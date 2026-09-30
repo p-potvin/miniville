@@ -120,13 +120,16 @@ def cmd_narrate_write(args) -> int:
 
 
 def cmd_narrate(args) -> int:
-    from .narrator import narrate_events
+    from .narrator import narrate_events, spend_report
     conn = _conn(args)
-    lines = narrate_events(conn, args.day - 1, model=args.model,
+    lines = narrate_events(conn, args.day - 1, provider=args.provider,
+                           hf_model=args.hf_model,
+                           ollama_model=args.ollama_model,
                            max_calls=args.max)
     for l in lines:
         print(l)
         print()
+    print(spend_report(conn))
     return 0
 
 
@@ -159,7 +162,12 @@ def main(argv=None) -> int:
     pw.set_defaults(fn=cmd_narrate_write)
     pn = sub.add_parser("narrate")
     pn.add_argument("--day", type=int, required=True)
-    pn.add_argument("--model", default="gemma4:e2b-it-qat")
+    pn.add_argument("--provider", choices=["hf", "ollama", "raw"], default="hf",
+                    help="hf = Hugging Face Inference (budget-capped $1.50), "
+                         "ollama = local, raw = no LLM")
+    pn.add_argument("--hf-model", default="openai/gpt-oss-20b:deepinfra",
+                    help="HF provider model, e.g. openai/gpt-oss-20b:deepinfra")
+    pn.add_argument("--ollama-model", default="gemma4:e2b-it-qat")
     pn.add_argument("--max", type=int, default=5)
     pn.set_defaults(fn=cmd_narrate)
 

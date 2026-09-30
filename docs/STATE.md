@@ -72,6 +72,13 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   → `narrate-write --day N` into `narratives`. Docs: `docs/NARRATION.md`.
   Day-3 demo narrative stored (source=swe-1.6-agent). Ollama no longer needed
   for quality prose — the agent narrates in-session at zero cost.
+- v0.2.1 narration providers (Tue, 30 Sep 2026): `narrate` now runs
+  HF Inference primary (default `openai/gpt-oss-20b:deepinfra`; token from
+  `..\.access\huggingface_token.txt` or `HF_TOKEN`; per-call cost via
+  `usage.estimated_cost`), hard cap `$1.50` cumulative in meta
+  (`narration_cost_usd`, override `MINIVILLE_NARRATION_CAP_USD`), then falls
+  back to Ollama, then raw digest. Flags: `--provider hf|ollama|raw`.
+  gpt-oss-20b is a reasoning model — max_tokens 640 covers reasoning+content.
 - v0.2 story depth live (Tue, 30 Sep 2026): `life.py` daily lottery (hire/fire,
   illness via `conditions` table, household moves), dating arc
   sweetheart→partner(move-in)→spouse(marriage), romance gated on marital
@@ -110,6 +117,22 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
 5. Time dynamics: seasons, holidays, aging, births/deaths, town economy stats.
 6. Persistence hygiene: snapshot/backup of `data/miniville.db`, `chronicle/` export.
 7. Scale test: 2k-5k agents, measure tick latency; index hot queries.
+
+## Durable plan (ultragoal)
+
+`.omx/ultragoal/{brief.md,goals.json,ledger.jsonl}` created Tue, 30 Sep 2026.
+Single aggregate goal G001 = the whole roadmap (story depth leftovers, observer
+UI, ColONEL-KFC avatars, daily routine, snapshots, 2k-5k scale test).
+`omx.cmd` lives at `%APPDATA%\npm\omx.cmd`. In Cascade there are no Codex
+goal tools, so drive it manually: `omx ultragoal complete-goals` prints the
+next story; checkpoint after each milestone.
+
+## Scale decision (operator asked)
+
+590 residents (500 adults + 90 children) is a deliberate starting size: big
+enough for statistical texture (venues 3-8 people/visit), small enough for a
+0.1s tick and fast iteration. `init --agents N` rescales anytime; scale test
+to 2k-5k is a roadmap item (perf indexes + batch upserts first).
 
 ## Operator asks / blockers
 

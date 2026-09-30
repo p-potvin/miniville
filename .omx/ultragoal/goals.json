@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "createdAt": "2026-09-30T20:25:30.728Z",
+  "updatedAt": "2026-09-30T20:25:30.728Z",
+  "briefPath": ".omx/ultragoal/brief.md",
+  "goalsPath": ".omx/ultragoal/goals.json",
+  "ledgerPath": ".omx/ultragoal/ledger.jsonl",
+  "codexGoalMode": "aggregate",
+  "goals": [
+    {
+      "id": "G001-miniville-autonomous-town-sim-repo-g",
+      "title": "Miniville autonomous town sim (repo: Github Repos/miniville, branch a...",
+      "objective": "Miniville autonomous town sim (repo: Github Repos/miniville, branch autodev). Grow the living town: deepen story systems (favor-asking, affair/rivalry drama, workplace friendships), add favor/debt mechanics, build read-only observer UI (FastAPI + minimal frontend: venue map, resident cards, live event feed, chronicle browser, narratives display), resident avatars via ColONEL-KFC+ComfyUI pipeline, daily autonomous routine (advance days, digest, narrate-write, STATE.md update, ledger), snapshot/backup hygiene, scale test to 2k-5k residents. Constraints: deterministic sim core; LLM narration never mutates state; HF narration capped at .50 cumulative then falls back to Ollama; no bulk Ollama/HF loops without operator approval; commits on autodev branch only.",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-09-30T20:25:30.728Z",
+      "updatedAt": "2026-09-30T20:25:30.728Z"
+    }
+  ],
+  "codexObjective": "Complete all ultragoal stories in .omx/ultragoal/goals.json: G001-miniville-autonomous-town-sim-repo-g Miniville autonomous town sim (repo: Github Repos/miniville, branch a..."
+}
