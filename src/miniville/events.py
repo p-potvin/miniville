@@ -40,6 +40,8 @@ def describe(conn: sqlite3.Connection, e: sqlite3.Row) -> str:
         return f"{a} and {b} shared a {tone} moment at {p}"
     if k == "relationship":
         return f"{a} and {b} are now {d.get('label','?')} ({p or 'around town'})"
+    if k == "gossip":
+        return f"{a} told {b}: \"{d.get('summary','...')}\" ({p or 'around town'})"
     if k == "life_event":
         return f"{a}: {d.get('text','something happened')}"
     if k == "town_event":

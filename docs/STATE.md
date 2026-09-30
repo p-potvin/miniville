@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Tue, 30 Sep 2026 12:35
+Last updated: Tue, 30 Sep 2026 17:10
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -72,6 +72,14 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   → `narrate-write --day N` into `narratives`. Docs: `docs/NARRATION.md`.
   Day-3 demo narrative stored (source=swe-1.6-agent). Ollama no longer needed
   for quality prose — the agent narrates in-session at zero cost.
+- v0.2 story depth live (Tue, 30 Sep 2026): `life.py` daily lottery (hire/fire,
+  illness via `conditions` table, household moves), dating arc
+  sweetheart→partner(move-in)→spouse(marriage), romance gated on marital
+  availability, gossip propagation on positive chats (p=0.2), and
+  `deviations.py` mood-driven plan overrides (lonely→social_call, bored→leisure,
+  miserable→wallow). 7-day verification: 90 life events, 672 gossips,
+  content 557/lonely 28/miserable 5. `scripts/inspect_db.py` added for quick
+  DB verification.
 
 ## Infra notes
 
@@ -93,9 +101,8 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
 ## Roadmap (ordered)
 
 1. ~~Core sim loop~~ ✔
-2. Tune sim quality: hunger/boredom balance, richer encounter outcomes
-   (arguments, gossip chains, favors), romance progression → dating/marriage
-   events, life events (job change, move, illness).
+2. ~~Story depth~~ ✔ dating arc, gossip, life events, mood deviations (v0.2).
+   Next tuning: affairs/rivalry drama, favor-asking, workplace friendships.
 3. ~~LLM narration~~ ✔ agent self-narrates via digest/narrate-write (NARRATION.md).
    Optional later: inner monologues via Ollama batches (needs operator OK).
 4. Observer surface: read-only web UI (FastAPI + small frontend) — map of venues,
@@ -113,7 +120,7 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
 
 ## Resume note for next session
 
-Branch `autodev`. World is seeded (seed=miniville) — `run` continues from tick 144.
-Do NOT `init` again unless intentionally resetting the town.
+Branch `autodev`. World is seeded (seed=miniville) — `run` continues from tick 336
+(Day 8 00:00). Do NOT `init` again unless intentionally resetting the town.
 Daily routine for the backup session: read this file → `run` the next day(s) →
 `digest` → write a `narrate-write` entry → update this file → ledger.

@@ -133,6 +133,14 @@ CREATE TABLE IF NOT EXISTS narratives (
     text TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_narratives_day ON narratives(day);
+
+-- Temporary agent conditions (illness etc.) that override plans
+CREATE TABLE IF NOT EXISTS conditions (
+    agent_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    until_tick INTEGER NOT NULL,
+    PRIMARY KEY (agent_id, kind)
+);
 """
 
 

@@ -5,7 +5,10 @@ import sqlite3
 
 from . import chronicle, events
 from .db import get_meta, set_meta
+from .deviations import apply_deviations
 from .encounters import run_encounters
+from .events import MINOR, emit
+from .life import apply_conditions, daily_life_lottery
 from .needs import apply_needs
 from .rng import rng_for
 from .schedules import rebuild_day_plans
@@ -67,7 +70,10 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
     if tick_of_day(tick) == 0:
         n = rebuild_day_plans(conn, day_of(tick), seed)
         stats["plans"] = n
+        stats["life_events"] = daily_life_lottery(conn, tick, seed)
     _move_agents(conn, tick)
+    apply_conditions(conn, tick)              # sick agents stay home resting
+    apply_deviations(conn, tick, seed)        # mood can push agents off-plan
 
     st = conn.execute(
         "SELECT agent_id, activity FROM agent_state s JOIN agents a ON a.id=s.agent_id WHERE a.alive=1"

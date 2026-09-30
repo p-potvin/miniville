@@ -5,6 +5,7 @@ import json
 import sqlite3
 
 from .events import MINOR, NOTABLE, TRIVIAL, emit
+from .life import dating_arc_check, romance_allowed
 from .rng import rng_for
 
 REL_THRESHOLDS = [
@@ -56,6 +57,26 @@ def _get_rel(conn: sqlite3.Connection, a: int, b: int) -> sqlite3.Row | None:
         "SELECT * FROM relationships WHERE a_id=? AND b_id=?", (lo, hi)).fetchone()
 
 
+def _spread_gossip(conn: sqlite3.Connection, a_id: int, b_id: int,
+                   tick: int, place_id: int, r) -> None:
+    """One participant shares a recent notable event they're not part of."""
+    from .events import describe
+    day = tick // 48
+    rows = conn.execute(
+        """SELECT id FROM events
+           WHERE day BETWEEN ? AND ? AND importance >= 3
+             AND (a_id IS NULL OR a_id NOT IN (?,?))
+             AND (b_id IS NULL OR b_id NOT IN (?,?))""",
+        (day - 2, day, a_id, b_id, a_id, b_id)).fetchall()
+    if not rows:
+        return
+    ev_id = r.choice(rows)["id"]
+    ev = conn.execute("SELECT * FROM events WHERE id=?", (ev_id,)).fetchone()
+    emitter, listener = (a_id, b_id) if r.random() < 0.5 else (b_id, a_id)
+    emit(conn, tick, "gossip", place_id=place_id, a=emitter, b=listener,
+         importance=MINOR, about=ev_id, summary=describe(conn, ev)[:140])
+
+
 def interact(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row,
              place_id: int, tick: int, seed: str) -> None:
     lo, hi = min(a["id"], b["id"]), max(a["id"], b["id"])
@@ -77,13 +98,14 @@ def interact(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row,
     fam += 1.0 + (0.5 if tone in ("warm", "delightful", "engaging") else 0)
     aff = max(-100.0, min(100.0, aff + d_aff))
 
-    # romance spark: compatible, positive affinity, both not "spouse"-labeled elsewhere
+    # romance spark: compatible, positive affinity, neither married to someone else
     d_rom = 0.0
-    if _compatible(a, b) and aff > 20 and rom < 95:
+    if (_compatible(a, b) and aff > 20 and rom < 95
+            and romance_allowed(conn, a, b, label)):
         if r.random() < 0.06 + max(0, aff) / 1000:
             d_rom = r.uniform(2, 8)
             rom = min(100.0, rom + d_rom)
-    elif rom > 0:
+    elif rom > 0 and label != "spouse":
         rom = max(0.0, rom - 0.2)
 
     new_label = _rel_label(fam, aff, rom)
@@ -109,6 +131,13 @@ def interact(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row,
     if new_label != label:
         emit(conn, tick, "relationship", place_id=place_id, a=a["id"], b=b["id"],
              importance=NOTABLE, label=new_label, was=label)
+    # dating arc: sweetheart -> partner -> spouse (uses post-update rel values)
+    updated = _get_rel(conn, lo, hi)
+    if updated:
+        dating_arc_check(conn, lo, hi, updated, tick, seed)
+    # gossip: positive interactions spread one recent notable happening
+    if tone in ("warm", "delightful", "engaging", "pleasant") and r.random() < 0.2:
+        _spread_gossip(conn, a["id"], b["id"], tick, place_id, r)
     # social needs satisfaction
     boost = 6 if tone in ("warm", "delightful", "engaging") else (2 if tone in ("pleasant", "civil", "routine") else -1)
     for aid in (a["id"], b["id"]):
