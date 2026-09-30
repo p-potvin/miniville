@@ -123,6 +123,16 @@ CREATE TABLE IF NOT EXISTS chronicle (
     day INTEGER PRIMARY KEY,
     text TEXT NOT NULL
 );
+
+-- Authored prose per day, written by an LLM narrator (in-session agent,
+-- local Ollama, or HF inference). source tags who wrote it.
+CREATE TABLE IF NOT EXISTS narratives (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    day INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    text TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_narratives_day ON narratives(day);
 """
 
 
@@ -132,6 +142,7 @@ def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    init_db(conn)  # idempotent: keeps existing DBs up to date
     return conn
 
 

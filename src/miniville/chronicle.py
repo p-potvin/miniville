@@ -47,3 +47,31 @@ def write_day(conn: sqlite3.Connection, day: int, seed: str) -> str:
         (day, text))
     conn.commit()
     return text
+
+
+def day_digest(conn: sqlite3.Connection, day: int, max_events: int = 20) -> str:
+    """Compact prompt-ready digest of a day for an LLM narrator."""
+    rows = conn.execute(
+        "SELECT * FROM events WHERE day=? AND importance>=2 ORDER BY importance DESC, id LIMIT ?",
+        (day, max_events)).fetchall()
+    pop = conn.execute("SELECT COUNT(*) c FROM agents WHERE alive=1").fetchone()["c"]
+    town = conn.execute(
+        "SELECT data FROM events WHERE day=? AND kind='town_event'", (day,)).fetchall()
+    mood = conn.execute(
+        "SELECT mood, COUNT(*) c FROM agent_state GROUP BY mood ORDER BY c DESC").fetchall()
+    lines = [f"Day {day+1} in Miniville ({pop} residents).",
+             f"Mood of the town: " + ", ".join(f"{m['mood']} x{m['c']}" for m in mood)]
+    for t in town:
+        lines.append(f"Town news: {json.loads(t['data']).get('text','')}")
+    lines.append("Events (most significant first):")
+    for r in rows:
+        lines.append(f"- {describe(conn, r)}")
+    return "\n".join(lines)
+
+
+def write_narrative(conn: sqlite3.Connection, day: int, text: str,
+                    source: str) -> None:
+    conn.execute(
+        "INSERT INTO narratives(day,source,text) VALUES(?,?,?)",
+        (day, source, text.strip()))
+    conn.commit()

@@ -68,6 +68,27 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
 - Verified: 3-day run = ~530 interactions/day; moods converged healthy
   (content 305 / bored 185 / miserable 59 / lonely 41 at end of day 3).
 - DB currently at `data/miniville.db`, tick 144 (Day 4 00:00).
+- Self-narration loop live (Tue, 30 Sep 2026): `digest --day N` → agent composes
+  → `narrate-write --day N` into `narratives`. Docs: `docs/NARRATION.md`.
+  Day-3 demo narrative stored (source=swe-1.6-agent). Ollama no longer needed
+  for quality prose — the agent narrates in-session at zero cost.
+
+## Infra notes
+
+- vaultwares-mcp (on vps-ovhcloud, container uid=ubuntu) ledger was broken:
+  `/opt/agent-ledger` had root-owned files from a Jul 16 root deploy →
+  `CHANGES.md`/`CHANGES.html` render denied. FIXED Tue, 30 Sep 2026 via ssh:
+  `chown -R ubuntu:ubuntu /opt/agent-ledger` + pre-created `/opt/CHANGES.{md,html}`
+  (script writes a parent-level digest). `render_ledger` now exits 0 (940 events).
+  CAUTION: any future root-side deploy to /opt/agent-ledger will re-break this.
+- `mcp1_agent_ledger_get_recent` returns [] despite events on disk — it likely
+  reads a different source (API?) than the events dir. Low priority.
+
+## Visual layer ideas (operator suggestions, parked)
+
+- Resident avatars via ColONEL-KFC + ComfyUI (qwen-image-edit reference views);
+  faces stay consistent across residents. Belongs with the v0.4 observer UI.
+- 3D town map via colmap/RealityScan someday — keep as a "someday" item.
 
 ## Roadmap (ordered)
 
@@ -75,9 +96,8 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
 2. Tune sim quality: hunger/boredom balance, richer encounter outcomes
    (arguments, gossip chains, favors), romance progression → dating/marriage
    events, life events (job change, move, illness).
-3. LLM layer: per-agent "inner monologue" + narrated scene vignettes via local
-   Ollama. NEEDS OPERATOR OK for batch calls (ROUTER REQUEST_RATE_LIMITING).
-   Design prompt templates + budget cap first.
+3. ~~LLM narration~~ ✔ agent self-narrates via digest/narrate-write (NARRATION.md).
+   Optional later: inner monologues via Ollama batches (needs operator OK).
 4. Observer surface: read-only web UI (FastAPI + small frontend) — map of venues,
    resident pages, live event feed, chronicle browser.
 5. Time dynamics: seasons, holidays, aging, births/deaths, town economy stats.
@@ -86,13 +106,14 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
 
 ## Operator asks / blockers
 
-- Approval needed before any loop over Ollama narration (target: ≤20 calls/day-sim
-  for the daily chronicle prose; model `gemma4:e2b-it-qat` or `llama3.2:3b`).
-- If bigger models wanted later: which Ollama models may be pulled, and when GPU
-  is free (operator's PC constraint).
+- Narration solved: agent writes prose itself (NARRATION.md option 1). Ollama/HF
+  only needed if operator wants unattended prose without an agent session.
+- If bigger Ollama models wanted later: which may be pulled, and when GPU is free.
 - `uv` is not installed on PATH (using `.venv` + pip). Optional: install uv.
 
 ## Resume note for next session
 
 Branch `autodev`. World is seeded (seed=miniville) — `run` continues from tick 144.
 Do NOT `init` again unless intentionally resetting the town.
+Daily routine for the backup session: read this file → `run` the next day(s) →
+`digest` → write a `narrate-write` entry → update this file → ledger.

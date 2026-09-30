@@ -97,6 +97,28 @@ def cmd_chronicle(args) -> int:
     return 0
 
 
+def cmd_digest(args) -> int:
+    from .chronicle import day_digest
+    conn = _conn(args)
+    print(day_digest(conn, args.day - 1, max_events=args.max))
+    return 0
+
+
+def cmd_narrate_write(args) -> int:
+    from .chronicle import write_narrative
+    conn = _conn(args)
+    if args.file:
+        text = Path(args.file).read_text(encoding="utf-8")
+    else:
+        text = sys.stdin.read()
+    if not text.strip():
+        print("empty narrative — nothing written")
+        return 1
+    write_narrative(conn, args.day - 1, text, source=args.source)
+    print(f"narrative stored for day {args.day} (source={args.source}, {len(text)} chars)")
+    return 0
+
+
 def cmd_narrate(args) -> int:
     from .narrator import narrate_events
     conn = _conn(args)
@@ -126,6 +148,15 @@ def main(argv=None) -> int:
     ps = sub.add_parser("status"); ps.set_defaults(fn=cmd_status)
     pj = sub.add_parser("inspect"); pj.add_argument("who"); pj.set_defaults(fn=cmd_inspect)
     pc = sub.add_parser("chronicle"); pc.add_argument("day", type=int); pc.set_defaults(fn=cmd_chronicle)
+    pd = sub.add_parser("digest")
+    pd.add_argument("--day", type=int, required=True)
+    pd.add_argument("--max", type=int, default=20)
+    pd.set_defaults(fn=cmd_digest)
+    pw = sub.add_parser("narrate-write")
+    pw.add_argument("--day", type=int, required=True)
+    pw.add_argument("--file", default=None, help="read prose from file instead of stdin")
+    pw.add_argument("--source", default="agent")
+    pw.set_defaults(fn=cmd_narrate_write)
     pn = sub.add_parser("narrate")
     pn.add_argument("--day", type=int, required=True)
     pn.add_argument("--model", default="gemma4:e2b-it-qat")

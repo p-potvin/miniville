@@ -1,6 +1,6 @@
 # TODO
 
-- [ ] Narrator batch approval from operator (Ollama, ≤20 calls/day-sim)
+- [x] Narration: self-narration loop via digest + narrate-write (agent-authored)
 - [ ] `break`/`eat` activity coverage for night-shift edge cases
 - [ ] Gossip mechanic: events propagate to mutual friends
 - [ ] Dating arc: sweetheart → cohabitation → marriage life events
