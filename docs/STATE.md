@@ -1,0 +1,98 @@
+# Miniville — project state (read this first every session)
+
+This file is the memory between sessions. Chat history is NOT carried over —
+everything worth knowing lives here, in `README.md`, and in `docs/`.
+Update it at the end of every session (status, decisions, roadmap, operator asks).
+
+Last updated: Tue, 30 Sep 2026 12:35
+
+## Mandate (from the operator, Tue, 30 Sep 2026)
+
+- This is the agent's own project: free rein on direction, features, stack.
+- Operator unblocks accounts, approves network requests per ROUTER.md, and helps on request.
+- Keep working autonomously; don't stop just because a turn "ends". A daily
+  scheduled task spawns a backup session — hence this file.
+- Seed data: `E:\Nemotron-Personas-USA` (1M NVIDIA personas, CC BY 4.0, parquet shards).
+- Compute: workstation has Ollama (small models), ComfyUI models in
+  `D:\COmfyUI\resources\comfyUI\models\`. Ask operator for more compute if needed.
+- Reference for session-continuity structure: `Prom-King\panopticam\docs\STATE.md`.
+
+## Hard rules inherited (VaultWares ROUTER)
+
+- No unapproved batch/loop network or model requests. Local Ollama one-off calls
+  are fine; bulk narration loops need operator approval first.
+- Dev happens on branch `autodev`; PRs to `main` go to the operator.
+- No git worktrees.
+- Ledger entry via `record-agent-change.ps1` at end of every session (project=miniville).
+- Timestamps in docs/chat: `DDD, dd MMM YYYY HH:mm`. Never inside code files.
+
+## Architecture (short)
+
+Python 3.12, `src/` layout, no heavy deps (pyarrow+pandas for ingest; sqlite3 stdlib;
+pytest for tests). Everything persistent lives in `data/miniville.db` (gitignored).
+
+- `ingest.py` — reservoir-samples personas across parquet shards, extracts names
+  from persona text (no name field in dataset), pairs `married_present` agents
+  into households (10% same-sex), spawns synthetic children (55% of couples,
+  ages 0-17), assigns jobs via occupation→venue tag mapping, picks homes.
+- `world.py` — 16 fixed venues + N per-district homes; districts: Old Mill
+  Quarter, Lakeshore, Greenhill, Downtown, The Flats.
+- `schedules.py` — deterministic per-(agent,day) 48-tick plans: sleep/work/
+  school/meals/leisure; work shifts get a mid-shift `break` and post-shift dinner.
+- `needs.py` — energy/hunger/social/fun/stress 0-100 + mood rules.
+- `encounters.py` — co-presence pairing at venues (≤12 pairs/place/tick),
+  affinity/familiarity/romance graph, labels incl. sweetheart/rival.
+- `events.py` — append-only ledger, importance 1-5.
+- `engine.py` — tick loop; rebuilds plans at midnight, runs encounters, pays
+  wages, ambient town events, writes chronicle at day end.
+- `chronicle.py` — daily markdown digest (headlines/around town/by the numbers).
+- `narrator.py` — optional Ollama prose (default `gemma4:e2b-it-qat`), opt-in, capped.
+- `cli.py` — `init | run | status | inspect | chronicle | narrate`.
+
+## Key design decisions (don't re-litigate)
+
+- Miniville is fictional; persona `city,state` kept as "origin" — everyone is a
+  transplant, which is a feature (conversation fodder, diversity).
+- Deterministic core: all randomness via `rng.py` hash-seeded per (seed, tick, ids).
+  Same seed + same inputs = identical world. LLM narration never changes state.
+- Tick = 30 min. Speed knob comes later (`run --ticks N` for now).
+- Dataset has no names/addresses; names are regexed from persona text
+  (`NAME_RE` in ingest.py), fallback = generated names.
+- `marital_status` values in dataset: `married_present`, `never_married`,
+  `divorced`, `widowed`, `separated` (NOT `married` — caused a bug once).
+
+## Status
+
+- v0.1.0 skeleton (Tue, 30 Sep 2026): ingest→SQLite, 500-adult town (+90 children),
+  tick engine, needs/moods, encounters→relationships, daily chronicle, smoke tests pass.
+- Verified: 3-day run = ~530 interactions/day; moods converged healthy
+  (content 305 / bored 185 / miserable 59 / lonely 41 at end of day 3).
+- DB currently at `data/miniville.db`, tick 144 (Day 4 00:00).
+
+## Roadmap (ordered)
+
+1. ~~Core sim loop~~ ✔
+2. Tune sim quality: hunger/boredom balance, richer encounter outcomes
+   (arguments, gossip chains, favors), romance progression → dating/marriage
+   events, life events (job change, move, illness).
+3. LLM layer: per-agent "inner monologue" + narrated scene vignettes via local
+   Ollama. NEEDS OPERATOR OK for batch calls (ROUTER REQUEST_RATE_LIMITING).
+   Design prompt templates + budget cap first.
+4. Observer surface: read-only web UI (FastAPI + small frontend) — map of venues,
+   resident pages, live event feed, chronicle browser.
+5. Time dynamics: seasons, holidays, aging, births/deaths, town economy stats.
+6. Persistence hygiene: snapshot/backup of `data/miniville.db`, `chronicle/` export.
+7. Scale test: 2k-5k agents, measure tick latency; index hot queries.
+
+## Operator asks / blockers
+
+- Approval needed before any loop over Ollama narration (target: ≤20 calls/day-sim
+  for the daily chronicle prose; model `gemma4:e2b-it-qat` or `llama3.2:3b`).
+- If bigger models wanted later: which Ollama models may be pulled, and when GPU
+  is free (operator's PC constraint).
+- `uv` is not installed on PATH (using `.venv` + pip). Optional: install uv.
+
+## Resume note for next session
+
+Branch `autodev`. World is seeded (seed=miniville) — `run` continues from tick 144.
+Do NOT `init` again unless intentionally resetting the town.

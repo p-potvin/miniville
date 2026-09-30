@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "miniville"
+version = "0.1.0"
+description = "Simulation of a mini ville and its inhabitants - persistent agent-based town life seeded by Nemotron-Personas-USA"
+requires-python = ">=3.11"
+dependencies = [
+    "pyarrow>=15",
+    "pandas>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "duckdb>=1.0"]
+narrator = ["requests>=2.31"]
+
+[project.scripts]
+miniville = "miniville.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
