@@ -8,6 +8,7 @@ from .db import get_meta, set_meta
 from .deviations import apply_deviations
 from .encounters import run_encounters
 from .events import MINOR, emit
+from .favors import spouse_discovery
 from .life import apply_conditions, daily_life_lottery
 from .needs import apply_needs
 from .rng import rng_for
@@ -71,6 +72,7 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
         n = rebuild_day_plans(conn, day_of(tick), seed)
         stats["plans"] = n
         stats["life_events"] = daily_life_lottery(conn, tick, seed)
+        stats["betrayals"] = spouse_discovery(conn, tick, seed)
     _move_agents(conn, tick)
     apply_conditions(conn, tick)              # sick agents stay home resting
     apply_deviations(conn, tick, seed)        # mood can push agents off-plan

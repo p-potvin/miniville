@@ -141,6 +141,18 @@ CREATE TABLE IF NOT EXISTS conditions (
     until_tick INTEGER NOT NULL,
     PRIMARY KEY (agent_id, kind)
 );
+
+-- Open favors owed between residents (small-town IOUs)
+CREATE TABLE IF NOT EXISTS debts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    debtor_id INTEGER NOT NULL,
+    creditor_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    created_tick INTEGER NOT NULL,
+    repaid_tick INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_debts_open ON debts(debtor_id, creditor_id)
+    WHERE repaid_tick IS NULL;
 """
 
 
@@ -156,7 +168,16 @@ def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    _migrate(conn)
     conn.commit()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Guarded column migrations — safe on every connect."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(agents)")}
+    if "avatar_path" not in cols:
+        # portrait path filled later by the ColONEL-KFC/ComfyUI pipeline
+        conn.execute("ALTER TABLE agents ADD COLUMN avatar_path TEXT")
 
 
 def get_meta(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:

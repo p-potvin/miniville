@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-09-30T20:25:30.728Z",
-  "updatedAt": "2026-09-30T20:25:30.728Z",
+  "updatedAt": "2026-09-30T20:51:17.705653+00:00",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -11,10 +11,69 @@
       "id": "G001-miniville-autonomous-town-sim-repo-g",
       "title": "Miniville autonomous town sim (repo: Github Repos/miniville, branch a...",
       "objective": "Miniville autonomous town sim (repo: Github Repos/miniville, branch autodev). Grow the living town: deepen story systems (favor-asking, affair/rivalry drama, workplace friendships), add favor/debt mechanics, build read-only observer UI (FastAPI + minimal frontend: venue map, resident cards, live event feed, chronicle browser, narratives display), resident avatars via ColONEL-KFC+ComfyUI pipeline, daily autonomous routine (advance days, digest, narrate-write, STATE.md update, ledger), snapshot/backup hygiene, scale test to 2k-5k residents. Constraints: deterministic sim core; LLM narration never mutates state; HF narration capped at .50 cumulative then falls back to Ollama; no bulk Ollama/HF loops without operator approval; commits on autodev branch only.",
-      "status": "pending",
+      "status": "completed",
       "attempt": 0,
       "createdAt": "2026-09-30T20:25:30.728Z",
-      "updatedAt": "2026-09-30T20:25:30.728Z"
+      "updatedAt": "2026-09-30T20:25:30.728Z",
+      "completedAt": "2026-09-30T20:47:05.324161+00:00"
+    },
+    {
+      "id": "G002-mood-balance",
+      "title": "Tune loneliness/energy loops \u2014 95 lonely is too high",
+      "objective": "Investigate why lonely count doubled (95) after favor/deviation systems; rebalance social decay or venue mix so moods sit ~80% content",
+      "status": "completed",
+      "attempt": 0,
+      "createdAt": "2026-09-30T20:47:05.324161+00:00",
+      "updatedAt": "2026-09-30T20:51:17.705653+00:00",
+      "completedAt": "2026-09-30T20:51:17.705653+00:00"
+    },
+    {
+      "id": "G003-debts-ui",
+      "title": "Surface debts/favors in observer UI",
+      "objective": "Add /api/debts endpoint + IOU ledger tab; show open debts on resident cards",
+      "status": "completed",
+      "attempt": 0,
+      "createdAt": "2026-09-30T20:47:05.324161+00:00",
+      "updatedAt": "2026-09-30T20:51:17.705653+00:00",
+      "completedAt": "2026-09-30T20:51:17.705653+00:00"
+    },
+    {
+      "id": "G004-drama-tuning",
+      "title": "Verify affair/betrayal rates over long horizon",
+      "objective": "Run 14-day soak; expect handful of affairs, 1-2 betrayals, some separations; tune P_AFFAIR/P_DISCOVERY if zero or flooded",
+      "status": "completed",
+      "attempt": 0,
+      "createdAt": "2026-09-30T20:47:05.324161+00:00",
+      "updatedAt": "2026-09-30T20:51:17.705653+00:00",
+      "completedAt": "2026-09-30T20:51:17.705653+00:00"
+    },
+    {
+      "id": "G005-agent-narrate-in-daily",
+      "title": "Agent-written narrative step in daily routine",
+      "objective": "daily cmd leaves a digest file + TODO marker so the next agent session writes narrate-write prose before advancing",
+      "status": "completed",
+      "attempt": 0,
+      "createdAt": "2026-09-30T20:47:05.324161+00:00",
+      "updatedAt": "2026-09-30T20:51:17.705653+00:00",
+      "completedAt": "2026-09-30T20:51:17.705653+00:00"
+    },
+    {
+      "id": "G006-avatars-remote",
+      "title": "Run ColONEL-KFC avatar generation on Clopeux-Desktop",
+      "objective": "BLOCKED on operator: remote GPU automation. Manifest ready (avatar_manifest.json); consumes via docs/AVATARS.md pipeline",
+      "status": "blocked",
+      "attempt": 0,
+      "createdAt": "2026-09-30T20:47:05.324161+00:00",
+      "updatedAt": "2026-09-30T20:47:05.324161+00:00"
+    },
+    {
+      "id": "G007-5k-scale",
+      "title": "5k-agent scale test + day-start rebuild optimization",
+      "objective": "p99 hit 2.8s at 2k on rebuild tick; batch plan inserts or spread rebuild across ticks before attempting 5k",
+      "status": "pending",
+      "attempt": 0,
+      "createdAt": "2026-09-30T20:47:05.324161+00:00",
+      "updatedAt": "2026-09-30T20:47:05.324161+00:00"
     }
   ],
   "codexObjective": "Complete all ultragoal stories in .omx/ultragoal/goals.json: G001-miniville-autonomous-town-sim-repo-g Miniville autonomous town sim (repo: Github Repos/miniville, branch a..."

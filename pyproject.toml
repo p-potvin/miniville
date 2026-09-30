@@ -13,8 +13,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "duckdb>=1.0"]
-narrator = ["requests>=2.31"]
+dev = ["pytest>=8", "duckdb>=1.0", "httpx>=0.27"]
+narrator = ["requests>=2.31", "huggingface_hub>=0.24"]
+ui = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
 
 [project.scripts]
 miniville = "miniville.cli:main"

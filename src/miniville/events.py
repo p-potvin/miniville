@@ -42,6 +42,19 @@ def describe(conn: sqlite3.Connection, e: sqlite3.Row) -> str:
         return f"{a} and {b} are now {d.get('label','?')} ({p or 'around town'})"
     if k == "gossip":
         return f"{a} told {b}: \"{d.get('summary','...')}\" ({p or 'around town'})"
+    if k == "favor":
+        if d.get("declined"):
+            return f"{b} asked {a} for a favor ({d.get('favor','?')}) and was gently turned down ({p or 'around town'})"
+        return f"{a} {d.get('favor','helped out')} for {b} ({p or 'around town'})"
+    if k == "favor_repaid":
+        return f"{a} repaid {b} for the favor ({d.get('favor','?')}) ({p or 'around town'})"
+    if k == "affair":
+        return f"{a} and {b} were seen being a little too close ({p or 'around town'})"
+    if k == "betrayal":
+        w = nm(d.get("with_id"))
+        return f"{a} found out about {b} and {w}" + (f" ({p})" if p else "")
+    if k == "work_buddy":
+        return f"{a} and {b} became work buddies at {p or 'the shop'}"
     if k == "life_event":
         return f"{a}: {d.get('text','something happened')}"
     if k == "town_event":

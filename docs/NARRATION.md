@@ -23,18 +23,30 @@ Any agent session can narrate. The flow:
 If no agent session is running, the operator can paste the digest into any LLM
 chat and pipe the result back via `narrate-write --file`. One command each way.
 
-## 3. Ollama (local, bounded)
+## 3. HF Inference (paid, hard-capped)
 
-`narrate --day N --max M` calls `localhost:11434` (default model
-`gemma4:e2b-it-qat`). Fine for a few calls; BULK narration loops require
-operator approval per REQUEST_RATE_LIMITING. GPU cost is real on this PC —
-prefer option 1.
+`narrate --day N --max M --provider hf` uses `huggingface_hub.InferenceClient`
+(default model `openai/gpt-oss-20b:deepinfra`). Token from
+`..\.access\huggingface_token.txt` or `HF_TOKEN`. Cumulative spend lives in
+`meta.narration_cost_usd` via the API's `estimated_cost` field; once it reaches
+the $1.50 cap (`MINIVILLE_NARRATION_CAP_USD` overrides) the provider degrades
+to Ollama permanently until the key is reset.
 
-## 4. HF Inference (optional, not yet implemented)
+Cost observed: ~$0.0001 per blurb — the cap covers ~15k blurbs, far beyond a
+daily narrative. gpt-oss-20b reasons before answering, so `max_tokens` is 640
+to leave room for both reasoning and content.
 
-Operator has ~$2/month HF quota. Single daily call ≈ a few cents. Would need:
-explicit approval + a per-run request cap + a chosen cheap model. Deferred
-until someone actually wants unattended prose without an agent session.
+## 4. Ollama (local fallback, bounded)
+
+`--provider ollama`, or the automatic fallthrough when HF fails/caps out.
+Default model `gemma4:e2b-it-qat` on `localhost:11434`. GPU cost is real on
+this PC — prefer option 1 or 2. BULK loops still need operator approval per
+REQUEST_RATE_LIMITING.
+
+## 5. Raw (last resort)
+
+`--provider raw` prints the digest lines untouched; also the terminal
+fallthrough when Ollama is unreachable.
 
 ## Output contract
 

@@ -1,0 +1,41 @@
+:root {
+  --bg: #0f1216; --panel: #171c23; --line: #262d38; --fg: #dfe6ee;
+  --dim: #8b98a8; --accent: #e8b64c; --warm: #d98a4a;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); margin: 0;
+  font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+header { display: flex; align-items: baseline; gap: 1.2rem; padding: .8rem 1.4rem;
+  border-bottom: 1px solid var(--line); background: var(--panel); }
+h1 { font-size: 1.4rem; color: var(--accent); margin: 0; font-family: Georgia, serif; }
+#status { color: var(--dim); font-size: .85rem; }
+#tabs { display: flex; gap: .4rem; padding: .6rem 1.4rem; }
+#tabs button { background: var(--panel); color: var(--dim); border: 1px solid var(--line);
+  border-radius: 6px; padding: .35rem .9rem; cursor: pointer; }
+#tabs button.on { color: var(--fg); border-color: var(--accent); }
+main { padding: 0 1.4rem 2rem; }
+.panel { display: none; } .panel.on { display: block; }
+h2 { font-family: Georgia, serif; color: var(--accent); font-size: 1.1rem; }
+ul { list-style: none; padding: 0; }
+li { padding: .45rem .6rem; border-bottom: 1px solid var(--line); }
+li.imp4, li.imp5 { border-left: 3px solid var(--accent); background: #1a2028; }
+li.imp3 { border-left: 3px solid var(--warm); }
+li b { color: var(--warm); text-transform: capitalize; margin-right: .4rem; }
+.t { color: var(--dim); font-size: .8rem; float: right; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--line); }
+th { color: var(--dim); font-weight: normal; font-size: .8rem; text-transform: uppercase; }
+input, select { background: var(--panel); color: var(--fg); border: 1px solid var(--line);
+  border-radius: 5px; padding: .35rem .6rem; }
+.res { padding: .5rem .6rem; border-bottom: 1px solid var(--line); cursor: pointer; }
+.res:hover { background: #1a2028; }
+.mood { color: var(--accent); }
+.res i { color: var(--dim); }
+#resident-card { background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 1rem; margin-top: 1rem; }
+.persona { color: var(--dim); font-style: italic; }
+.state { color: var(--dim); }
+pre { white-space: pre-wrap; background: var(--panel); padding: 1rem;
+  border-radius: 8px; border: 1px solid var(--line); }
+.narr { border-left: 3px solid var(--accent); padding: .4rem .8rem; margin: .8rem 0; }
+.narr b { color: var(--warm); }

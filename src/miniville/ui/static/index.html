@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Miniville Observer</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>Miniville</h1>
+  <div id="status">loading…</div>
+</header>
+<nav id="tabs">
+  <button data-tab="feed" class="on">Feed</button>
+  <button data-tab="venues">Venues</button>
+  <button data-tab="residents">Residents</button>
+  <button data-tab="chronicle">Chronicle</button>
+  <button data-tab="rels">Bonds</button>
+  <button data-tab="debts">IOUs</button>
+</nav>
+<main>
+  <section id="feed" class="panel on">
+    <h2>Happenings — <span id="feed-day"></span></h2>
+    <ul id="feed-list"></ul>
+  </section>
+  <section id="venues" class="panel">
+    <h2>Venues</h2>
+    <table><thead><tr><th>Venue</th><th>Kind</th><th>District</th><th>Inside</th></tr></thead>
+    <tbody id="venues-body"></tbody></table>
+  </section>
+  <section id="residents" class="panel">
+    <h2>Residents</h2>
+    <input id="q" placeholder="search names…" autocomplete="off">
+    <div id="resident-list"></div>
+    <div id="resident-card" hidden></div>
+  </section>
+  <section id="chronicle" class="panel">
+    <h2>Chronicle <input id="chron-day" type="number" min="1" value="1" size="3">
+      <button id="chron-go">go</button></h2>
+    <pre id="chron-text"></pre>
+    <div id="narratives"></div>
+  </section>
+  <section id="rels" class="panel">
+    <h2>Relationships</h2>
+    <select id="rel-filter">
+      <option value="">all</option><option>spouse</option><option>partner</option>
+      <option>sweetheart</option><option>close_friend</option><option>friend</option>
+      <option>rival</option><option>estranged</option>
+    </select>
+    <ul id="rels-list"></ul>
+  </section>
+  <section id="debts" class="panel">
+    <h2>IOU ledger <label><input id="debts-all" type="checkbox"> include settled</label></h2>
+    <ul id="debts-list"></ul>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

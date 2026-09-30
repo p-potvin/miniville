@@ -5,6 +5,7 @@ import json
 import sqlite3
 
 from .events import MINOR, NOTABLE, TRIVIAL, emit
+from .favors import maybe_affair, maybe_ask_favor, maybe_repay_debt
 from .life import dating_arc_check, romance_allowed
 from .rng import rng_for
 
@@ -131,6 +132,13 @@ def interact(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row,
     if new_label != label:
         emit(conn, tick, "relationship", place_id=place_id, a=a["id"], b=b["id"],
              importance=NOTABLE, label=new_label, was=label)
+        # coworkers who click at work become work buddies (visible in chronicle)
+        if (new_label == "friend" and place_id is not None
+                and a["work_place_id"] is not None
+                and a["work_place_id"] == b["work_place_id"]
+                and place_id == a["work_place_id"]):
+            emit(conn, tick, "work_buddy", place_id=place_id, a=a["id"], b=b["id"],
+                 importance=MINOR)
     # dating arc: sweetheart -> partner -> spouse (uses post-update rel values)
     updated = _get_rel(conn, lo, hi)
     if updated:
@@ -138,6 +146,12 @@ def interact(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row,
     # gossip: positive interactions spread one recent notable happening
     if tone in ("warm", "delightful", "engaging", "pleasant") and r.random() < 0.2:
         _spread_gossip(conn, a["id"], b["id"], tick, place_id, r)
+    # favors: warm chats can mint/settle IOUs
+    maybe_ask_favor(conn, a, b, place_id, tick, tone, r)
+    maybe_repay_debt(conn, a["id"], b["id"], place_id, tick, tone, r)
+    # drama: rare affair trigger when a partnered agent flirts with non-spouse
+    maybe_affair(conn, a, b, new_label, aff, fam, place_id, tick, r, tone)
+    maybe_affair(conn, b, a, new_label, aff, fam, place_id, tick, r, tone)
     # social needs satisfaction
     boost = 6 if tone in ("warm", "delightful", "engaging") else (2 if tone in ("pleasant", "civil", "routine") else -1)
     for aid in (a["id"], b["id"]):

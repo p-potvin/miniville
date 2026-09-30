@@ -7,6 +7,11 @@ __pycache__/
 data/*.db
 data/*.db-*
 chronicle/
+backups/
+export/
+digest/
+assets/avatars/
+*.manifest.json
 .localdata/
 *.egg-info/
 dist/

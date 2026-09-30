@@ -143,7 +143,7 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
 
 ## Resume note for next session
 
-Branch `autodev`. World is seeded (seed=miniville) — `run` continues from tick 336
+Branch `autodev`. World is seeded (seed=miniville) — `run` continues from tick 384
 (Day 8 00:00). Do NOT `init` again unless intentionally resetting the town.
 Daily routine for the backup session: read this file → `run` the next day(s) →
 `digest` → write a `narrate-write` entry → update this file → ledger.

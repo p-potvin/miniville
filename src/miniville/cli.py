@@ -133,6 +133,87 @@ def cmd_narrate(args) -> int:
     return 0
 
 
+def cmd_backup(args) -> int:
+    from .backup import backup_db, export_days
+    conn = _conn(args)
+    dest = backup_db(conn)
+    n = export_days(conn)
+    print(f"snapshot: {dest} (+chronicle export of {n} day(s) to export/)")
+    return 0
+
+
+def cmd_daily(args) -> int:
+    """Advance N days, digest each, narrate via provider chain, snapshot."""
+    from . import engine
+    from .backup import backup_db, export_days
+    from .chronicle import write_narrative
+    from .db import get_meta
+    from .narrator import narrate_events, spend_report
+    from .timekeeper import TICKS_PER_DAY
+    conn = _conn(args)
+    seed = get_meta(conn, "seed", "miniville")
+    start_day = int(get_meta(conn, "tick", "0") or 0) // TICKS_PER_DAY
+    for d in range(start_day, start_day + args.days):
+        print(f"=== Day {d + 1} ===")
+        engine.run(conn, TICKS_PER_DAY, seed, verbose=True)
+        # leave a digest file so the next agent session can write prose first
+        dig_dir = Path("digest")
+        dig_dir.mkdir(exist_ok=True)
+        from .chronicle import day_digest
+        (dig_dir / f"day-{d + 1:03d}.md").write_text(
+            day_digest(conn, d), encoding="utf-8")
+        if not conn.execute(
+                "SELECT 1 FROM narratives WHERE day=?", (d,)).fetchone():
+            print(f"(day {d + 1} has no narrative — agent can digest "
+                  f"digest/day-{d + 1:03d}.md and narrate-write)")
+        if not args.skip_narrate:
+            lines = narrate_events(conn, d, provider=args.provider,
+                                   max_calls=args.max)
+            for l in lines:
+                print(l)
+            if args.write and lines:
+                prose = "\n".join(l for l in lines)
+                write_narrative(conn, d, prose, source=f"narrate-{args.provider}")
+                print(f"(narrative stored for day {d + 1})")
+            print(spend_report(conn))
+    snap = backup_db(conn)
+    export_days(conn)
+    print(f"backup: {snap}")
+    return 0
+
+
+def cmd_serve(args) -> int:
+    from .ui.server import serve
+    serve(args.db, args.host, args.port)
+    return 0
+
+
+def cmd_benchmark(args) -> int:
+    """Clone the live DB to a temp file and time N days of ticks."""
+    import shutil
+    import tempfile
+    import time
+    from . import engine
+    src = Path(args.db) if args.db else dbmod.DEFAULT_DB
+    tmp = Path(tempfile.mkdtemp()) / "bench.db"
+    shutil.copy2(src, tmp)
+    conn = dbmod.connect(tmp)
+    seed = dbmod.get_meta(conn, "seed", "miniville")
+    times = []
+    total = args.days * 48
+    for _ in range(total):
+        t0 = time.perf_counter()
+        engine.step(conn, seed)
+        times.append((time.perf_counter() - t0) * 1000)
+    times.sort()
+    n = len(times)
+    print(f"benchmark: {total} ticks on {src.name}")
+    print(f"  mean={sum(times)/n:.1f}ms  p50={times[n//2]:.1f}ms  "
+          f"p99={times[int(n*0.99)]:.1f}ms  max={times[-1]:.1f}ms")
+    shutil.rmtree(tmp.parent, ignore_errors=True)
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="miniville")
     p.add_argument("--db", default=None, help="sqlite path (env MINIVILLE_DB)")
@@ -170,6 +251,23 @@ def main(argv=None) -> int:
     pn.add_argument("--ollama-model", default="gemma4:e2b-it-qat")
     pn.add_argument("--max", type=int, default=5)
     pn.set_defaults(fn=cmd_narrate)
+    pb = sub.add_parser("backup"); pb.set_defaults(fn=cmd_backup)
+    pdy = sub.add_parser("daily", help="advance days + narrate + snapshot")
+    pdy.add_argument("--days", type=int, default=1)
+    pdy.add_argument("--provider", choices=["hf", "ollama", "raw"], default="hf")
+    pdy.add_argument("--max", type=int, default=5,
+                     help="max narration calls per day")
+    pdy.add_argument("--write", action="store_true",
+                     help="store narrated blurbs into narratives table")
+    pdy.add_argument("--skip-narrate", action="store_true")
+    pdy.set_defaults(fn=cmd_daily)
+    pv = sub.add_parser("serve", help="read-only observer UI")
+    pv.add_argument("--host", default="127.0.0.1")
+    pv.add_argument("--port", type=int, default=8787)
+    pv.set_defaults(fn=cmd_serve)
+    pm = sub.add_parser("benchmark", help="time ticks on a temp copy of the DB")
+    pm.add_argument("--days", type=int, default=1)
+    pm.set_defaults(fn=cmd_benchmark)
 
     args = p.parse_args(argv)
     return args.fn(args)

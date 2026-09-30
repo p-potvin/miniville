@@ -4,7 +4,7 @@ from __future__ import annotations
 import sqlite3
 
 # per-tick decay
-DECAY = {"energy": 0.35, "hunger": 0.9, "social": 0.5, "fun": 0.6}
+DECAY = {"energy": 0.35, "hunger": 0.9, "social": 0.35, "fun": 0.6}
 
 ACTIVITY_EFFECTS = {
     "sleep":   {"energy": +4.2, "hunger": -0.4},
@@ -17,7 +17,7 @@ ACTIVITY_EFFECTS = {
     "social_call": {"social": +3.5, "fun": +2.0, "energy": -0.4},
     "wallow":  {"stress": +1.0, "fun": -1.0, "social": -1.0, "energy": +0.2},
     "resting": {"energy": +1.5, "stress": -0.5, "social": -0.5},
-    "home":    {"fun": +1.0, "stress": -0.6, "energy": +0.4, "social": -0.3},
+    "home":    {"fun": +1.0, "stress": -0.6, "energy": +0.4, "social": +0.15},
     "idle":    {},
 }
 
