@@ -72,6 +72,14 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   → `narrate-write --day N` into `narratives`. Docs: `docs/NARRATION.md`.
   Day-3 demo narrative stored (source=swe-1.6-agent). Ollama no longer needed
   for quality prose — the agent narrates in-session at zero cost.
+- v0.3.1 avatar casting (Tue, 30 Sep 2026): NO ComfyUI (locks PC). Residents cast
+  from operator galleries instead: F→`G:\Gallery`, M→`G:\Galleries\Celebrities`;
+  `scripts/build_avatar_gallery.py` picks nearest-age UNUSED identity, copies ≤4
+  exemplar images + antelopev2 `face_crops` rows into `D:\miniville\gallery\gallery.db`,
+  crops 256px portraits to `D:\miniville\avatars\` (UI serves `/avatars/*`).
+  No identity reuse — deferred males wait for `Import-IMDbStarMeter.ps1` growth.
+  PuLID standalone benchmark: 16.3s model load, ~0.2s/img warm (RTX 3060) →
+  ~3 min for 590 safetensors. FLAME heads optional via `vw new-face-head`.
 - v0.2.1 narration providers (Tue, 30 Sep 2026): `narrate` now runs
   HF Inference primary (default `openai/gpt-oss-20b:deepinfra`; token from
   `..\.access\huggingface_token.txt` or `HF_TOKEN`; per-call cost via

@@ -30,10 +30,10 @@ unused source are deferred until the galleries grow.
 
 ## Gallery growth (male pool)
 
-Run ColONEL-KFC importers when deferred count is high:
-`Import-IMDbStarMeter.ps1`, `Import-TmdbCelebrities.ps1`,
-`Import-TmdbTop1000.ps1`, or `vw process-dataset-archives` for zipped sets —
-then re-run the builder; it picks up new identities automatically.
+Grow `G:\Galleries\Celebrities` via the IMDb importer (NOT TMDb):
+`..\ColONEL-KFC\Import-IMDbStarMeter.ps1 -Phase both -StartNm <N>` scans
+sequential IMDb ids, downloads up to 150 photos per person, and extracts them
+as `<name>_nmXXXXXXX` folders the builder picks up on re-run.
 
 ## Optional later steps
 

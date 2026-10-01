@@ -10,6 +10,8 @@
 - [x] Mood balance: social decay 0.5→0.35, home trickle (lonely 129→0 in soak)
 - [ ] `break`/`eat` activity coverage for night-shift edge cases
 - [ ] Perf: optimize day-start plan rebuild before 5k agents (G007)
-- [ ] Avatar generation run on Clopeux-Desktop — BLOCKED on operator (G006)
+- [ ] Avatar gallery: run `scripts/build_avatar_gallery.py` to cast 590 residents
+      (G:\Gallery for F, G:\Galleries\Celebrities for M; no reuse — deferred males
+      need Import-IMDbStarMeter.ps1 pool growth). PuLID tokens ~0.2s/img after 16s load
 - [ ] Economy stats: wages vs spending drift, rent, household budgets (v0.5)
 - [ ] Relationship graph viz in UI (cytoscape-lite canvas, optional)

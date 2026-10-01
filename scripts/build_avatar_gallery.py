@@ -176,7 +176,7 @@ def main() -> int:
         encoding="utf-8")
     uniq = len({m["identity"] for m in mapping})
     print(f"done: {done} cast ({uniq} identities), {len(deferred)} deferred "
-          f"(need gallery growth — run vw IMDb/TMDb import)")
+          f"(grow the pool: Import-IMDbStarMeter.ps1 -Phase both)")
     print(f"dry-run={a.dry_run}  gallery={gal_dir}  avatars={av_dir}")
     return 0
 
