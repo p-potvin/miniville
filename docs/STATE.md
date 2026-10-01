@@ -305,6 +305,31 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   34 agree / 0 disagree / 6 refused. Nothing in the avatar path hits the network.
 - Ledger debt cleared: the cloud session's entry (owed because its VM had no
   `record-agent-change.ps1`) is recorded on the workstation.
+- Celebrity gallery re-embedded (Thu, 01 Oct 2026, workstation). The operator
+  suspected the sex mislabels came from a pre-smart-picker gallery with stale
+  embeddings. Measured, the opposite is true: **the gallery is already
+  smart-picked and the embeddings reproduce exactly** — for Nicole Kidman, Tom
+  Hanks and Kaya Scodelario, `select_smart_exemplars(valid, 6)` returns
+  precisely the six crops already stored, and a fresh `FaceEngine` run
+  reproduces every `quality_score`/`feature_norm` to 3 decimals. The real cause
+  of the original bug is that `pool()` read the **per-crop** `gender` column:
+  90.3% accurate per crop, but 99.4% as an identity-level majority.
+  What *did* need doing, and is now done: `scripts/reembed_celebrity_gallery.py`
+  re-ran the engine over every tag-eligible photo and stored **every** kept crop
+  instead of only the six exemplars — crops 949 -> 2,015, exemplars unchanged,
+  identity-level sex vote 99.4% -> **100%** against TMDB, and Nicole Kidman
+  (the one identity it got wrong, M4/F2 over six crops) now votes correctly
+  (F6/M4 over ten). `verify_celebrity_gender.py` was fixed to vote over *all* a
+  person's crops, not the first six — sampling six left lola_petticrew
+  undecided (M3/F11 overall, but M2/F4 over the first six, an exact 2:1 tie).
+  `docs/AVATARS.md` records the method and the measurements.
+  **Still blocked on the pool**: 171 male residents hold a female identity and
+  only 93 verified male identities exist, all in use. All 112 folders missing
+  from `gallery.db` have zero tag-eligible images, so the constraint is
+  *tagging*: the tagger (`vault-commander\cli\utils\tag_images.py`) cannot run
+  because `rapidocr` is missing from that venv. OPERATOR: install `rapidocr`
+  (or point me at the venv that has it) and the 112 folders become embeddable,
+  verifiable offline, and castable.
 
 ## Resume note for next session
 

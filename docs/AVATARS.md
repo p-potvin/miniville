@@ -35,6 +35,47 @@ Grow `G:\Galleries\Celebrities` via the IMDb importer (NOT TMDb):
 sequential IMDb ids, downloads up to 150 photos per person, and extracts them
 as `<name>_nmXXXXXXX` folders the builder picks up on re-run.
 
+**The binding constraint is tagging, not photos.** Measured Thu, 01 Oct 2026:
+275 folders on disk hold 15,659 images, but only 4,264 carry a Tag-Images
+sidecar, and **all 112 folders that are missing from `gallery.db` have zero
+tag-eligible images**. Nothing can be embedded, verified or cast from them until
+they are tagged. The tagger is `vault-commander\cli\utils\tag_images.py`
+(`--input <dir>`); it currently cannot run because `rapidocr` is missing from
+that venv.
+
+## Identity sex: how it is decided
+
+The 201-resident bug came from `pool()` reading the **per-crop**
+`face_crops.gender` column. Measured against the TMDB labels: per-crop that
+column is only **90.3%** accurate, but a majority vote over all of an identity's
+crops is **99.4%**, and **100%** after the re-embed below. Decide sex per
+*identity*, never per crop.
+
+`scripts/verify_celebrity_gender.py` does that vote offline (insightface
+`genderage`, no network). A plain majority is not enough — it voted Nicole
+Kidman male 4-2, the exact false-male error behind the original bug — so the
+winner must beat the loser by better than 2:1 and ambiguous identities stay
+unresolved rather than guessed. Note the tagger's own `face_female`/`face_male`
+tags are **only 61%** accurate (it calls Tom Hanks female); do not use them.
+
+## Re-embedding the gallery
+
+`scripts/reembed_celebrity_gallery.py` (ColONEL-KFC venv) re-runs the ArcFace
+engine over every tag-eligible photo, picks exemplars with the smart picker
+(`face_organizer.smart_picker.select_smart_exemplars`), and stores **every**
+kept crop — not just the six exemplars — flagging the picked ones.
+
+Run once, Thu, 01 Oct 2026: crops 949 → **2,015**, exemplars unchanged at 949,
+identity-level sex vote 99.4% → **100%** against TMDB, and the one identity it
+used to get wrong (Nicole Kidman, M4/F2 over six crops) now votes correctly
+(F6/M4 over ten).
+
+`embed_tagged_gallery.py` in ColONEL-KFC does the same job but its gate
+(`prob >= 0.90`) was calibrated on curated galleries with big faces — on this
+one it rejects 71 of 71 images sampled, so it would rewrite nothing. The
+Miniville script uses a sanity floor (`prob >= 0.60`) and lets the smart picker
+choose.
+
 ## Optional later steps
 
 - **PuLID identity tokens** (for consistent regenerations): ColONEL-KFC venv,

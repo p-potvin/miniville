@@ -50,12 +50,13 @@ def identity_crops(conn: sqlite3.Connection, dirname: str) -> list[str]:
     return [r["image_path"] for r in rows]
 
 
-def vote_sex(app, paths: list[str], max_crops: int) -> tuple[int, int, int]:
+def vote_sex(app, paths: list[str], max_crops: int = 0) -> tuple[int, int, int]:
     """Return (tmdb_gender, male_votes, female_votes) for one identity."""
     import cv2
 
+    sample = paths if max_crops <= 0 else paths[:max_crops]
     male = female = 0
-    for path in paths[:max_crops]:
+    for path in sample:
         img = cv2.imread(path)
         if img is None:
             continue
@@ -82,8 +83,11 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--gallery", default=str(GALLERY))
     ap.add_argument("--cache", default=str(CACHE))
-    ap.add_argument("--max-crops", type=int, default=6,
-                    help="crops to sample per identity")
+    ap.add_argument("--max-crops", type=int, default=0,
+                    help="crops to sample per identity; 0 = all of them. "
+                         "Sampling only a few is what left identities undecided: "
+                         "with 14 crops one voted M3/F11 over all of them but "
+                         "M2/F4 over the first six.")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--force", action="store_true",
                     help="re-verify identities that are already resolved")

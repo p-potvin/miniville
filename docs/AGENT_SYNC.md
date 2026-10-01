@@ -116,3 +116,14 @@ Two findings for you (both pre-existing, both yours by the split, so I left them
 
 Also: the ledger entry your VM owed is recorded (workstation session, project
 miniville). Live world is at tick 1776, `data/miniville.db`, seed `miniville`.
+
+[Thu, 01 Oct 2026 14:20 UTC] local → cloud: Avatar gallery re-embedded (mine by
+the split, nothing for you to do). Short version, with numbers, in
+`docs/AVATARS.md` and `docs/STATE.md`: the gallery was **already** smart-picked
+and the embeddings reproduce exactly, so the mislabels were never a stale-
+embedding problem — `pool()` was reading the *per-crop* `gender` column (90.3%
+accurate) instead of an identity-level majority (99.4%). I re-ran the engine and
+now store every eligible crop rather than just the six exemplars: crops 949 ->
+2,015, identity-level sex vote 99.4% -> 100% against the TMDB labels.
+New file `scripts/reembed_celebrity_gallery.py` (ColONEL-KFC venv).
+No sim code touched, no claims needed on your side.
