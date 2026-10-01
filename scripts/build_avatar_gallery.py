@@ -31,6 +31,11 @@ MALE_SRC = Path(r"G:\Galleries\Celebrities")
 OUT_ROOT = Path(r"D:\miniville")
 SAMPLES = 4          # exemplar source images per resident (>= vw reindex minimum)
 OUT_DB = OUT_ROOT / "gallery" / "gallery.db"
+# TMDB-verified sex for the MIXED celebrity gallery, from
+# scripts/verify_celebrity_gender.py. The gallery's own face_crops.gender column
+# is unreliable (it mislabels angled/profile crops), so when this file exists we
+# trust it over the column. TMDB gender: 1 = female, 2 = male.
+VERIFIED_SEX = OUT_ROOT / "celebrity_gender.json"
 
 FACE_DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS identities (
@@ -45,18 +50,37 @@ CREATE TABLE IF NOT EXISTS face_crops (
 """
 
 
-def pool(conn: sqlite3.Connection, gender: int) -> dict[int, dict]:
-    """identity_id -> {name, median_age, crops:[rows]} from a source gallery."""
+def load_verified(path: Path = VERIFIED_SEX) -> dict[str, int]:
+    """gallery dir name -> TMDB gender (1 female / 2 male). Empty if absent."""
+    if not path.is_file():
+        return {}
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return {k: (v or {}).get("gender", 0) for k, v in raw.items()}
+
+
+def pool(conn: sqlite3.Connection, gender: int,
+         verified: dict[str, int] | None = None) -> dict[int, dict]:
+    """identity_id -> {name, median_age, crops:[rows]} from a source gallery.
+
+    `gender` uses the insightface convention (0 female / 1 male). When
+    `verified` is supplied it decides membership instead of the per-crop
+    `f.gender` column, which is what let female faces into the male pool.
+    """
     crops = conn.execute(
         """SELECT f.identity_id, i.name, f.age, f.bbox, f.image_path, f.rel_path,
                   f.landmarks_5pts, f.landmarks_106, f.embedding, f.feature_norm,
-                  f.quality_score, f.is_exemplar
+                  f.quality_score, f.is_exemplar, f.gender
            FROM face_crops f JOIN identities i ON i.id = f.identity_id
-           WHERE f.is_exemplar = 1 AND f.gender = ? AND i.status != 'invalid'
-           ORDER BY f.quality_score DESC""",
-        (gender,)).fetchall()
+           WHERE f.is_exemplar = 1 AND i.status != 'invalid'
+           ORDER BY f.quality_score DESC""").fetchall()
+    want = 1 if gender == 0 else 2          # insightface 0/1 -> TMDB 1/2
     by_id: dict[int, dict] = {}
     for r in crops:
+        if verified is not None:
+            if verified.get(r["name"], 0) != want:
+                continue
+        elif r["gender"] != gender:
+            continue
         d = by_id.setdefault(r["identity_id"], {"name": r["name"], "ages": [], "rows": []})
         if r["age"]:
             d["ages"].append(r["age"])
@@ -109,8 +133,15 @@ def main() -> int:
     conns = {s: sqlite3.connect(p / "gallery.db") for s, p in srcs.items() if p.exists()}
     for c in conns.values():
         c.row_factory = sqlite3.Row
-    pools = {s: pool(conns[s], 0 if s == "Female" else 1) for s in conns}
-    # insightface gender: 0=female, 1=male
+    verified = load_verified()
+    if verified:
+        print(f"verified sex map: {len(verified)} identities from {VERIFIED_SEX}")
+    else:
+        print("WARNING: no verified sex map — falling back to the unreliable "
+              "face_crops.gender column. Run scripts/verify_celebrity_gender.py")
+    pools = {s: pool(conns[s], 0 if s == "Female" else 1,
+                     verified=verified if s == "Male" else None) for s in conns}
+    # insightface gender: 0=female, 1=male; the male pool is TMDB-verified
     used: dict[str, set[int]] = {s: set() for s in pools}
     gal_dir = OUT_ROOT / "gallery"
     av_dir = OUT_ROOT / "avatars"
