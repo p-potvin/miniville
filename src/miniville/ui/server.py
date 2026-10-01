@@ -37,7 +37,9 @@ def create_app(db_path: str | None = None) -> FastAPI:
         try:
             tick = int(dbmod.get_meta(c, "tick", "0") or 0)
             moods = {r["mood"]: r["c"] for r in c.execute(
-                "SELECT mood, COUNT(*) c FROM agent_state GROUP BY mood")}
+                """SELECT s.mood, COUNT(*) c FROM agent_state s
+                   JOIN agents a ON a.id=s.agent_id
+                   WHERE a.alive=1 GROUP BY s.mood""")}
             pop = c.execute(
                 "SELECT COUNT(*) n FROM agents WHERE alive=1").fetchone()["n"]
             day = day_of(tick)

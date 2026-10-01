@@ -100,7 +100,7 @@ def record_event_memories(conn: sqlite3.Connection, tick: int,
         vec = embed_text(text) if embed else None
         for aid in {e["a_id"], e["b_id"]}:
             if aid:
-                remember(conn, aid, tick, text, kind=e["kind"],
+                remember(conn, aid, e["tick"], text, kind=e["kind"],
                          importance=e["importance"], embedding=vec)
                 n += 1
     set_meta(conn, "memory_upto_event", str(rows[-1]["id"]))

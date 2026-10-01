@@ -95,3 +95,38 @@ def test_immigrate_skips_known_uuids(conn, monkeypatch):
              "hobbies_and_interests_list": [], "skills_and_expertise_list": []}]
     monkeypatch.setattr(growth, "load_persona_rows", lambda *a, **k: rows)
     assert growth.immigrate(conn, 1, tick=0, seed="test") == 0
+
+
+def test_newborn_records_birth_day(conn, monkeypatch):
+    conn.execute(
+        """INSERT INTO relationships(a_id,b_id,familiarity,affinity,romance,label)
+           VALUES(1,2,95,80,95,'spouse')""")
+
+    class BirthRng:
+        def random(self):
+            return 0
+
+        def choice(self, values):
+            return values[0]
+
+    monkeypatch.setattr(growth, "rng_for", lambda *args: BirthRng())
+    assert growth.births(conn, 10 * 48, "test") == 1
+    newborn = conn.execute(
+        "SELECT birth_day FROM agents WHERE is_child=1").fetchone()
+    assert newborn["birth_day"] == 10
+
+
+def test_immigration_reservoir_seed_varies_by_tick(conn, monkeypatch):
+    calls = []
+
+    def empty_sample(dataset_dir, n, seed):
+        calls.append((n, seed))
+        return []
+
+    monkeypatch.setattr(growth, "load_persona_rows", empty_sample)
+    growth.immigrate(conn, 1, tick=48, seed="test")
+    growth.immigrate(conn, 1, tick=96, seed="test")
+    assert calls == [
+        (3, "test:immigrate:48"),
+        (3, "test:immigrate:96"),
+    ]

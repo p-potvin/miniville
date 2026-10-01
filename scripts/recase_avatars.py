@@ -154,6 +154,10 @@ def main(argv=None) -> int:
         # retire the old (wrong-sex) identity so it can be reused correctly
         if old_dir.is_dir() and old_dir != ddir:
             shutil.rmtree(old_dir, ignore_errors=True)
+            out.execute(
+                "DELETE FROM face_crops WHERE identity_id IN "
+                "(SELECT id FROM identities WHERE name=?)",
+                (e["gallery_dir"],))
             out.execute("DELETE FROM identities WHERE name=?", (e["gallery_dir"],))
 
         e["identity"] = ident["name"]

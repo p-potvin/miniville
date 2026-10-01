@@ -98,7 +98,9 @@ def main(argv=None) -> int:
         try:
             cache[d] = lookup(session, key, kind, ident)
         except Exception as e:                      # noqa: BLE001 - keep going
-            cache[d] = {"name": None, "gender": 0, "error": str(e)[:120]}
+            message = re.sub(r"([?&]api_key=)[^&\s]+",
+                             r"\1[redacted]", str(e))
+            print(f"  lookup failed for {d}: {message[:120]}")
         done += 1
         if done % 25 == 0:
             cache_path.write_text(json.dumps(cache, indent=1), encoding="utf-8")

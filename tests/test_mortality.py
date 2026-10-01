@@ -113,3 +113,22 @@ def test_dead_residents_get_no_plans(conn, monkeypatch):
     from miniville import schedules
     schedules.rebuild_day_plans(conn, 1, "test")
     assert conn.execute("SELECT 1 FROM plans WHERE agent_id=1").fetchone() is None
+
+
+def test_orphans_join_a_living_adult_household(conn):
+    from miniville.rng import rng_for
+
+    conn.execute("UPDATE agents SET alive=0 WHERE id IN (1,2)")
+    deceased = conn.execute("SELECT * FROM agents WHERE id=1").fetchone()
+
+    assert mortality._rehome_children(
+        conn, deceased, rng_for("test", "orphan-household", 1)) == 1
+
+    child = conn.execute("SELECT household_id,home_place_id FROM agents WHERE id=3").fetchone()
+    adult = conn.execute(
+        """SELECT 1 FROM agents WHERE household_id=? AND alive=1 AND is_child=0""",
+        (child["household_id"],)).fetchone()
+    assert child["household_id"] == 2
+    assert child["home_place_id"] == conn.execute(
+        "SELECT home_place_id FROM households WHERE id=2").fetchone()[0]
+    assert adult is not None

@@ -205,3 +205,60 @@ def test_holiday_fair_opens_stranger_interactions(conn):
         conn, 186 * 48 + 32, "holiday-mingling", max_pairs_per_place=30)
     assert holiday_interactions > weekday_interactions, (
         holiday_interactions, weekday_interactions)
+
+
+def test_wages_require_a_work_plan(conn):
+    _add_job(conn, 1, "Town Hall")
+    balance = conn.execute(
+        "SELECT money_cents FROM agent_state WHERE agent_id=1").fetchone()[0]
+
+    schedules.rebuild_day_plans(conn, 186, "test")
+    assert conn.execute(
+        "SELECT 1 FROM plans WHERE agent_id=1 AND activity IN ('work','break')"
+    ).fetchone()
+    engine._wages_and_spending(conn, 186 * 48 + 34)
+    weekday_balance = conn.execute(
+        "SELECT money_cents FROM agent_state WHERE agent_id=1").fetchone()[0]
+    assert weekday_balance > balance
+
+    schedules.rebuild_day_plans(conn, 184, "test")
+    engine._wages_and_spending(conn, 184 * 48 + 34)
+    holiday_balance = conn.execute(
+        "SELECT money_cents FROM agent_state WHERE agent_id=1").fetchone()[0]
+    assert holiday_balance == weekday_balance
+
+
+def test_birthday_precedes_daily_plan_rebuild(conn):
+    conn.execute(
+        "UPDATE agents SET age=17,is_child=1,birth_day=200 WHERE id=1")
+    _add_job(conn, 1, "Town Hall")
+    db.set_meta(conn, "tick", str(200 * 48))
+
+    engine.step(conn, "test")
+
+    agent = conn.execute(
+        "SELECT age,is_child FROM agents WHERE id=1").fetchone()
+    assert tuple(agent) == (18, 0)
+    assert conn.execute(
+        "SELECT 1 FROM plans WHERE agent_id=1 AND tick=16 AND activity='work'"
+    ).fetchone()
+
+
+def test_explicit_birth_day_overrides_hashed_birthday(conn):
+    conn.execute("UPDATE agents SET birth_day=10 WHERE id=1")
+    assert seasons.birthday_doy("birth-day-override", 1) != 10
+    assert seasons.birthday_doy("birth-day-override", 1, 10) == 10
+
+    assert seasons.birthdays(conn, 375 * 48, "birth-day-override") == 1
+    assert conn.execute("SELECT age FROM agents WHERE id=1").fetchone()["age"] == 31
+
+
+def test_birth_day_migrates_legacy_agents_table():
+    legacy = sqlite3.connect(":memory:")
+    legacy.row_factory = sqlite3.Row
+    legacy.execute("CREATE TABLE agents(id INTEGER PRIMARY KEY, avatar_path TEXT)")
+    db._migrate(legacy)
+    assert "birth_day" in {
+        row["name"] for row in legacy.execute("PRAGMA table_info(agents)")}
+    db._migrate(legacy)
+    legacy.close()

@@ -128,7 +128,9 @@ def school_in_session(day: int) -> bool:
     return not (holiday and holiday.day_off)
 
 
-def birthday_doy(seed: str, agent_id: int) -> int:
+def birthday_doy(seed: str, agent_id: int, birth_day: int | None = None) -> int:
+    if birth_day is not None:
+        return birth_day % DAYS_PER_YEAR
     return seed_int(seed, "birthday", agent_id) % DAYS_PER_YEAR
 
 
@@ -138,10 +140,10 @@ def birthdays(conn: sqlite3.Connection, tick: int, seed: str) -> int:
         return 0
     doy = day_of_year(day_of(tick))
     residents = conn.execute(
-        "SELECT id, age, is_child FROM agents WHERE alive=1").fetchall()
+        "SELECT id, age, is_child, birth_day FROM agents WHERE alive=1").fetchall()
     aged = 0
     for resident in residents:
-        if birthday_doy(seed, resident["id"]) != doy:
+        if birthday_doy(seed, resident["id"], resident["birth_day"]) != doy:
             continue
         new_age = resident["age"] + 1
         is_adult = resident["is_child"] and new_age >= 18

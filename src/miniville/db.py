@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS agents (
     sex TEXT,
     age INTEGER,
     birth_year INTEGER,
+    birth_day INTEGER,
     marital_status TEXT,
     education_level TEXT,
     occupation TEXT,
@@ -200,6 +201,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "avatar_path" not in cols:
         # portrait path filled later by the ColONEL-KFC/ComfyUI pipeline
         conn.execute("ALTER TABLE agents ADD COLUMN avatar_path TEXT")
+    if "birth_day" not in cols:
+        conn.execute("ALTER TABLE agents ADD COLUMN birth_day INTEGER")
 
 
 def get_meta(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:

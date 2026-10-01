@@ -59,7 +59,7 @@ def _widow(conn: sqlite3.Connection, deceased_id: int) -> int | None:
 
 
 def _rehome_children(conn: sqlite3.Connection, deceased: sqlite3.Row, r) -> int:
-    """Children left with no living adult are taken into a new household."""
+    """Place orphaned children with a living adult household when possible."""
     hid = deceased["household_id"]
     if hid is None:
         return 0
@@ -74,9 +74,41 @@ def _rehome_children(conn: sqlite3.Connection, deceased: sqlite3.Row, r) -> int:
         (hid,)).fetchall()
     if not kids:
         return 0
-    home = _free_home(conn, r)
-    surname = (kids[0]["name"] or "Miniville").split()[-1]
-    _new_household(conn, [k["id"] for k in kids], home, surname)
+
+    related = conn.execute(
+        """SELECT adult.household_id
+           FROM relationships r
+           JOIN agents adult
+             ON adult.id=CASE WHEN r.a_id=? THEN r.b_id ELSE r.a_id END
+           WHERE (r.a_id=? OR r.b_id=?)
+             AND adult.alive=1 AND adult.is_child=0
+             AND adult.household_id IS NOT NULL AND adult.household_id!=?
+           ORDER BY r.familiarity DESC, adult.id
+           LIMIT 1""",
+        (deceased["id"], deceased["id"], deceased["id"], hid)).fetchone()
+    if related:
+        destination = conn.execute(
+            "SELECT id, home_place_id FROM households WHERE id=?",
+            (related["household_id"],)).fetchone()
+    else:
+        households = conn.execute(
+            """SELECT h.id, h.home_place_id FROM households h
+               WHERE EXISTS (
+                   SELECT 1 FROM agents a
+                   WHERE a.household_id=h.id AND a.alive=1 AND a.is_child=0
+               )
+               ORDER BY h.id""").fetchall()
+        destination = r.choice(households) if households else None
+
+    if destination:
+        for kid in kids:
+            conn.execute(
+                "UPDATE agents SET household_id=?, home_place_id=? WHERE id=?",
+                (destination["id"], destination["home_place_id"], kid["id"]))
+    else:
+        home = _free_home(conn, r)
+        surname = (kids[0]["name"] or "Miniville").split()[-1]
+        _new_household(conn, [k["id"] for k in kids], home, surname)
     return len(kids)
 
 

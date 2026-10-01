@@ -52,7 +52,14 @@ def _wages_and_spending(conn: sqlite3.Connection, tick: int) -> None:
     # pay at end of shift tick
     tod = tick_of_day(tick)
     rows = conn.execute(
-        "SELECT agent_id, wage_cents FROM jobs WHERE shift_end=?", (tod,)).fetchall()
+        """SELECT j.agent_id, j.wage_cents FROM jobs j
+           WHERE j.shift_end=?
+             AND EXISTS (
+                 SELECT 1 FROM plans p
+                 WHERE p.agent_id=j.agent_id
+                   AND p.activity IN ('work','break')
+             )""",
+        (tod,)).fetchall()
     for row in rows:
         conn.execute(
             "UPDATE agent_state SET money_cents=money_cents+? WHERE agent_id=?",
@@ -68,9 +75,9 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
     tick = int(get_meta(conn, "tick", "0") or 0)
     stats = {"tick": tick}
     if tick_of_day(tick) == 0:
+        stats["birthdays"] = seasons.birthdays(conn, tick, seed)
         n = rebuild_day_plans(conn, day_of(tick), seed)
         stats["plans"] = n
-        stats["birthdays"] = seasons.birthdays(conn, tick, seed)
         seasons.announce_day(conn, tick)
         stats["life_events"] = daily_life_lottery(conn, tick, seed)
         stats["betrayals"] = spouse_discovery(conn, tick, seed)

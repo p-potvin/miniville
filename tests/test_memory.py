@@ -82,3 +82,15 @@ def test_memory_digest_renders(conn):
     memory.remember(conn, 1, 0, "a small thing", importance=1)
     conn.commit()
     assert "a small thing" in memory.memory_digest(conn, 1)
+
+
+def test_event_memory_uses_event_tick(conn):
+    from miniville.events import emit
+
+    emit(conn, 7, "chat", a=1, b=2, importance=2, text="a dated conversation")
+    conn.commit()
+    memory.record_event_memories(conn, 100)
+
+    rows = conn.execute(
+        "SELECT tick,day FROM memories ORDER BY agent_id").fetchall()
+    assert [tuple(row) for row in rows] == [(7, 0), (7, 0)]

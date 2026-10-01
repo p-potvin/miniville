@@ -20,6 +20,7 @@ import sqlite3
 from .events import HISTORIC, NOTABLE, emit
 from .ingest import _list_field, _name_of, load_persona_rows
 from .rng import rng_for
+from .timekeeper import day_of
 from .world import workplace_tags_for
 
 P_BIRTH = 0.02          # per married couple per day
@@ -95,7 +96,7 @@ def immigrate(conn: sqlite3.Connection, n: int, tick: int, seed: str,
     known = {r["uuid"] for r in conn.execute(
         "SELECT uuid FROM agents WHERE uuid IS NOT NULL").fetchall()}
     # over-fetch: the dataset sample may overlap residents already in town
-    rows = load_persona_rows(dataset_dir, n * 3, seed)
+    rows = load_persona_rows(dataset_dir, n * 3, f"{seed}:immigrate:{tick}")
     fresh = [row for row in rows if row.get("uuid") not in known][:n]
     if not fresh:
         return 0
@@ -152,12 +153,12 @@ def births(conn: sqlite3.Connection, tick: int, seed: str) -> int:
         cname = f"{r.choice(_CHILD_FIRST)} {surname}"
         cur = conn.execute(
             """INSERT INTO agents(uuid,name,sex,age,marital_status,education_level,
-               occupation,persona,household_id,home_place_id,is_child)
-               VALUES(?,?,?,?,?,?,?,?,?,?,1)""",
+               occupation,persona,household_id,home_place_id,is_child,birth_day)
+               VALUES(?,?,?,?,?,?,?,?,?,?,1,?)""",
             (f"born-{c['a_id']}-{c['b_id']}-{tick}", cname,
              r.choice(["Male", "Female"]), 0, "never_married", "none", "child",
              f"{cname}, born in Miniville.", parent["household_id"],
-             parent["home_place_id"]))
+             parent["home_place_id"], day_of(tick)))
         aid = int(cur.lastrowid or 0)
         conn.execute(
             "INSERT INTO agent_state(agent_id, place_id, money_cents) VALUES(?,?,0)",

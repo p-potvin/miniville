@@ -107,11 +107,14 @@ async function gazette() {
       "prints at the end of week 1.";
     return;
   }
-  if (!sel.options.length) {
+  if (sel.options.length !== r.editions.length) {
+    const selectedWeek = sel.value;
     sel.innerHTML = r.editions.map(e =>
       `<option value="${e.week}">week ${e.week}</option>`).join("");
-    sel.onchange = () => gazetteWeek(sel.value);
+    if (r.editions.some(e => String(e.week) === selectedWeek))
+      sel.value = selectedWeek;
   }
+  sel.onchange = () => gazetteWeek(sel.value);
   $("#gaz-text").textContent = r.latest.text;
 }
 
