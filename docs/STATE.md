@@ -80,8 +80,14 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   No identity reuse — deferred males wait for `Import-IMDbStarMeter.ps1` growth.
   DONE: 415 cast (all females + 106 males), 175 deferred. 415 PuLID
   `identity.safetensors` extracted (~16s load + 0.2s/img, ~3min total).
-  FLAME heads: 381 reused from source galleries, 34 fitted via New-FaceHead.ps1.
+  FLAME heads: 381 reused from source galleries, 34 fitting via New-FaceHead.ps1
+  (call it directly — the vw wrapper drops `-Identity` when forwarding).
   `extract_pulid_batch.py` retries through all source images on no-face.
+  Pushed to origin/main. IMDb StarMeter scraper running long-term in chunks
+  (`Import-IMDbStarMeter.ps1 -Phase both`, 2k-id chunks from nm0000001 up,
+  headless, resumable via gallery dirs + presence cache) — goal 10k identities
+  with ≥6 photos as back catalog for pool growth. NOTE: must run with CWD =
+  ColONEL-KFC root (`imdb_gallery` is a repo-level module, not installed).
 - v0.2.1 narration providers (Tue, 30 Sep 2026): `narrate` now runs
   HF Inference primary (default `openai/gpt-oss-20b:deepinfra`; token from
   `..\.access\huggingface_token.txt` or `HF_TOKEN`; per-call cost via
