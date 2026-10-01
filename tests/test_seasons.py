@@ -5,7 +5,7 @@ from dataclasses import replace
 
 import pytest
 
-from miniville import db, engine, schedules, seasons, world
+from miniville import db, encounters, engine, schedules, seasons, world
 
 
 @pytest.fixture()
@@ -153,3 +153,36 @@ def test_engine_announces_holiday_at_day_start(conn):
     event = conn.execute(
         "SELECT data FROM events WHERE day=184 AND kind='town_event'").fetchall()
     assert any(json.loads(row["data"]).get("tag") == "holiday" for row in event)
+
+
+def test_holiday_venue_lifts_pair_cap(conn):
+    park_id = conn.execute(
+        "SELECT id FROM places WHERE name='Lush Meadow Park'").fetchone()["id"]
+    home_id = conn.execute(
+        "SELECT home_place_id FROM agents WHERE id=1").fetchone()["home_place_id"]
+    conn.execute(
+        "UPDATE agent_state SET place_id=?,activity='celebrate' WHERE agent_id=1",
+        (park_id,))
+    for index in range(2, 61):
+        agent_id = conn.execute(
+            """INSERT INTO agents(uuid,name,sex,age,marital_status,occupation,
+               hobbies_json,home_place_id)
+               VALUES(?,?,?,30,'never_married','resident','["Hiking"]',?)""",
+            (f"crowd-{index}", f"Crowd Resident {index}", "Female", home_id)
+        ).lastrowid
+        conn.execute(
+            """INSERT INTO agent_state(agent_id,place_id,activity)
+               VALUES(?,?,'celebrate')""",
+            (agent_id, park_id))
+    conn.executemany(
+        """INSERT INTO relationships(a_id,b_id,familiarity,affinity,romance,
+           label,interactions,last_met_tick) VALUES(?,?,40,0,0,'friend',0,0)""",
+        [(left, right) for left in range(1, 61) for right in range(left + 1, 61)])
+    conn.commit()
+
+    holiday_interactions = encounters.run_encounters(
+        conn, 184 * 48 + 32, "test", max_pairs_per_place=2)
+    weekday_interactions = encounters.run_encounters(
+        conn, 186 * 48 + 32, "test", max_pairs_per_place=2)
+    assert holiday_interactions > 2
+    assert weekday_interactions <= 2
