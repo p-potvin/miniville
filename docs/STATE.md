@@ -128,9 +128,20 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   (TMDB `/find` by IMDb id or `/person/{id}`, cached to
   `D:\miniville\celebrity_gender.json`) and `scripts/audit_avatar_gender.py`
   (insightface genderage on rendered portraits; report at
-  `D:\miniville\avatar_gender_audit.json`). SHORTFALL: 201 residents need a male
-  identity but only 90 verified male identities are unused — the re-cast must
+  `D:\miniville\avatar_gender_audit.json`). SHORTFALL: 202 residents need a male
+  identity but only 30 verified male identities were unused — the re-cast must
   proceed incrementally as the scraper grows the pool.
+  FIX IN PROGRESS: `build_avatar_gallery.pool()` now takes a TMDB-verified sex
+  map and uses it instead of `f.gender`; `scripts/recase_avatars.py` re-casts
+  only the mismatched residents (idempotent, resumable, retires the old
+  wrong-sex identity); `scripts/refresh_avatars.py` runs one pass of
+  ingest -> verify -> re-cast and is safe on a timer. **30 re-cast so far,
+  172 still deferred.** A background loop runs refresh_avatars every 15 min
+  (log: `D:\miniville\avatar-refresh.log`).
+  NOTE: the scraper only *downloads* into `<gallery>/.imdb-imports/`; the
+  ingest into `gallery.db` is a separate step, so a long scrape leaves a
+  staging backlog. `ColONEL-KFC\ingest_staged.py` drains it via the same
+  `process_staged_identity` the TMDB importer uses.
 - IMDb scraper FIXED (Wed, 30 Sep 2026): it was running `-Headless`, and IMDb
   returns **403 Forbidden** to headless Chromium — every page failed, so the
   presence scan reported "no photos" for ~99% of ids (1% yield). Running
