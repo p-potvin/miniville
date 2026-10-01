@@ -116,6 +116,19 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   cards; new CLI `immigrate | newspaper | reflect`. Verified on the live world:
   9,612 memories, 1,255 reflections, 15 births (pop 590→601), 1 edition.
   Also fixed a latent `NameError` in `chronicle.day_digest` (missing `import json`).
+- v0.5 mortality (Wed, 30 Sep 2026): `mortality.py` — age-dependent Gompertz
+  hazard (`A=5e-5`, `B=0.085`, calibrated to a US life table: ~1.5/1000 at 40,
+  ~19/1000 at 70), rolled once per simulated day, x4 while ill. A death is
+  *settled*, not just recorded: the spouse is widowed (agent row + relationship
+  label), the job/plans/conditions are released, children left with no living
+  adult are rehomed into a new household, and everyone with `familiarity>=30`
+  carries a `death` memory. `MINIVILLE_MORTALITY_SCALE` raises the rate to watch
+  generations turn over in a short run. The deceased are also excluded from
+  `chronicle.day_digest` moods, `memory.reflect_all`, and `cli status`.
+  Verified on a copy of the live world: one simulated year (17,520 ticks, ~13
+  min) = **4 deaths** (ages 58/70/80/81), 3 widows, 27 mourning memories, 0
+  orphans (the dead had no minor children); all 4 deceased held 0 plans/jobs/
+  conditions. 8 new tests, 42 total pass.
 - **AVATAR SEX MISMATCH (found Wed, 30 Sep 2026) — 201 male residents hold a
   female identity.** Root cause: `build_avatar_gallery.pool()` filters source
   identities by `face_crops.gender`, which is unreliable (mislabels angled/

@@ -163,8 +163,8 @@ def reflect(conn: sqlite3.Connection, agent_id: int, day: int,
 def reflect_all(conn: sqlite3.Connection, day: int, k: int = 8,
                 limit: int = 0) -> int:
     """Reflect for every living resident with enough recent memories."""
-    q = ("SELECT DISTINCT agent_id FROM memories WHERE day>=? "
-         "ORDER BY agent_id")
+    q = ("SELECT DISTINCT m.agent_id FROM memories m JOIN agents a ON a.id=m.agent_id "
+         "WHERE m.day>=? AND a.alive=1 ORDER BY m.agent_id")
     ids = [r["agent_id"] for r in conn.execute(q, (day - 1,)).fetchall()]
     if limit:
         ids = ids[:limit]

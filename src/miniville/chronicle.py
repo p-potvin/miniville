@@ -59,7 +59,8 @@ def day_digest(conn: sqlite3.Connection, day: int, max_events: int = 20) -> str:
     town = conn.execute(
         "SELECT data FROM events WHERE day=? AND kind='town_event'", (day,)).fetchall()
     mood = conn.execute(
-        "SELECT mood, COUNT(*) c FROM agent_state GROUP BY mood ORDER BY c DESC").fetchall()
+        """SELECT s.mood, COUNT(*) c FROM agent_state s JOIN agents a ON a.id=s.agent_id
+           WHERE a.alive=1 GROUP BY s.mood ORDER BY c DESC""").fetchall()
     lines = [f"Day {day+1} in Miniville ({pop} residents).",
              f"Mood of the town: " + ", ".join(f"{m['mood']} x{m['c']}" for m in mood)]
     for t in town:

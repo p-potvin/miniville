@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import chronicle, events, growth, memory, newspaper
+from . import chronicle, events, growth, memory, mortality, newspaper
 from .db import get_meta, set_meta
 from .deviations import apply_deviations
 from .encounters import run_encounters
@@ -73,6 +73,9 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
         stats["plans"] = n
         stats["life_events"] = daily_life_lottery(conn, tick, seed)
         stats["betrayals"] = spouse_discovery(conn, tick, seed)
+        # deaths settle before births: a widow is no longer a spouse, so the
+        # couple cannot also welcome a child on the same day
+        stats["deaths"] = mortality.daily_mortality(conn, tick, seed)
         stats["births"] = growth.births(conn, tick, seed)
     _move_agents(conn, tick)
     apply_conditions(conn, tick)              # sick agents stay home resting

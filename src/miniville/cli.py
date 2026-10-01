@@ -42,11 +42,15 @@ def cmd_status(args) -> int:
     from .timekeeper import fmt_tick
     tick = int(dbmod.get_meta(conn, "tick", "0") or 0)
     print(f"time: {fmt_tick(tick)} (tick {tick})")
-    for t in ("agents", "households", "places", "events", "relationships"):
+    alive = conn.execute("SELECT COUNT(*) c FROM agents WHERE alive=1").fetchone()["c"]
+    dead = conn.execute("SELECT COUNT(*) c FROM agents WHERE alive=0").fetchone()["c"]
+    print(f"  residents: {alive} alive, {dead} deceased")
+    for t in ("households", "places", "events", "relationships"):
         c = conn.execute(f"SELECT COUNT(*) c FROM {t}").fetchone()["c"]
         print(f"  {t}: {c}")
     moods = conn.execute(
-        "SELECT mood, COUNT(*) c FROM agent_state GROUP BY mood ORDER BY c DESC").fetchall()
+        """SELECT s.mood, COUNT(*) c FROM agent_state s JOIN agents a ON a.id=s.agent_id
+           WHERE a.alive=1 GROUP BY s.mood ORDER BY c DESC""").fetchall()
     print("  moods:", {m["mood"]: m["c"] for m in moods})
     labels = conn.execute(
         "SELECT label, COUNT(*) c FROM relationships GROUP BY label ORDER BY c DESC").fetchall()
