@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Wed, 30 Sep 2026 22:30
+Last updated: Thu, 01 Oct 2026 09:00
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -40,8 +40,11 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
 - `schedules.py` — deterministic per-(agent,day) 48-tick plans: sleep/work/
   school/meals/leisure; work shifts get a mid-shift `break` and post-shift dinner.
 - `needs.py` — energy/hunger/social/fun/stress 0-100 + mood rules.
-- `encounters.py` — co-presence pairing at venues (≤12 pairs/place/tick),
+- `encounters.py` — co-presence pairing at venues (≤12 pairs/place/tick;
+  uncapped + strangers at p≥0.5 at an active holiday venue),
   affinity/familiarity/romance graph, labels incl. sweetheart/rival.
+- `seasons.py` — calendar (day 0 = Jan 1, Year 1; 365-day years), seasons,
+  `HOLIDAYS`, school breaks, outdoor appeal, seasonal weather, birthdays.
 - `events.py` — append-only ledger, importance 1-5.
 - `engine.py` — tick loop; rebuilds plans at midnight, runs encounters, pays
   wages, ambient town events, writes chronicle at day end.
@@ -129,6 +132,20 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   min) = **4 deaths** (ages 58/70/80/81), 3 widows, 27 mourning memories, 0
   orphans (the dead had no minor children); all 4 deceased held 0 plans/jobs/
   conditions. 8 new tests, 42 total pass.
+- v0.5 seasons + holidays + birthdays (Thu, 01 Oct 2026, cloud session):
+  `seasons.py` calendar/seasons; 9 fixed holidays (venue or home, tick window,
+  `day_off`, attendance p) — day-off holidays close every workplace except
+  `health`; plan precedence work > school > holiday > sleep; school breaks
+  Jun 15-Aug 31 + Dec 22-Jan 2; outdoor leisure kept with seasonal p (winter
+  0.35 → summer 1.0); weather lines per season. BUG FIXED: nobody ever aged —
+  `growth.age_children` was dead code (removed). Now everyone ages on a
+  hash-derived birthday (`birthday_doy`), children come of age at 18
+  (`coming_of_age` life event). Chronicle/digest/status/UI show date + season +
+  holiday. Verified on SYNTHETIC worlds only (no dataset/live DB on the cloud
+  VM): 590-adult Jul 1-7 soak = 391/742/793/**1,651 (Jul 4)**/771/795/393
+  interactions, 44.9 ticks/s on Jul 4; outdoor leisure Jan week 2,402 vs Jul
+  week 7,119. Tests: 46 pass (test_ui skipped — no PyPI on that VM).
+  NOT yet run on the live world.
 - **AVATAR SEX MISMATCH (found Wed, 30 Sep 2026) — 201 male residents hold a
   female identity.** Root cause: `build_avatar_gallery.pool()` filters source
   identities by `face_crops.gender`, which is unreliable (mislabels angled/
@@ -188,7 +205,8 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
    Optional later: inner monologues via Ollama batches (needs operator OK).
 4. Observer surface: read-only web UI (FastAPI + small frontend) — map of venues,
    resident pages, live event feed, chronicle browser.
-5. Time dynamics: seasons, holidays, aging, births/deaths, town economy stats.
+5. Time dynamics: ~~seasons, holidays, aging, births/deaths~~ ✔ (v0.4/v0.5);
+   town economy stats next (see ROADMAP.md v0.5).
 6. Persistence hygiene: snapshot/backup of `data/miniville.db`, `chronicle/` export.
 7. Scale test: 2k-5k agents, measure tick latency; index hot queries.
 
@@ -214,10 +232,17 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   only needed if operator wants unattended prose without an agent session.
 - If bigger Ollama models wanted later: which may be pulled, and when GPU is free.
 - `uv` is not installed on PATH (using `.venv` + pip). Optional: install uv.
+- Thu, 01 Oct 2026 session ran on a fresh cloud VM (not the workstation): no
+  PyPI (allowlist request for pypi.org + files.pythonhosted.org pending), no
+  dataset/live DB/Ollama, vaultwares-mcp SSE unreachable, and
+  `record-agent-change.ps1` not present — ledger entry for that session is
+  owed; the next workstation session should record it.
 
 ## Resume note for next session
 
 Branch `autodev`. World is seeded (seed=miniville) — `run` continues from tick 384
-(Day 8 00:00). Do NOT `init` again unless intentionally resetting the town.
+(Day 8 00:00 = Jan 8, Year 1, winter; the next holiday is Founders' Day, Apr 18 =
+Day 108, tick 5136). First workstation run after the v0.5 seasons merge: run a day, check
+the chronicle header shows the date and that ~1/365 of residents aged. Do NOT `init` again unless intentionally resetting the town.
 Daily routine for the backup session: read this file → `run` the next day(s) →
 `digest` → write a `narrate-write` entry → update this file → ledger.

@@ -32,10 +32,13 @@ not turn over across years. Closing that loop is the milestone.
   children left with no adult are taken into a new household, and everyone
   close to the deceased carries the memory. `MINIVILLE_MORTALITY_SCALE` raises
   the rate to watch generations turn over in a short run.
-- Births, child aging, immigration — done in v0.4.
-- **Seasons + holidays** — the next piece. A holiday synchronizes the town into
-  the same venues at once, which is where emergent drama comes from; seasons
-  give `schedules.py` a reason to vary (school terms, outdoor leisure).
+- Births and immigration — done in v0.4.
+- **Seasons + holidays + birthdays (done).** A 365-day calendar with seasons;
+  nine fixed holidays that pull the town into one venue at once (or home), with
+  day-off holidays closing workplaces and the holiday crowd mingling freely;
+  school breaks; season-weighted outdoor leisure and seasonal weather. Every
+  resident now ages on their own birthday and children come of age at 18 —
+  previously nobody aged at all (`growth.age_children` was never called).
 - **Economy** — wages only go up today. Needs prices, scarcity, and business
   failure before "economy stats" means anything.
 - **God-mode interventions** — inject a shock (factory closes, fire, festival)
