@@ -146,6 +146,13 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   interactions, 44.9 ticks/s on Jul 4; outdoor leisure Jan week 2,402 vs Jul
   week 7,119. Tests: 46 pass (test_ui skipped — no PyPI on that VM).
   NOT yet run on the live world.
+  PR #1 review fixes (same day): wages only for agents whose day plan has
+  work (was paying on weekends/holidays too); birthdays run before plan
+  rebuild; `agents.birth_day` (newborns age on their real birthday);
+  memories keep the event's tick; orphans fostered into an adult household;
+  immigration reservoir seeded per tick; UI moods exclude the dead; Gazette
+  selector refreshes; avatar scripts: no caching of transient TMDB failures,
+  face_crops removed with retired identities. 54 tests pass.
 - **AVATAR SEX MISMATCH (found Wed, 30 Sep 2026) — 201 male residents hold a
   female identity.** Root cause: `build_avatar_gallery.pool()` filters source
   identities by `face_crops.gender`, which is unreliable (mislabels angled/
@@ -237,6 +244,8 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   dataset/live DB/Ollama, vaultwares-mcp SSE unreachable, and
   `record-agent-change.ps1` not present — ledger entry for that session is
   owed; the next workstation session should record it.
+- OPERATOR: confirm the 15-min `refresh_avatars` timer (TMDB verification
+  requests in a loop) is approved per ROUTER, or stop it until it is.
 
 ## Resume note for next session
 
