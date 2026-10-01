@@ -34,6 +34,9 @@ SECTIONS = {
     "favor": "Neighbors",
     "favor_repaid": "Neighbors",
     "work_buddy": "Working Life",
+    "holiday": "Town Life",
+    "season": "Town Life",
+    "coming_of_age": "Town Life",
 }
 
 

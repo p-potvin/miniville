@@ -9,7 +9,8 @@ async function status() {
   const s = await api("/api/status");
   curDay = s.day;
   $("#status").innerHTML =
-    `Day ${s.day} · ${esc(s.time)} · ${s.population} residents · ` +
+    `Day ${s.day} · ${esc(s.date)} · ${esc(s.season)}${s.holiday ? ` · ${esc(s.holiday)}` : ""} · ` +
+    `${esc(s.time)} · ${s.population} residents · ` +
     Object.entries(s.moods).map(([m, n]) => `${m} ${n}`).join(" · ");
   $("#feed-day").textContent = `day ${s.day}`;
   $("#chron-day").value = Math.max(1, s.day - 1);

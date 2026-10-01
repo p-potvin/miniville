@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import chronicle, events, growth, memory, mortality, newspaper
+from . import chronicle, events, growth, memory, mortality, newspaper, seasons
 from .db import get_meta, set_meta
 from .deviations import apply_deviations
 from .encounters import run_encounters
@@ -17,9 +17,6 @@ from .timekeeper import TICKS_PER_DAY, day_of, tick_of_day
 
 # occasional town-level happenings
 TOWN_EVENTS = [
-    ("weather", "A cold snap rolls in over Lush Meadow Park."),
-    ("weather", "Warm sunshine draws crowds to Lakeshore."),
-    ("weather", "Rain drums on the roofs of the Old Mill Quarter."),
     ("town", "The Miniville Gazette publishes its weekly edition."),
     ("town", "A farmers' market sets up in the Community Center lot."),
     ("town", "The high school team wins a home game; Greenhill celebrates."),
@@ -45,7 +42,9 @@ def _move_agents(conn: sqlite3.Connection, tick: int) -> int:
 def _ambient_town_event(conn: sqlite3.Connection, tick: int, seed: str) -> None:
     r = rng_for(seed, "town", tick)
     if r.random() < 0.012:
-        kind, text = r.choice(TOWN_EVENTS)
+        weather = [("weather", text) for text in seasons.SEASON_WEATHER[
+            seasons.season_of(day_of(tick))]]
+        kind, text = r.choice(TOWN_EVENTS + weather)
         events.emit(conn, tick, "town_event", importance=2, text=text, tag=kind)
 
 
@@ -71,6 +70,8 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
     if tick_of_day(tick) == 0:
         n = rebuild_day_plans(conn, day_of(tick), seed)
         stats["plans"] = n
+        stats["birthdays"] = seasons.birthdays(conn, tick, seed)
+        seasons.announce_day(conn, tick)
         stats["life_events"] = daily_life_lottery(conn, tick, seed)
         stats["betrayals"] = spouse_discovery(conn, tick, seed)
         # deaths settle before births: a widow is no longer a spouse, so the

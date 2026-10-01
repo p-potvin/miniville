@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import db as dbmod
 from ..events import describe
+from ..seasons import fmt_date, holiday_on, season_of
 from ..timekeeper import TICKS_PER_DAY, day_of, fmt_tick
 
 STATIC = Path(__file__).parent / "static"
@@ -39,7 +40,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "SELECT mood, COUNT(*) c FROM agent_state GROUP BY mood")}
             pop = c.execute(
                 "SELECT COUNT(*) n FROM agents WHERE alive=1").fetchone()["n"]
-            return {"tick": tick, "day": day_of(tick) + 1,
+            day = day_of(tick)
+            holiday = holiday_on(day)
+            return {"tick": tick, "day": day + 1, "date": fmt_date(day),
+                    "season": season_of(day),
+                    "holiday": holiday.name if holiday else None,
                     "time": fmt_tick(tick), "population": pop, "moods": moods}
         finally:
             c.close()

@@ -168,13 +168,3 @@ def births(conn: sqlite3.Connection, tick: int, seed: str) -> int:
         n += 1
     conn.commit()
     return n
-
-
-def age_children(conn: sqlite3.Connection, tick: int) -> int:
-    """Children turn a year older on their birthday (day 1 of each year)."""
-    if tick % (48 * 365) != 0:
-        return 0
-    cur = conn.execute(
-        "UPDATE agents SET age=age+1 WHERE is_child=1 AND alive=1")
-    conn.commit()
-    return cur.rowcount

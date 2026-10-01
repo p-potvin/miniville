@@ -39,9 +39,16 @@ def cmd_run(args) -> int:
 
 def cmd_status(args) -> int:
     conn = _conn(args)
+    from .seasons import fmt_date, holiday_on, season_of
+    from .timekeeper import day_of
     from .timekeeper import fmt_tick
     tick = int(dbmod.get_meta(conn, "tick", "0") or 0)
     print(f"time: {fmt_tick(tick)} (tick {tick})")
+    day = day_of(tick)
+    print(f"date: {fmt_date(day)} ({season_of(day)})")
+    holiday = holiday_on(day)
+    if holiday:
+        print(f"holiday: {holiday.name}")
     alive = conn.execute("SELECT COUNT(*) c FROM agents WHERE alive=1").fetchone()["c"]
     dead = conn.execute("SELECT COUNT(*) c FROM agents WHERE alive=0").fetchone()["c"]
     print(f"  residents: {alive} alive, {dead} deceased")
