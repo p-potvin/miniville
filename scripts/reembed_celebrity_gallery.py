@@ -131,9 +131,13 @@ def main(argv=None) -> int:
         if not args.dry_run:
             (folder / "embedding-evaluation.json").write_text(
                 json.dumps(result, indent=2), encoding="utf-8")
-            done.add(name)
-            state["completed"] = sorted(done)
-            state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            # only a folder that actually produced crops counts as done: an
+            # "incomplete" one is usually just untagged, and must be retried
+            # once the tagger has run rather than skipped by --resume
+            if result["status"] == "ok":
+                done.add(name)
+                state["completed"] = sorted(done)
+                state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
         if n % 10 == 0 or n == len(folders):
             rate = (time.monotonic() - t0) / max(1, n)

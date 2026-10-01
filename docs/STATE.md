@@ -323,13 +323,30 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   person's crops, not the first six — sampling six left lola_petticrew
   undecided (M3/F11 overall, but M2/F4 over the first six, an exact 2:1 tie).
   `docs/AVATARS.md` records the method and the measurements.
-  **Still blocked on the pool**: 171 male residents hold a female identity and
-  only 93 verified male identities exist, all in use. All 112 folders missing
-  from `gallery.db` have zero tag-eligible images, so the constraint is
-  *tagging*: the tagger (`vault-commander\cli\utils\tag_images.py`) cannot run
-  because `rapidocr` is missing from that venv. OPERATOR: install `rapidocr`
-  (or point me at the venv that has it) and the 112 folders become embeddable,
-  verifiable offline, and castable.
+  The binding constraint was *tagging*, and it is now cleared. `rapidocr` was
+  missing from both the vault-commander and ColONEL-KFC venvs; installed into
+  ColONEL-KFC with `uv pip install --python <KFC python> rapidocr` (6 small
+  packages, no CUDA), which the operator had pointed me at as the vision venv.
+  Then ran the whole chain (tag -> re-embed -> verify -> re-cast), 62 min of
+  tagging at ~3 img/s plus ~15 min of embedding:
+
+  | | before | after |
+  | --- | --- | --- |
+  | folders with >=6 eligible images | 133 | **371** |
+  | identities in `gallery.db` | 163 | **256** |
+  | face crops | 2,015 | **4,826** |
+  | exemplars | 949 | **1,535** |
+  | residents on a wrong-sex identity | 171 | **125** |
+  47 residents re-cast onto a correct-sex identity (John Cleese, James Cameron,
+  Kirk Douglas, Robert Mitchum, Henry Mancini joined the pool). Identity-level
+  sex vote 251/254 correct vs the TMDB labels. Pipeline documented in
+  `docs/AVATARS.md`.
+  **Remaining 125 need people not in the gallery yet** — every folder with >=6
+  eligible images has now been embedded, so the pool only grows by downloading
+  new identities (`Import-IMDbStarMeter.ps1`). `G:\Gallery` (931 identities) is
+  female-only (929F/1M). Also fixed `reembed_celebrity_gallery.py` marking
+  untagged folders "done" (so `--resume` skipped them) and
+  `verify_celebrity_gender.py` sampling only the first 6 crops.
 
 ## Resume note for next session
 

@@ -39,9 +39,62 @@ as `<name>_nmXXXXXXX` folders the builder picks up on re-run.
 275 folders on disk hold 15,659 images, but only 4,264 carry a Tag-Images
 sidecar, and **all 112 folders that are missing from `gallery.db` have zero
 tag-eligible images**. Nothing can be embedded, verified or cast from them until
-they are tagged. The tagger is `vault-commander\cli\utils\tag_images.py`
-(`--input <dir>`); it currently cannot run because `rapidocr` is missing from
-that venv.
+they are tagged.
+
+## The pipeline, in order
+
+Every step is resumable and safe to re-run. Run the vision steps with the
+**ColONEL-KFC venv** (`ColONEL-KFC\.venv\Scripts\python.exe`) — it has torch,
+ultralytics, onnxruntime and insightface.
+
+```powershell
+$KFC = "..\ColONEL-KFC\.venv\Scripts\python.exe"
+
+# 1. tag: writes <photo>.jpg.json beside every image that lacks one
+#    (vault-commander's tagger; ~2-5 img/s, skips already-tagged)
+& $KFC "..\vault-commander\cli\utils\tag_images.py" --input "G:\Galleries\Celebrities"
+
+# 2. embed + pick exemplars + store every eligible crop
+& $KFC scripts\reembed_celebrity_gallery.py --root "G:\Galleries\Celebrities" --resume
+
+# 3. decide each identity's sex offline (insightface vote over all its crops)
+& $KFC scripts\verify_celebrity_gender.py
+
+# 4. give the mismatched residents a correct-sex identity
+.\.venv\Scripts\python.exe scripts\recase_avatars.py
+```
+
+`tag_images.py` needs `rapidocr` (for the `large_text` quality tag). It was
+missing from both the vault-commander and ColONEL-KFC venvs; installed into
+ColONEL-KFC with `uv pip install --python <KFC python> rapidocr` (6 small
+packages, no CUDA). It will move genuinely corrupt files to `.invalid/`.
+
+Order matters: the tagger's `Single`/`people_count` tags are what
+`tagged_face_eligibility` gates on, and the re-embed is a no-op on a folder that
+is not yet tagged.
+
+### Result of the first full run (Thu, 01 Oct 2026)
+
+Ran the whole chain end to end. Tagging 11,647 images took 62 min at ~3 img/s
+(9,448 were already tagged; 0 faulty, 0 moved to `.invalid`).
+
+| | before | after |
+| --- | --- | --- |
+| folders with >=6 eligible images | 133 | **371** |
+| identities in `gallery.db` | 163 | **256** |
+| face crops | 2,015 | **4,826** |
+| exemplars | 949 | **1,535** |
+| residents on a wrong-sex identity | 171 | **125** |
+
+47 residents were re-cast onto a correct-sex identity (John Cleese, James
+Cameron, Kirk Douglas, Robert Mitchum and Henry Mancini all entered the pool
+this way). Identity-level sex vote: 251/254 correct against the TMDB labels.
+
+**The remaining 125 need people who are not in the gallery yet.** Every folder
+with >=6 eligible images has now been embedded, so there is nothing left to
+extract from the current photo set — the pool only grows by downloading new
+identities (`Import-IMDbStarMeter.ps1`). `G:\Gallery` (931 identities) is
+female-only (929F/1M) and cannot help.
 
 ## Identity sex: how it is decided
 
