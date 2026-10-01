@@ -8,6 +8,9 @@ from __future__ import annotations
 import json
 import sqlite3
 
+from .seasons import (
+    OUTDOOR_APPEAL, OUTDOOR_TAGS, holiday_on, school_in_session, season_of,
+)
 from .rng import rng_for
 from .timekeeper import TICKS_PER_DAY, is_weekend, weekday
 
@@ -17,6 +20,13 @@ SCHOOL_START, SCHOOL_END = 14, 32
 
 LEISURE_TAGS = ["outdoors", "food", "drink", "nightlife", "sport", "quiet",
                 "arts", "community", "coffee"]
+
+# shops and eateries can be workplaces too (the grocer, the diner, the shops),
+# so customers must be able to plan a trip there
+SHOP_TAGS = ["retail", "trades"]
+SHOP_KINDS = ("workplace", "public")
+DINING_KINDS = ("workplace", "public")
+SHOPPING_WINDOWS = (20, 32, 42)   # 10:00, 16:00, 21:00
 
 
 def _venue_by_tags(conn: sqlite3.Connection, tags: list[str], kinds=("public", "civic")):
@@ -35,13 +45,21 @@ def _plan_ctx(conn: sqlite3.Connection) -> dict:
     """Per-day cached venue data — one table scan instead of ~100."""
     venues = []
     for row in conn.execute(
-            "SELECT id, kind, tags, open_tick, close_tick FROM places").fetchall():
+            """SELECT p.id, p.name, p.kind, p.tags, p.open_tick, p.close_tick,
+                      COALESCE(b.status, 'open') AS status
+               FROM places p LEFT JOIN businesses b ON b.place_id = p.id""").fetchall():
         v = dict(row)
         v["tags"] = set(json.loads(v["tags"]))
+        if v["status"] == "closed":
+            continue              # a shut business is not a destination
         venues.append(v)
     school = conn.execute(
         "SELECT id FROM places WHERE name='Miniville School'").fetchone()
-    return {"venues": venues, "school_id": school["id"] if school else None}
+    return {
+        "venues": venues,
+        "ids_by_name": {v["name"]: v["id"] for v in venues},
+        "school_id": school["id"] if school else None,
+    }
 
 
 def _by_tags(venues: list[dict], tags: list[str], kinds=("public", "civic")):
@@ -73,33 +91,55 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
     home = agent["home_place_id"]
     wknd = is_weekend(day * TICKS_PER_DAY)
     hobbies = json.loads(agent["hobbies_json"] or "[]")
+    season = season_of(day)
+    holiday = holiday_on(day)
 
     job = conn.execute("SELECT * FROM jobs WHERE agent_id=?", (agent["id"],)).fetchone()
+    job_venue = next((v for v in ctx["venues"]
+                      if job and v["id"] == job["place_id"]), None)
     works_today = bool(job) and not wknd and not agent["is_child"]
+    if holiday and holiday.day_off and not (job_venue and "health" in job_venue["tags"]):
+        works_today = False
+    attends_holiday = bool(holiday) and not (
+        holiday.adults_only and agent["is_child"]
+    ) and rng_for(seed, "holiday", agent["id"], day).random() < holiday.p_attend
 
     leisure_venues = _by_tags(ctx["venues"], _hobby_tags(hobbies))
     if not leisure_venues:
         leisure_venues = _by_tags(ctx["venues"], LEISURE_TAGS)
-    food_venues = _by_tags(ctx["venues"], ["food"])
+    food_venues = _by_tags(ctx["venues"], ["food"], DINING_KINDS)
+    shop_venues = _by_tags(ctx["venues"], SHOP_TAGS, SHOP_KINDS)
     school_id = ctx["school_id"]
 
     for t in range(TICKS_PER_DAY):
         place, act = home, "sleep"
-        if t < WAKE_TICK or t >= SLEEP_TICK:
-            plan[t] = (place, act)
-            continue
-
-        if agent["is_child"] and agent["age"] >= 5 and not wknd:
-            if SCHOOL_START <= t < SCHOOL_END and school_id:
-                plan[t] = (school_id, "school")
-                continue
-        elif works_today and job["shift_start"] <= t < job["shift_end"]:
+        in_work_shift = works_today and job["shift_start"] <= t < job["shift_end"]
+        if in_work_shift:
             # lunch break mid-shift so workers don't starve
             mid = (job["shift_start"] + job["shift_end"]) // 2
-            if t == mid:
-                plan[t] = (job["place_id"], "break")
-            else:
-                plan[t] = (job["place_id"], "work")
+            plan[t] = (job["place_id"], "break" if t == mid else "work")
+            continue
+
+        in_school = (
+            agent["is_child"] and agent["age"] >= 5 and not wknd
+            and school_in_session(day) and SCHOOL_START <= t < SCHOOL_END
+            and school_id
+        )
+        if in_school:
+            plan[t] = (school_id, "school")
+            continue
+
+        in_holiday = (
+            holiday and attends_holiday
+            and holiday.start_tick <= t < holiday.end_tick
+        )
+        if in_holiday:
+            venue_id = ctx["ids_by_name"].get(holiday.venue) if holiday.venue else None
+            plan[t] = (venue_id or home, "celebrate")
+            continue
+
+        if t < WAKE_TICK or t >= SLEEP_TICK:
+            plan[t] = (place, act)
             continue
 
         # post-shift dinner for workers whose shift ends at/past dinner time
@@ -115,12 +155,23 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
             plan[t] = (home, "eat")
             continue
 
+        # errands: a shopping trip now and then keeps the shops in business
+        if t in SHOPPING_WINDOWS and shop_venues and not agent["is_child"]:
+            if r.random() < 0.30:
+                v = r.choice(shop_venues)
+                if v["open_tick"] <= t <= v["close_tick"]:
+                    plan[t] = (v["id"], "shopping")
+                    continue
+
         # leisure: prob of going out depends on weekend & hour
         p_out = 0.55 if wknd else (0.35 if 18 <= t <= 30 else 0.2)
         if t >= 40 and r.random() < 0.3:
             p_out = 0.4  # nightlife window
         if r.random() < p_out and leisure_venues:
             v = r.choice(leisure_venues)
+            if v["tags"] & OUTDOOR_TAGS and r.random() >= OUTDOOR_APPEAL[season]:
+                plan[t] = (home, "home")
+                continue
             if v["open_tick"] <= t <= v["close_tick"]:
                 plan[t] = (v["id"], "leisure")
                 continue

@@ -62,3 +62,28 @@ def test_chronicle_404_then_ok(client):
     assert client.get("/api/chronicle/99").status_code == 404
     r = client.get("/api/chronicle/1")
     assert r.status_code == 200 and "Day 1" in r.json()["chronicle"]
+
+
+def test_resident_detail_includes_memories(client):
+    rid = client.get("/api/residents?q=Ada").json()[0]["id"]
+    detail = client.get(f"/api/resident/{rid}").json()
+    assert "memories" in detail
+    mems = client.get(f"/api/memories/{rid}").json()
+    assert isinstance(mems, list)
+
+
+def test_newspaper_endpoint(client):
+    body = client.get("/api/newspaper").json()
+    assert "editions" in body and "latest" in body
+    assert client.get("/api/newspaper?week=99").status_code == 404
+
+
+def test_economy_endpoint(client):
+    body = client.get("/api/economy").json()
+    assert "money_supply_cents" in body["stats"]
+    assert body["businesses"], "the town should have businesses"
+    assert any(b["name"] == "Town Hall" for b in body["businesses"])
+    # the fixture runs exactly one day, so no day has closed its books yet and
+    # the in-progress day must not be reported as the last completed one
+    assert body["stats"]["last_day"] is None
+    assert body["series"] == []

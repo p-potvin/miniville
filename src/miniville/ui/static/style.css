@@ -41,3 +41,15 @@ pre { white-space: pre-wrap; background: var(--panel); padding: 1rem;
   border-radius: 8px; border: 1px solid var(--line); }
 .narr { border-left: 3px solid var(--accent); padding: .4rem .8rem; margin: .8rem 0; }
 .narr b { color: var(--warm); }
+li.mem { border-left: 3px solid var(--line); }
+li.mem.refl { border-left: 3px solid var(--accent); background: #1a2028;
+  font-style: italic; }
+#gaz-text { font-family: Georgia, serif; line-height: 1.6; }
+#econ-stats { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1rem; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: .5rem .9rem; min-width: 8.5rem; }
+.stat b { display: block; color: var(--accent); font-size: 1.15rem; }
+.stat span { color: var(--dim); font-size: .78rem; }
+h3 { font-family: Georgia, serif; color: var(--dim); font-size: .95rem;
+  margin: 1.4rem 0 .4rem; font-weight: normal; }
+td.closed { color: var(--warm); }

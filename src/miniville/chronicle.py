@@ -1,10 +1,12 @@
 """Daily chronicle: distills the day's events into a readable entry."""
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections import Counter
 
 from .events import describe
+from .seasons import fmt_date, holiday_on, season_of
 from .timekeeper import DAY_NAMES
 
 HEADLINES = {
@@ -19,7 +21,11 @@ def write_day(conn: sqlite3.Connection, day: int, seed: str) -> str:
         "SELECT * FROM events WHERE day=? ORDER BY importance DESC, id", (day,)).fetchall()
     pop = conn.execute("SELECT COUNT(*) c FROM agents WHERE alive=1").fetchone()["c"]
     weekday = DAY_NAMES[day % 7]
-    lines = [f"# Day {day+1} ({weekday}) — Miniville Chronicle", ""]
+    lines = [
+        f"# Day {day+1} ({weekday}, {fmt_date(day)}, {season_of(day).capitalize()}) "
+        "— Miniville Chronicle",
+        "",
+    ]
     lines.append(f"*{pop} residents. {len(rows)} recorded happenings.*")
     lines.append("")
 
@@ -40,6 +46,10 @@ def write_day(conn: sqlite3.Connection, day: int, seed: str) -> str:
     lines.append("## By the numbers")
     for k, c in kinds.most_common():
         lines.append(f"- {k}: {c}")
+    lines.append("")
+    lines.append("## Economy")
+    from .economy import economy_line
+    lines.append(f"- {economy_line(conn)}")
     text = "\n".join(lines)
 
     conn.execute(
@@ -58,9 +68,16 @@ def day_digest(conn: sqlite3.Connection, day: int, max_events: int = 20) -> str:
     town = conn.execute(
         "SELECT data FROM events WHERE day=? AND kind='town_event'", (day,)).fetchall()
     mood = conn.execute(
-        "SELECT mood, COUNT(*) c FROM agent_state GROUP BY mood ORDER BY c DESC").fetchall()
+        """SELECT s.mood, COUNT(*) c FROM agent_state s JOIN agents a ON a.id=s.agent_id
+           WHERE a.alive=1 GROUP BY s.mood ORDER BY c DESC""").fetchall()
     lines = [f"Day {day+1} in Miniville ({pop} residents).",
+             f"Date: {fmt_date(day)}, {season_of(day)}"]
+    holiday = holiday_on(day)
+    if holiday:
+        lines.append(f"Holiday: {holiday.name}")
+    lines.extend([
              f"Mood of the town: " + ", ".join(f"{m['mood']} x{m['c']}" for m in mood)]
+    )
     for t in town:
         lines.append(f"Town news: {json.loads(t['data']).get('text','')}")
     lines.append("Events (most significant first):")

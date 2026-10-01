@@ -5,6 +5,10 @@ Autonomous town simulation seeded by NVIDIA Nemotron-Personas-USA.
 **First, every session: read `docs/STATE.md`** (mandate, decisions, blockers,
 resume pointer). Update it before finishing.
 
+**Two agents share this repo** (workstation + cloud Devin). Pull before working,
+push small commits to `autodev` often, and coordinate via `docs/AGENT_SYNC.md`
+(claims + append-only messages).
+
 VaultWares protocols apply via `vaultwares-docs/instructions/ROUTER.md` —
 notably: branch `autodev` (PRs to main for operator), no unapproved request
 loops (Ollama narration batches need operator OK), agent-ledger entry before

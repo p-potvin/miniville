@@ -15,4 +15,10 @@ python -m venv .venv; .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Project memory between sessions: [`docs/STATE.md`](docs/STATE.md). Design notes: [`docs/DESIGN.md`](docs/DESIGN.md).
+The town has a calendar (four seasons, twelve holidays), a lifecycle (births,
+coming of age, immigration, mortality) and an economy (rent, prices, businesses
+that can fail, wages that move with unemployment).
+
+Project memory between sessions: [`docs/STATE.md`](docs/STATE.md). Design notes:
+[`docs/DESIGN.md`](docs/DESIGN.md), [`docs/ECONOMY.md`](docs/ECONOMY.md),
+[`docs/AVATARS.md`](docs/AVATARS.md), [`docs/NARRATION.md`](docs/NARRATION.md).

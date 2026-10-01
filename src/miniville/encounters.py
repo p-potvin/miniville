@@ -8,11 +8,14 @@ from .events import MINOR, NOTABLE, TRIVIAL, emit
 from .favors import maybe_affair, maybe_ask_favor, maybe_repay_debt
 from .life import dating_arc_check, romance_allowed
 from .rng import rng_for
+from .seasons import holiday_on
 
 REL_THRESHOLDS = [
     (0, "stranger"), (3, "acquaintance"), (10, "familiar"), (25, "friend"),
     (60, "close_friend"),
 ]
+
+HOLIDAY_P_INTERACT = 0.5
 
 
 def _rel_label(familiarity: float, affinity: float, romance: float) -> str:
@@ -164,8 +167,15 @@ def run_encounters(conn: sqlite3.Connection, tick: int, seed: str,
                    max_pairs_per_place: int = 12) -> int:
     """Pair up co-present agents at public venues. Returns # interactions."""
     tick_of_day = tick % 48
+    holiday = holiday_on(tick // 48)
+    holiday_place_id = None
+    if (holiday and holiday.venue
+            and holiday.start_tick <= tick_of_day < holiday.end_tick):
+        place = conn.execute(
+            "SELECT id FROM places WHERE name=?", (holiday.venue,)).fetchone()
+        holiday_place_id = place["id"] if place else None
     places = conn.execute(
-        "SELECT id, capacity FROM places WHERE kind IN ('public','civic','workplace')"
+        "SELECT id, name, capacity FROM places WHERE kind IN ('public','civic','workplace')"
     ).fetchall()
     n_interactions = 0
     for p in places:
@@ -182,10 +192,18 @@ def run_encounters(conn: sqlite3.Connection, tick: int, seed: str,
         pairs = []
         for i in range(0, len(agents) - 1, 2):
             pairs.append((agents[i], agents[i + 1]))
-        for a, b in pairs[:max_pairs_per_place]:
+        pair_cap = max_pairs_per_place
+        holiday_venue_active = (
+            holiday_place_id is not None and p["id"] == holiday_place_id
+        )
+        if holiday_venue_active:
+            pair_cap = len(pairs)
+        for a, b in pairs[:pair_cap]:
             # interaction probability: strangers lower, acquaintances higher
             rel = _get_rel(conn, a["agent_id"], b["agent_id"])
             p_int = 0.28 if not rel else min(0.9, 0.3 + rel["familiarity"] / 40)
+            if holiday_venue_active:
+                p_int = max(p_int, HOLIDAY_P_INTERACT)
             if r.random() < p_int:
                 ra = conn.execute("SELECT * FROM agents WHERE id=?", (a["agent_id"],)).fetchone()
                 rb = conn.execute("SELECT * FROM agents WHERE id=?", (b["agent_id"],)).fetchone()

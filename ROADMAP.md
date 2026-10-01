@@ -21,7 +21,34 @@ weekly newspaper recap. Bounded calls; needs operator approval for batches.
 FastAPI + minimal frontend: town map (venues/districts), resident cards,
 live event feed, chronicle browser, relationship graph viz.
 
-## v0.5+ — deep time
+## v0.5 — deep time (in progress)
 
-Seasons, holidays, aging, births/deaths, economy stats, migration in/out,
-god-mode interventions, maybe multi-town federation.
+The town could only grow — births and immigration in, nothing out — so it could
+not turn over across years. Closing that loop is the milestone.
+
+- **Mortality (done).** Age-dependent Gompertz hazard rolled once per simulated
+  day, calibrated to a US life table (~10 deaths/1000/yr). A death is settled,
+  not just recorded: the spouse is widowed, the job is freed for someone else,
+  children left with no adult are taken into a new household, and everyone
+  close to the deceased carries the memory. `MINIVILLE_MORTALITY_SCALE` raises
+  the rate to watch generations turn over in a short run.
+- Births and immigration — done in v0.4.
+- **Seasons + holidays + birthdays (done).** A 365-day calendar with seasons;
+  nine fixed holidays that pull the town into one venue at once (or home), with
+  day-off holidays closing workplaces and the holiday crowd mingling freely;
+  school breaks; season-weighted outdoor leisure and seasonal weather. Every
+  resident now ages on their own birthday and children come of age at 18 —
+  previously nobody aged at all (`growth.age_children` was never called).
+- **Economy (done, v0.6).** Rent, groceries, meals, shopping and paid leisure
+  give the town a cost of living; a household that misses two rent payments
+  downsizes to The Flats. Every venue has a business that is credited for what
+  customers spend and debited for the wages it pays; a commercial venue that
+  bleeds past −$60k closes, lays off its staff, and reopens weeks later.
+  `wage_index` drifts with unemployment, so wages no longer only go up. A weekly
+  levy on business reserves funds the town and rebates a civic dividend, which
+  keeps money circulating. Full write-up: `docs/ECONOMY.md`.
+- **God-mode interventions** — inject a shock (factory closes, fire, festival)
+  and watch the town absorb it. The economy now gives a shock something to
+  propagate through: a closed business is already a real shock, and a venue
+  losing its customers already fails. Next: make shocks *injectable* on demand.
+- Multi-town federation — maybe.

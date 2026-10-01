@@ -9,7 +9,8 @@ async function status() {
   const s = await api("/api/status");
   curDay = s.day;
   $("#status").innerHTML =
-    `Day ${s.day} · ${esc(s.time)} · ${s.population} residents · ` +
+    `Day ${s.day} · ${esc(s.date)} · ${esc(s.season)}${s.holiday ? ` · ${esc(s.holiday)}` : ""} · ` +
+    `${esc(s.time)} · ${s.population} residents · ` +
     Object.entries(s.moods).map(([m, n]) => `${m} ${n}`).join(" · ");
   $("#feed-day").textContent = `day ${s.day}`;
   $("#chron-day").value = Math.max(1, s.day - 1);
@@ -61,6 +62,11 @@ async function residentCard(id) {
     <ul>${r.relationships.map(x =>
       `<li>${esc(x.name)} — ${x.label} (fam ${Math.round(x.familiarity)},
         aff ${Math.round(x.affinity)}, rom ${Math.round(x.romance)})</li>`).join("")}</ul>
+    ${r.memories && r.memories.length ? `
+    <h4>Memories</h4>
+    <ul>${r.memories.map(m =>
+      `<li class="mem${m.kind === "reflection" ? " refl" : ""}">
+        <span class="t">d${m.day} · ${esc(m.kind)}</span> ${esc(m.text)}</li>`).join("")}</ul>` : ""}
     <h4>Recent</h4>
     <ul>${r.recent.map(e => `<li>${esc(e.text)}</li>`).join("")}</ul>`;
 }
@@ -92,7 +98,58 @@ async function rels() {
      rom ${Math.round(r.romance)}</span></li>`).join("");
 }
 
-const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts };
+async function gazette() {
+  const r = await api("/api/newspaper");
+  const sel = $("#gaz-week");
+  if (!r.latest) {
+    sel.innerHTML = "";
+    $("#gaz-text").textContent = "No edition published yet — the first paper " +
+      "prints at the end of week 1.";
+    return;
+  }
+  if (sel.options.length !== r.editions.length) {
+    sel.innerHTML = r.editions.map(e =>
+      `<option value="${e.week}">week ${e.week}</option>`).join("");
+  }
+  sel.value = String(r.editions[0].week);
+  sel.onchange = () => gazetteWeek(sel.value);
+  $("#gaz-text").textContent = r.latest.text;
+}
+
+async function gazetteWeek(week) {
+  const r = await api("/api/newspaper?week=" + week);
+  $("#gaz-text").textContent = r.text;
+}
+
+const money = (c) => "$" + ((c ?? 0) / 100).toLocaleString(undefined,
+  { maximumFractionDigits: 0 });
+
+async function economy() {
+  const r = await api("/api/economy");
+  const s = r.stats;
+  $("#econ-stats").innerHTML =
+    `<div class="stat"><b>${money(s.money_supply_cents)}</b><span>in circulation</span></div>
+     <div class="stat"><b>${money(s.median_balance_cents)}</b><span>median wallet</span></div>
+     <div class="stat"><b>${(s.unemployment * 100).toFixed(1)}%</b><span>unemployment</span></div>
+     <div class="stat"><b>${Math.round(s.wage_index * 100)}%</b><span>wages vs baseline</span></div>
+     <div class="stat"><b>${s.businesses_open}</b><span>open</span></div>
+     <div class="stat"><b>${s.businesses_closed}</b><span>dark</span></div>
+     <div class="stat"><b>${s.in_debt}</b><span>in debt</span></div>`;
+  $("#econ-body").innerHTML = r.businesses.map(b =>
+    `<tr><td>${esc(b.name)}</td><td>${esc(b.kind)}</td>
+     <td class="${b.status === "closed" ? "closed" : ""}">${b.status}</td>
+     <td>${money(b.balance_cents)}</td><td>${money(b.revenue_total)}</td>
+     <td>${money(b.payroll_total)}</td><td>${(b.price_index * 100).toFixed(0)}%</td>
+     <td>${Math.round(b.ema_traffic)}</td></tr>`).join("");
+  $("#econ-days").innerHTML = r.series.map(d =>
+    `<tr><td>${d.day + 1}</td><td>${money(d.revenue_cents)}</td>
+     <td>${money(d.payroll_cents)}</td><td>${money(d.rent_cents)}</td>
+     <td>${money(d.spending_cents)}</td><td>${money(d.money_supply_cents)}</td>
+     <td>${(d.unemployment_bp / 100).toFixed(1)}%</td>
+     <td>${d.businesses_closed}</td></tr>`).join("");
+}
+
+const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts, gazette, economy };
 for (const b of document.querySelectorAll("#tabs button"))
   b.onclick = () => {
     document.querySelectorAll("#tabs button").forEach(x => x.classList.remove("on"));

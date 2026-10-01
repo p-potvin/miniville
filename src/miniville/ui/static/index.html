@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+<link rel="icon" href="data:,">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Miniville Observer</title>
@@ -18,6 +19,8 @@
   <button data-tab="chronicle">Chronicle</button>
   <button data-tab="rels">Bonds</button>
   <button data-tab="debts">IOUs</button>
+  <button data-tab="gazette">Gazette</button>
+  <button data-tab="economy">Economy</button>
 </nav>
 <main>
   <section id="feed" class="panel on">
@@ -53,6 +56,23 @@
   <section id="debts" class="panel">
     <h2>IOU ledger <label><input id="debts-all" type="checkbox"> include settled</label></h2>
     <ul id="debts-list"></ul>
+  </section>
+  <section id="gazette" class="panel">
+    <h2>The Miniville Gazette
+      <select id="gaz-week"></select></h2>
+    <pre id="gaz-text"></pre>
+  </section>
+  <section id="economy" class="panel">
+    <h2>Economy</h2>
+    <div id="econ-stats"></div>
+    <h3>Businesses</h3>
+    <table><thead><tr><th>Business</th><th>Kind</th><th>Status</th>
+      <th>Balance</th><th>Revenue</th><th>Payroll</th><th>Prices</th><th>Traffic</th>
+    </tr></thead><tbody id="econ-body"></tbody></table>
+    <h3>Recent days</h3>
+    <table><thead><tr><th>Day</th><th>Revenue</th><th>Payroll</th><th>Rent</th>
+      <th>Spending</th><th>Supply</th><th>Unemployment</th><th>Closed</th>
+    </tr></thead><tbody id="econ-days"></tbody></table>
   </section>
 </main>
 <script src="/app.js"></script>

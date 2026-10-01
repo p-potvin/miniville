@@ -29,7 +29,7 @@ hobbies, ambitions). The town is an abstract social graph anchored to venues —
 
 ## The world
 
-- 5 districts; 16 civic/public/work venues + generated homes.
+- 5 districts; 17 civic/public/work venues + generated homes.
 - Venues have tags (food, quiet, sport, worship...) and opening ticks.
 - Occupation keywords map to venue tags → workplace assignment (see
   `OCCUPATION_MAP`). 8% baseline unemployment.
@@ -38,8 +38,29 @@ hobbies, ambitions). The town is an abstract social graph anchored to venues —
 
 - 48 ticks/day (30 min). Agents sleep 22:30-06:30.
 - Weekday work (bitmask in `jobs.work_days`); school for children 5-17.
-- Encounters only where agents co-present & awake; ≤12 pairs/venue/tick.
-- Wages paid at shift end; dining out costs $14.
+- Encounters only where agents co-present & awake; ≤12 pairs/venue/tick
+  (lifted at an active holiday venue — see Calendar).
+- Wages paid at shift end, but only for days actually worked. Rent, groceries,
+  meals and errands are priced; see `ECONOMY.md`.
+
+## Calendar (v0.5, `seasons.py`)
+
+- 365-day years, no leap days; day 0 = Jan 1, Year 1 (a Monday). Seasons are
+  meteorological: winter Dec-Feb, spring Mar-May, summer Jun-Aug, autumn Sep-Nov.
+- Fixed-date holidays (`HOLIDAYS`) name a venue (or home), a tick window, a
+  `day_off` flag and an attendance probability. Attendance is one roll per
+  (agent, day) on its own RNG stream, so it never perturbs the plan stream.
+  Plan precedence: work shift > school > holiday window > sleep > the rest.
+  Day-off holidays close every workplace except `health` venues.
+- At the holiday venue during its window every co-present pair gets a chance
+  to interact and strangers mix at p≥0.5: a holiday is the town's busiest
+  social day, which is the point.
+- School breaks: Jun 15-Aug 31 and Dec 22-Jan 2, plus day-off holidays.
+- Outdoor leisure (`outdoors`/`water` venues) is kept with a seasonal
+  probability (winter 0.35 → summer 1.0); otherwise the agent stays home.
+  Ambient weather lines are drawn from the current season.
+- Everyone ages on a hash-derived birthday (`birthday_doy`); no ageing on day
+  0. A child turning 18 becomes an adult (`coming_of_age` life event).
 
 ## Event kinds (v0.1)
 
@@ -51,3 +72,5 @@ hobbies, ambitions). The town is an abstract social graph anchored to venues —
 - No geospatial map/coordinates (venues are nodes, not polygons).
 - No pathfinding, no real-time movement animation.
 - No external API calls; narrator is local Ollama only.
+- No closed money supply: wages are minted and rent is destroyed. The levy and
+  dividend (`ECONOMY.md`) keep the balance sane without a full treasury ledger.

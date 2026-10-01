@@ -9,6 +9,7 @@ import sqlite3
 
 import pyarrow.parquet as pq
 
+from . import economy
 from .rng import rng_for, seed_int
 from .world import DISTRICTS, create_world, workplace_tags_for
 
@@ -224,7 +225,7 @@ def populate(conn: sqlite3.Connection, dataset_dir: str, n_agents: int,
         shift_r = rng_for(seed, "shift", row["id"])
         shift_start = shift_r.choice([12, 14, 16, 18])
         shift_len = shift_r.randint(14, 18)
-        wage = shift_r.randint(2200, 9000)
+        wage = shift_r.randint(economy.WAGE_MIN_CENTS, economy.WAGE_MAX_CENTS)
         conn.execute(
             "INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,work_days)"
             " VALUES(?,?,?,?,?,?,?)",
@@ -236,7 +237,8 @@ def populate(conn: sqlite3.Connection, dataset_dir: str, n_agents: int,
     for row in conn.execute("SELECT id, home_place_id FROM agents").fetchall():
         conn.execute(
             "INSERT INTO agent_state(agent_id, place_id, money_cents) VALUES(?,?,?)",
-            (row["id"], row["home_place_id"], r.randint(200000, 1200000)))
+            (row["id"], row["home_place_id"],
+             r.randint(economy.STARTING_MONEY_MIN, economy.STARTING_MONEY_MAX)))
 
     conn.commit()
     stats = {
