@@ -244,8 +244,9 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   dataset/live DB/Ollama, vaultwares-mcp SSE unreachable, and
   `record-agent-change.ps1` not present — ledger entry for that session is
   owed; the next workstation session should record it.
-- OPERATOR: confirm the 15-min `refresh_avatars` timer (TMDB verification
-  requests in a loop) is approved per ROUTER, or stop it until it is.
+- TMDB is retired (operator, Thu, 01 Oct 2026): `refresh_avatars` step 2
+  (`verify_celebrity_gender.py`) must be dropped or replaced; local agent owns
+  avatars. Two agents now share the repo; coordinate via `docs/AGENT_SYNC.md`.
 
 ## Resume note for next session
 
