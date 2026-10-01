@@ -62,3 +62,17 @@ def test_chronicle_404_then_ok(client):
     assert client.get("/api/chronicle/99").status_code == 404
     r = client.get("/api/chronicle/1")
     assert r.status_code == 200 and "Day 1" in r.json()["chronicle"]
+
+
+def test_resident_detail_includes_memories(client):
+    rid = client.get("/api/residents?q=Ada").json()[0]["id"]
+    detail = client.get(f"/api/resident/{rid}").json()
+    assert "memories" in detail
+    mems = client.get(f"/api/memories/{rid}").json()
+    assert isinstance(mems, list)
+
+
+def test_newspaper_endpoint(client):
+    body = client.get("/api/newspaper").json()
+    assert "editions" in body and "latest" in body
+    assert client.get("/api/newspaper?week=99").status_code == 404

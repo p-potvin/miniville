@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import chronicle, events
+from . import chronicle, events, growth, memory, newspaper
 from .db import get_meta, set_meta
 from .deviations import apply_deviations
 from .encounters import run_encounters
@@ -73,6 +73,7 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
         stats["plans"] = n
         stats["life_events"] = daily_life_lottery(conn, tick, seed)
         stats["betrayals"] = spouse_discovery(conn, tick, seed)
+        stats["births"] = growth.births(conn, tick, seed)
     _move_agents(conn, tick)
     apply_conditions(conn, tick)              # sick agents stay home resting
     apply_deviations(conn, tick, seed)        # mood can push agents off-plan
@@ -92,6 +93,13 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
     if tick_of_day(tick) == TICKS_PER_DAY - 1:
         text = chronicle.write_day(conn, day_of(tick), seed)
         stats["chronicle"] = len(text)
+        # fold the day's events into each participant's memory stream, then
+        # every third day distill the strongest memories into a reflection
+        stats["memories"] = memory.record_event_memories(conn, tick)
+        if day_of(tick) % 3 == 2:
+            stats["reflections"] = memory.reflect_all(conn, day_of(tick))
+        if day_of(tick) % newspaper.DAYS_PER_WEEK == newspaper.DAYS_PER_WEEK - 1:
+            newspaper.publish_week(conn, newspaper.week_of(day_of(tick)), seed)
     return stats
 
 

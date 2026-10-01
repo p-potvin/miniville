@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Tue, 30 Sep 2026 17:10
+Last updated: Wed, 30 Sep 2026 22:30
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -88,6 +88,11 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   headless, resumable via gallery dirs + presence cache) — goal 10k identities
   with ≥6 photos as back catalog for pool growth. NOTE: must run with CWD =
   ColONEL-KFC root (`imdb_gallery` is a repo-level module, not installed).
+- ColONEL-KFC cross-project sync (Wed, 30 Sep 2026): KFC bridge (`Sync-MinivilleAssets.ps1`
+  / `face_organizer.miniville_bridge`) unlocked 123 male identities from `F:\amd\gallery`
+  and `G:\Gallery`. Cast 167 deferred residents with zero GPU overhead; total cast
+  reached 582 / 610 (95.4%). Remaining deferred reduced to 28. Mapping updated in
+  `D:\miniville\avatar_mapping.json` and `agents.avatar_path`.
 - v0.2.1 narration providers (Tue, 30 Sep 2026): `narrate` now runs
   HF Inference primary (default `openai/gpt-oss-20b:deepinfra`; token from
   `..\.access\huggingface_token.txt` or `HF_TOKEN`; per-call cost via
@@ -103,6 +108,35 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   miserable→wallow). 7-day verification: 90 life events, 672 gossips,
   content 557/lonely 28/miserable 5. `scripts/inspect_db.py` added for quick
   DB verification.
+- v0.4 memory + growth + newspaper (Wed, 30 Sep 2026): `memory.py` (append-only
+  memory stream per agent, importance+recency retrieval, every-3-day reflections),
+  `growth.py` (immigration of unused dataset personas + births for high-romance
+  spouses), `newspaper.py` (weekly Gazette front page from the chronicle, stored
+  in `newspapers`). UI gains a Gazette tab and a Memories block on resident
+  cards; new CLI `immigrate | newspaper | reflect`. Verified on the live world:
+  9,612 memories, 1,255 reflections, 15 births (pop 590→601), 1 edition.
+  Also fixed a latent `NameError` in `chronicle.day_digest` (missing `import json`).
+- **AVATAR SEX MISMATCH (found Wed, 30 Sep 2026) — 201 male residents hold a
+  female identity.** Root cause: `build_avatar_gallery.pool()` filters source
+  identities by `face_crops.gender`, which is unreliable (mislabels angled/
+  profile crops), and the KFC bridge pulled from the female-only galleries into
+  the male pool. Breakdown: 43 from `G:\Galleries\Celebrities` (female
+  celebrities — Hannah Waddingham, Anne Hathaway, Florence Pugh, Kaya
+  Scodelario…), 159 from `F:\amd\gallery` / `G:\Gallery`. Zero female residents
+  hold a male identity. `G:\Galleries\Celebrities` is MIXED — TMDB-verified
+  **153 male / 114 female** of 271. Tooling added: `scripts/verify_celebrity_gender.py`
+  (TMDB `/find` by IMDb id or `/person/{id}`, cached to
+  `D:\miniville\celebrity_gender.json`) and `scripts/audit_avatar_gender.py`
+  (insightface genderage on rendered portraits; report at
+  `D:\miniville\avatar_gender_audit.json`). SHORTFALL: 201 residents need a male
+  identity but only 90 verified male identities are unused — the re-cast must
+  proceed incrementally as the scraper grows the pool.
+- IMDb scraper FIXED (Wed, 30 Sep 2026): it was running `-Headless`, and IMDb
+  returns **403 Forbidden** to headless Chromium — every page failed, so the
+  presence scan reported "no photos" for ~99% of ids (1% yield). Running
+  **headed** gives 97% yield (146/150 with photos, 137 media, 0 errors). Now
+  running headed in 2k-id chunks; `G:\Galleries\Celebrities` grew ~100 → 268.
+  Do NOT pass `-Headless`.
 
 ## Infra notes
 

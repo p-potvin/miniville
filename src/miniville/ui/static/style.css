@@ -41,3 +41,7 @@ pre { white-space: pre-wrap; background: var(--panel); padding: 1rem;
   border-radius: 8px; border: 1px solid var(--line); }
 .narr { border-left: 3px solid var(--accent); padding: .4rem .8rem; margin: .8rem 0; }
 .narr b { color: var(--warm); }
+li.mem { border-left: 3px solid var(--line); }
+li.mem.refl { border-left: 3px solid var(--accent); background: #1a2028;
+  font-style: italic; }
+#gaz-text { font-family: Georgia, serif; line-height: 1.6; }

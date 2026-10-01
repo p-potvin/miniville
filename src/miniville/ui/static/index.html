@@ -18,6 +18,7 @@
   <button data-tab="chronicle">Chronicle</button>
   <button data-tab="rels">Bonds</button>
   <button data-tab="debts">IOUs</button>
+  <button data-tab="gazette">Gazette</button>
 </nav>
 <main>
   <section id="feed" class="panel on">
@@ -53,6 +54,11 @@
   <section id="debts" class="panel">
     <h2>IOU ledger <label><input id="debts-all" type="checkbox"> include settled</label></h2>
     <ul id="debts-list"></ul>
+  </section>
+  <section id="gazette" class="panel">
+    <h2>The Miniville Gazette
+      <select id="gaz-week"></select></h2>
+    <pre id="gaz-text"></pre>
   </section>
 </main>
 <script src="/app.js"></script>

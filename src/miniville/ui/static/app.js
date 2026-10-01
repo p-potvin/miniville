@@ -61,6 +61,11 @@ async function residentCard(id) {
     <ul>${r.relationships.map(x =>
       `<li>${esc(x.name)} — ${x.label} (fam ${Math.round(x.familiarity)},
         aff ${Math.round(x.affinity)}, rom ${Math.round(x.romance)})</li>`).join("")}</ul>
+    ${r.memories && r.memories.length ? `
+    <h4>Memories</h4>
+    <ul>${r.memories.map(m =>
+      `<li class="mem${m.kind === "reflection" ? " refl" : ""}">
+        <span class="t">d${m.day} · ${esc(m.kind)}</span> ${esc(m.text)}</li>`).join("")}</ul>` : ""}
     <h4>Recent</h4>
     <ul>${r.recent.map(e => `<li>${esc(e.text)}</li>`).join("")}</ul>`;
 }
@@ -92,7 +97,29 @@ async function rels() {
      rom ${Math.round(r.romance)}</span></li>`).join("");
 }
 
-const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts };
+async function gazette() {
+  const r = await api("/api/newspaper");
+  const sel = $("#gaz-week");
+  if (!r.latest) {
+    sel.innerHTML = "";
+    $("#gaz-text").textContent = "No edition published yet — the first paper " +
+      "prints at the end of week 1.";
+    return;
+  }
+  if (!sel.options.length) {
+    sel.innerHTML = r.editions.map(e =>
+      `<option value="${e.week}">week ${e.week}</option>`).join("");
+    sel.onchange = () => gazetteWeek(sel.value);
+  }
+  $("#gaz-text").textContent = r.latest.text;
+}
+
+async function gazetteWeek(week) {
+  const r = await api("/api/newspaper?week=" + week);
+  $("#gaz-text").textContent = r.text;
+}
+
+const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts, gazette };
 for (const b of document.querySelectorAll("#tabs button"))
   b.onclick = () => {
     document.querySelectorAll("#tabs button").forEach(x => x.classList.remove("on"));

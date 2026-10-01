@@ -142,6 +142,28 @@ CREATE TABLE IF NOT EXISTS conditions (
     PRIMARY KEY (agent_id, kind)
 );
 
+-- Per-resident memory stream (Generative Agents pattern). embedding is an
+-- optional packed float32 vector used for relevance scoring at retrieval time.
+CREATE TABLE IF NOT EXISTS memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id INTEGER NOT NULL,
+    tick INTEGER NOT NULL,
+    day INTEGER NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'event',
+    text TEXT NOT NULL,
+    importance INTEGER NOT NULL DEFAULT 1,
+    embedding BLOB
+);
+CREATE INDEX IF NOT EXISTS idx_memories_agent ON memories(agent_id, tick);
+CREATE INDEX IF NOT EXISTS idx_memories_day ON memories(day);
+
+-- Weekly newspaper front pages, distilled from the chronicle
+CREATE TABLE IF NOT EXISTS newspapers (
+    week INTEGER PRIMARY KEY,
+    text TEXT NOT NULL,
+    created_tick INTEGER NOT NULL DEFAULT 0
+);
+
 -- Open favors owed between residents (small-town IOUs)
 CREATE TABLE IF NOT EXISTS debts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

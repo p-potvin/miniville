@@ -126,10 +126,46 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 """SELECT x.name debtor, d.kind FROM debts d
                    JOIN agents x ON x.id=d.debtor_id
                    WHERE d.creditor_id=? AND d.repaid_tick IS NULL""", (agent_id,))
+            from ..memory import retrieve
+            mems = [{"day": m["day"] + 1, "kind": m["kind"], "text": m["text"],
+                     "importance": m["importance"]}
+                    for m in retrieve(c, agent_id, k=8)]
             return {"agent": dict(a), "state": dict(st) if st else {},
                     "job": dict(job) if job else None,
                     "debts": {"owes": owed_by, "owed": owed_to},
-                    "relationships": rels, "recent": recent}
+                    "relationships": rels, "recent": recent, "memories": mems}
+        finally:
+            c.close()
+
+    @app.get("/api/memories/{agent_id}")
+    def memories(agent_id: int, k: int = Query(10, le=50)):
+        c = conn()
+        try:
+            from ..memory import retrieve
+            return [{"day": m["day"] + 1, "tick": m["tick"], "kind": m["kind"],
+                     "text": m["text"], "importance": m["importance"]}
+                    for m in retrieve(c, agent_id, k=k)]
+        finally:
+            c.close()
+
+    @app.get("/api/newspaper")
+    def newspaper(week: int | None = Query(None)):
+        c = conn()
+        try:
+            if week is not None:
+                row = c.execute("SELECT * FROM newspapers WHERE week=?",
+                                (week - 1,)).fetchone()
+                if not row:
+                    raise HTTPException(404, "no edition for that week")
+                return dict(row)
+            rows = _rows(c, "SELECT week, created_tick FROM newspapers "
+                            "ORDER BY week DESC LIMIT 20")
+            for r in rows:
+                r["week"] += 1
+            latest = c.execute("SELECT * FROM newspapers ORDER BY week DESC "
+                               "LIMIT 1").fetchone()
+            return {"editions": rows,
+                    "latest": dict(latest) if latest else None}
         finally:
             c.close()
 

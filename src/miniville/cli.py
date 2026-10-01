@@ -83,6 +83,9 @@ def cmd_inspect(args) -> int:
     from .events import describe
     for e in evs:
         print(f"  ev[{e['tick']}]: {describe(conn, e)}")
+    from .memory import memory_digest
+    print("  memories:")
+    print(memory_digest(conn, a["id"]))
     return 0
 
 
@@ -125,11 +128,52 @@ def cmd_narrate(args) -> int:
     lines = narrate_events(conn, args.day - 1, provider=args.provider,
                            hf_model=args.hf_model,
                            ollama_model=args.ollama_model,
+                           vw_model=args.vw_model,
                            max_calls=args.max)
     for l in lines:
         print(l)
         print()
     print(spend_report(conn))
+    return 0
+
+
+def cmd_immigrate(args) -> int:
+    from .db import get_meta
+    from .growth import immigrate
+    conn = _conn(args)
+    seed = get_meta(conn, "seed", "miniville")
+    tick = int(get_meta(conn, "tick", "0") or 0)
+    n = immigrate(conn, args.n, tick, seed, dataset_dir=args.dataset)
+    total = conn.execute("SELECT COUNT(*) c FROM agents").fetchone()["c"]
+    print(f"{n} newcomer(s) arrived; population now {total}")
+    return 0
+
+
+def cmd_newspaper(args) -> int:
+    from .db import get_meta
+    from .newspaper import latest, publish_week, week_of
+    conn = _conn(args)
+    if args.week is not None:
+        text = publish_week(conn, args.week - 1, get_meta(conn, "seed", "miniville"))
+    else:
+        row = latest(conn)
+        if not row:
+            tick = int(get_meta(conn, "tick", "0") or 0)
+            text = publish_week(conn, week_of(tick // 48),
+                                get_meta(conn, "seed", "miniville"))
+        else:
+            text = row["text"]
+    print(text)
+    return 0
+
+
+def cmd_reflect(args) -> int:
+    from .db import get_meta
+    from .memory import reflect_all
+    conn = _conn(args)
+    tick = int(get_meta(conn, "tick", "0") or 0)
+    n = reflect_all(conn, tick // 48, limit=args.limit)
+    print(f"{n} resident(s) reflected")
     return 0
 
 
@@ -243,18 +287,21 @@ def main(argv=None) -> int:
     pw.set_defaults(fn=cmd_narrate_write)
     pn = sub.add_parser("narrate")
     pn.add_argument("--day", type=int, required=True)
-    pn.add_argument("--provider", choices=["hf", "ollama", "raw"], default="hf",
-                    help="hf = Hugging Face Inference (budget-capped $1.50), "
+    pn.add_argument("--provider", choices=["vw", "hf", "ollama", "raw"], default="vw",
+                    help="vw = vault-inference gateway (preferred), "
+                         "hf = Hugging Face Inference direct (budget-capped $1.50), "
                          "ollama = local, raw = no LLM")
     pn.add_argument("--hf-model", default="openai/gpt-oss-20b:deepinfra",
                     help="HF provider model, e.g. openai/gpt-oss-20b:deepinfra")
     pn.add_argument("--ollama-model", default="gemma4:e2b-it-qat")
+    pn.add_argument("--vw-model", default="",
+                    help="vault-inference model id (empty = gateway default)")
     pn.add_argument("--max", type=int, default=5)
     pn.set_defaults(fn=cmd_narrate)
     pb = sub.add_parser("backup"); pb.set_defaults(fn=cmd_backup)
     pdy = sub.add_parser("daily", help="advance days + narrate + snapshot")
     pdy.add_argument("--days", type=int, default=1)
-    pdy.add_argument("--provider", choices=["hf", "ollama", "raw"], default="hf")
+    pdy.add_argument("--provider", choices=["vw", "hf", "ollama", "raw"], default="vw")
     pdy.add_argument("--max", type=int, default=5,
                      help="max narration calls per day")
     pdy.add_argument("--write", action="store_true",
@@ -268,6 +315,17 @@ def main(argv=None) -> int:
     pm = sub.add_parser("benchmark", help="time ticks on a temp copy of the DB")
     pm.add_argument("--days", type=int, default=1)
     pm.set_defaults(fn=cmd_benchmark)
+    pg = sub.add_parser("immigrate", help="move unused dataset personas into town")
+    pg.add_argument("--n", type=int, default=25)
+    pg.add_argument("--dataset", default=r"E:\Nemotron-Personas-USA")
+    pg.set_defaults(fn=cmd_immigrate)
+    pnp = sub.add_parser("newspaper", help="print or publish a weekly Gazette edition")
+    pnp.add_argument("--week", type=int, default=None,
+                     help="1-based week to (re)publish; omit for the latest")
+    pnp.set_defaults(fn=cmd_newspaper)
+    prf = sub.add_parser("reflect", help="distill residents' memories into reflections")
+    prf.add_argument("--limit", type=int, default=0)
+    prf.set_defaults(fn=cmd_reflect)
 
     args = p.parse_args(argv)
     return args.fn(args)
