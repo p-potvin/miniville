@@ -155,7 +155,7 @@ def test_engine_announces_holiday_at_day_start(conn):
     assert any(json.loads(row["data"]).get("tag") == "holiday" for row in event)
 
 
-def test_holiday_venue_lifts_pair_cap(conn):
+def _put_adults_in_park(conn, count=60):
     park_id = conn.execute(
         "SELECT id FROM places WHERE name='Lush Meadow Park'").fetchone()["id"]
     home_id = conn.execute(
@@ -174,6 +174,11 @@ def test_holiday_venue_lifts_pair_cap(conn):
             """INSERT INTO agent_state(agent_id,place_id,activity)
                VALUES(?,?,'celebrate')""",
             (agent_id, park_id))
+    return park_id
+
+
+def test_holiday_venue_lifts_pair_cap(conn):
+    park_id = _put_adults_in_park(conn)
     conn.executemany(
         """INSERT INTO relationships(a_id,b_id,familiarity,affinity,romance,
            label,interactions,last_met_tick) VALUES(?,?,40,0,0,'friend',0,0)""",
@@ -186,3 +191,17 @@ def test_holiday_venue_lifts_pair_cap(conn):
         conn, 186 * 48 + 32, "test", max_pairs_per_place=2)
     assert holiday_interactions > 2
     assert weekday_interactions <= 2
+
+
+def test_holiday_fair_opens_stranger_interactions(conn):
+    _put_adults_in_park(conn)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM relationships").fetchone()[0] == 0
+
+    holiday_interactions = encounters.run_encounters(
+        conn, 184 * 48 + 32, "holiday-mingling", max_pairs_per_place=30)
+    conn.execute("DELETE FROM relationships")
+    weekday_interactions = encounters.run_encounters(
+        conn, 186 * 48 + 32, "holiday-mingling", max_pairs_per_place=30)
+    assert holiday_interactions > weekday_interactions, (
+        holiday_interactions, weekday_interactions)

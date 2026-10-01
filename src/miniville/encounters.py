@@ -15,7 +15,7 @@ REL_THRESHOLDS = [
     (60, "close_friend"),
 ]
 
-HOLIDAY_PAIR_SHARE = 0.5
+HOLIDAY_P_INTERACT = 0.5
 
 
 def _rel_label(familiarity: float, affinity: float, romance: float) -> str:
@@ -193,12 +193,17 @@ def run_encounters(conn: sqlite3.Connection, tick: int, seed: str,
         for i in range(0, len(agents) - 1, 2):
             pairs.append((agents[i], agents[i + 1]))
         pair_cap = max_pairs_per_place
-        if holiday_place_id is not None and p["id"] == holiday_place_id:
-            pair_cap = max(max_pairs_per_place, int(len(pairs) * HOLIDAY_PAIR_SHARE))
+        holiday_venue_active = (
+            holiday_place_id is not None and p["id"] == holiday_place_id
+        )
+        if holiday_venue_active:
+            pair_cap = len(pairs)
         for a, b in pairs[:pair_cap]:
             # interaction probability: strangers lower, acquaintances higher
             rel = _get_rel(conn, a["agent_id"], b["agent_id"])
             p_int = 0.28 if not rel else min(0.9, 0.3 + rel["familiarity"] / 40)
+            if holiday_venue_active:
+                p_int = max(p_int, HOLIDAY_P_INTERACT)
             if r.random() < p_int:
                 ra = conn.execute("SELECT * FROM agents WHERE id=?", (a["agent_id"],)).fetchone()
                 rb = conn.execute("SELECT * FROM agents WHERE id=?", (b["agent_id"],)).fetchone()
