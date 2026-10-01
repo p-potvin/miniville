@@ -295,18 +295,36 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
 - TMDB is retired (operator, Thu, 01 Oct 2026): `refresh_avatars` step 2
   (`verify_celebrity_gender.py`) must be dropped or replaced; local agent owns
   avatars. Two agents now share the repo; coordinate via `docs/AGENT_SYNC.md`.
+  DONE (Thu, 01 Oct 2026, workstation): `verify_celebrity_gender.py` is now
+  **offline** — insightface `genderage` over each identity's own face crops,
+  same cache file and JSON shape, so the builder and re-caster are untouched.
+  A plain majority was unsafe (it voted Nicole Kidman male 4-2 — the exact
+  false-male error behind the original 201-resident bug), so the winner must now
+  beat the loser by better than 2:1 and ambiguous identities stay unresolved.
+  Validated on the 162 identities with both a cached label and usable crops:
+  34 agree / 0 disagree / 6 refused. Nothing in the avatar path hits the network.
+- Ledger debt cleared: the cloud session's entry (owed because its VM had no
+  `record-agent-change.ps1`) is recorded on the workstation.
 
 ## Resume note for next session
 
-Branch `autodev`. World is seeded (seed=miniville) — `run` continues from tick 1728
-(Day 37 = **Feb 6, Year 1**, winter; next holiday is Founders' Day, Apr 18 = Day 108,
-tick 5136). Do NOT `init` again unless intentionally resetting the town.
-The live world has had both economy migrations applied (wages $62–252/day).
+Branch `autodev`, both agents pushing. World is seeded (seed=miniville) — `run`
+continues from tick 1776 (Day 38 = **Feb 7, Year 1**, winter; next holiday is
+Founders' Day, Apr 18 = Day 108, tick 5136). Do NOT `init` again unless
+intentionally resetting the town. Both economy migrations are applied (wages
+$62–252/day).
+
+**Read `docs/AGENT_SYNC.md` first** — claims and messages between the workstation
+and cloud sessions live there. Pull before starting work; push small commits.
+
 CAVEAT: days 18–37 of the live world were simulated under the *pre-merge* seasons
 code (my dropped implementation), so a few chronicles say "Spring" where the merged
 calendar says winter, and the ledger contains a couple of holiday events that no
 longer exist (`Spring Blossom Festival`). Cosmetic only — nothing reads it back.
-Next session should confirm the chronicle header shows the date and season, and
-that birthdays fire (a resident ages on their hashed `birth_day`).
+
+Open items the next session could take: the two findings left for the cloud agent
+in `AGENT_SYNC.md` (duplicate `cohabitation` events; keep the `cli.py` stdout
+reconfigure), and the roadmap's next milestone — **God-mode shocks** (inject a
+factory closure / fire / festival and watch the town absorb it).
 Daily routine for the backup session: read this file → `run` the next day(s) →
 `digest` → write a `narrate-write` entry → update this file → ledger.

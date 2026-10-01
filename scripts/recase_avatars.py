@@ -7,11 +7,12 @@ galleries). A full rebuild would churn every resident, so this fixes only the
 mismatched ones and leaves the correct 380 alone.
 
 Truth sources:
-  * `D:\miniville\celebrity_gender.json` — TMDB-verified sex for the mixed
-    `G:\Galleries\Celebrities` gallery (from verify_celebrity_gender.py).
+  * `D:\miniville\celebrity_gender.json` — sex verified offline with insightface
+    for the mixed `G:\Galleries\Celebrities` gallery (from
+    verify_celebrity_gender.py, which no longer calls TMDB).
   * `G:\Gallery` and `F:\amd\gallery` are female-only by construction.
 
-The male pool is `G:\Galleries\Celebrities` filtered to TMDB-verified males.
+The male pool is `G:\Galleries\Celebrities` filtered to verified males.
 It is smaller than the demand today, so this is meant to be re-run as the
 IMDb scraper grows the gallery — it is idempotent and resumable.
 
@@ -52,7 +53,7 @@ def identity_sex(gallery_dir: str, verified: dict[str, int]) -> str | None:
     if g == 1:
         return "Female"
     if g == 0:
-        return None                      # TMDB could not resolve it
+        return None                      # could not be resolved offline
     return "Female"                      # the other galleries are female-only
 
 

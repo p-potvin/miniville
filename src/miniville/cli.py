@@ -9,6 +9,16 @@ from pathlib import Path
 
 from . import db as dbmod
 
+# The Windows console defaults to cp1252, and a stray non-ASCII character in
+# any command's output (the `·` separators, an em dash in a chronicle) makes
+# the whole write fail — silently, in a piped shell. Force UTF-8 so no command
+# can lose its output to a punctuation mark.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:                                   # noqa: BLE001
+        pass
+
 
 def _conn(args) -> sqlite3.Connection:
     conn = dbmod.connect(args.db)

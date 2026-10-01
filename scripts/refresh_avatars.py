@@ -6,13 +6,14 @@ grows `G:\Galleries\Celebrities`. This runs the three steps in order:
 
   1. ingest  — drain staged downloads into the source `gallery.db`
                (ColONEL-KFC `ingest_staged.py`; the scraper only downloads).
-  2. verify  — resolve any new identities' sex via TMDB
-               (`verify_celebrity_gender.py`, cached and resumable).
+  2. verify  — resolve any new identities' sex **offline**, with insightface
+               over the gallery's own face crops (`verify_celebrity_gender.py`,
+               cached and resumable). This used to call TMDB; TMDB is retired.
   3. re-cast — give the mismatched residents a verified male identity
                (`recase_avatars.py`, idempotent).
 
 Every step is resumable, so this is safe to run on a timer while the scraper
-is still going.
+is still going. Nothing here touches the network.
 
 Run:
     .\.venv\Scripts\python.exe scripts\refresh_avatars.py [--dry-run]
@@ -62,7 +63,9 @@ def main(argv=None) -> int:
     if not args.skip_ingest and KFC_PY.is_file():
         rc |= run("ingest staged identities",
                   [str(KFC_PY), "ingest_staged.py"], KFC)
-    rc |= run("verify celebrity sex (TMDB)",
+    # offline: insightface genderage over the gallery's own face crops. Runs in
+    # the ColONEL-KFC venv because that is where insightface lives.
+    rc |= run("verify celebrity sex (local, insightface)",
               [str(KFC_PY), str(REPO / "scripts" / "verify_celebrity_gender.py")], KFC)
     recase = [str(MV_PY), str(REPO / "scripts" / "recase_avatars.py")]
     if args.dry_run:
