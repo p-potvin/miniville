@@ -31,6 +31,8 @@ input, select { background: var(--panel); color: var(--fg); border: 1px solid va
 .res:hover { background: #1a2028; }
 .mood { color: var(--accent); }
 .res i { color: var(--dim); }
+.avatar { width: 128px; height: 128px; object-fit: cover; border-radius: 8px;
+  float: right; border: 1px solid var(--line); }
 #resident-card { background: var(--panel); border: 1px solid var(--line);
   border-radius: 8px; padding: 1rem; margin-top: 1rem; }
 .persona { color: var(--dim); font-style: italic; }

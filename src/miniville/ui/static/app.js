@@ -44,6 +44,7 @@ async function residentCard(id) {
   const a = r.agent, s = r.state || {};
   $("#resident-card").hidden = false;
   $("#resident-card").innerHTML = `
+    ${a.avatar_path ? `<img class="avatar" src="${esc(a.avatar_path)}" alt="">` : ""}
     <h3>${esc(a.name)}</h3>
     <p>${a.age} ${esc(a.sex)} · ${esc(a.occupation)} · ${esc(a.marital_status)}
        ${r.job ? `· works at ${esc(r.job.place)}` : "· unemployed"}</p>

@@ -5,6 +5,7 @@ resolved path so the dashboard follows MINIVILLE_DB / --db like the CLI.
 """
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 
@@ -177,6 +178,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
         finally:
             c.close()
 
+    # resident portraits live outside the repo (D:\miniville by default)
+    av_dir = Path(os.environ.get("MINIVILLE_AVATARS_DIR", r"D:\miniville\avatars"))
+    if av_dir.is_dir():
+        app.mount("/avatars", StaticFiles(directory=av_dir), name="avatars")
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
     return app
 

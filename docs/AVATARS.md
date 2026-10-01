@@ -1,26 +1,44 @@
-# Avatar pipeline — ColONEL-KFC + ComfyUI (deferred execution)
+# Avatar pipeline — ColONEL-KFC gallery casting (no ComfyUI)
 
-Goal: consistent portrait per resident for the observer UI.
+Goal: a real, consistent face per resident for the observer UI, cast from the
+operator's face galleries. **Never reuse an identity** — residents with no
+unused source are deferred until the galleries grow.
 
-## Storage contract
+## Layout (all assets on D:)
 
-`agents.avatar_path` (added by guarded migration, NULL until generated) holds a
-path relative to `assets/avatars/`, e.g. `assets/avatars/a0042.png`. The UI
-renders it on resident cards when non-NULL.
+- `D:\miniville\gallery\<aNNNN_identity>\` — per-resident identity dirs with
+  exemplar source images copied from the source galleries
+- `D:\miniville\gallery\gallery.db` — ColONEL-KFC-schema SQLite holding the
+  antelopev2 embeddings, landmarks, bbox for every copied crop
+- `D:\miniville\avatars\aNNNN.jpg` — 256px face-portrait crops served by the
+  observer UI at `/avatars/*` (`MINIVILLE_AVATARS_DIR` overrides)
+- `D:\miniville\avatar_mapping.json` — resident → identity cast list +
+  `deferred_ids` for residents awaiting new gallery members
+- `agents.avatar_path` stores the URL (`/avatars/aNNNN.jpg`)
 
-## Pipeline (runs on Clopeux-Desktop, 100.71.101.21)
+## Casting
 
-1. `scripts/gen_avatars.py --manifest out.json` emits a manifest listing every
-   resident needing a portrait: `{id, name, sex, age, occupation, persona}`.
-2. On the GPU host, a driver script consumes the manifest:
-   - ComfyUI generates a base portrait per persona (age/sex/occupation-prompted).
-   - ColONEL-KFC (InsightFace antelopev2) validates face identity and produces
-     the reference-view crops used for consistency across regenerations.
-3. Output PNGs land in `assets/avatars/`, `agents.avatar_path` backfilled via
-   `scripts/gen_avatars.py --apply <dir>`.
+`scripts/build_avatar_gallery.py` (miniville venv; stdlib + pillow):
 
-## Status
+- Female residents → `G:\Gallery` exemplars (gender=0, ~930 identities)
+- Male residents → `G:\Galleries\Celebrities` exemplars (gender=1; currently
+  ~90 male identities, so ~190 of 281 males defer until growth)
+- Picks the unused identity with median exemplar age nearest the resident,
+  copies up to 4 exemplar images + their `face_crops` rows (embeddings and
+  landmarks copied verbatim — identical vectors to a `vw reindex-gallery`
+  re-embed, zero GPU cost), crops the portrait, sets `avatar_path`.
 
-Blocked on operator approval: remote GPU automation is out of scope for the
-local autopilot loop. The manifest stub is ready; generation is a future
-story once the operator green-lights the remote run.
+## Gallery growth (male pool)
+
+Run ColONEL-KFC importers when deferred count is high:
+`Import-IMDbStarMeter.ps1`, `Import-TmdbCelebrities.ps1`,
+`Import-TmdbTop1000.ps1`, or `vw process-dataset-archives` for zipped sets —
+then re-run the builder; it picks up new identities automatically.
+
+## Optional later steps
+
+- **PuLID identity tokens** (for consistent regenerations): ColONEL-KFC venv,
+  `face_organizer.standalone_pulid_flux` `extract` → per-identity `.safetensors`
+  (benchmark: 16s model load, ~0.2s/img warm on the RTX 3060 → ~3 min for 590).
+- **FLAME heads**: `vw new-face-head -Gallery D:\miniville\gallery -Identity <dir>`
+  for a rigged 5023-vertex head per resident; `vw face-mesh` for sparse mesh.
