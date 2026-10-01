@@ -78,8 +78,10 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   exemplar images + antelopev2 `face_crops` rows into `D:\miniville\gallery\gallery.db`,
   crops 256px portraits to `D:\miniville\avatars\` (UI serves `/avatars/*`).
   No identity reuse — deferred males wait for `Import-IMDbStarMeter.ps1` growth.
-  PuLID standalone benchmark: 16.3s model load, ~0.2s/img warm (RTX 3060) →
-  ~3 min for 590 safetensors. FLAME heads optional via `vw new-face-head`.
+  DONE: 415 cast (all females + 106 males), 175 deferred. 415 PuLID
+  `identity.safetensors` extracted (~16s load + 0.2s/img, ~3min total).
+  FLAME heads: 381 reused from source galleries, 34 fitted via New-FaceHead.ps1.
+  `extract_pulid_batch.py` retries through all source images on no-face.
 - v0.2.1 narration providers (Tue, 30 Sep 2026): `narrate` now runs
   HF Inference primary (default `openai/gpt-oss-20b:deepinfra`; token from
   `..\.access\huggingface_token.txt` or `HF_TOKEN`; per-call cost via
