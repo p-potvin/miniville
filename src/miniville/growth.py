@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import sqlite3
 
+from . import economy
 from .events import HISTORIC, NOTABLE, emit
 from .ingest import _list_field, _name_of, load_persona_rows
 from .rng import rng_for
@@ -68,8 +69,7 @@ def _give_job(conn: sqlite3.Connection, agent_id: int, occupation: str, r) -> in
     if r.random() < 0.10:      # 10% arrive between jobs
         return None
     tags = workplace_tags_for(occ)
-    rows = conn.execute(
-        "SELECT id, tags FROM places WHERE kind='workplace'").fetchall()
+    rows = economy.open_workplaces(conn)
     scored = sorted(
         ((len(set(json.loads(x["tags"])) & set(tags)), x["id"]) for x in rows),
         key=lambda t: -t[0])
@@ -81,7 +81,8 @@ def _give_job(conn: sqlite3.Connection, agent_id: int, occupation: str, r) -> in
     conn.execute(
         "INSERT OR REPLACE INTO jobs(agent_id,place_id,role,wage_cents,"
         "shift_start,shift_end,work_days) VALUES(?,?,?,?,?,?,62)",
-        (agent_id, place_id, occ, r.randint(2200, 9000), shift_start,
+        (agent_id, place_id, occ,
+         r.randint(economy.WAGE_MIN_CENTS, economy.WAGE_MAX_CENTS), shift_start,
          min(shift_start + r.randint(14, 18), 44)))
     conn.execute("UPDATE agents SET work_place_id=? WHERE id=?",
                  (place_id, agent_id))
@@ -125,7 +126,8 @@ def immigrate(conn: sqlite3.Connection, n: int, tick: int, seed: str,
         _give_job(conn, aid, row.get("occupation") or "", r)
         conn.execute(
             "INSERT INTO agent_state(agent_id, place_id, money_cents) VALUES(?,?,?)",
-            (aid, home, r.randint(200000, 1200000)))
+            (aid, home, r.randint(economy.STARTING_MONEY_MIN,
+                                  economy.STARTING_MONEY_MAX)))
         emit(conn, tick, "arrival", a=aid, importance=NOTABLE,
              text=f"moved to Miniville from {row.get('city') or 'out of town'}",
              tag="immigration")

@@ -13,6 +13,7 @@ ACTIVITY_EFFECTS = {
     "break":   {"hunger": +18, "social": +1.5, "energy": +0.6, "stress": -0.4},
     "eat":     {"hunger": +22, "energy": +0.5},
     "eat_out": {"hunger": +24, "fun": +3, "social": +1.5},
+    "shopping": {"hunger": +6, "fun": +2.5, "social": +1.2, "stress": -0.4},
     "leisure": {"fun": +4.5, "social": +2.0, "stress": -1.2, "energy": -0.3},
     "celebrate": {"fun": +5.0, "social": +3.0, "stress": -1.5, "energy": -0.4, "hunger": +4},
     "social_call": {"social": +3.5, "fun": +2.0, "energy": -0.4},

@@ -13,5 +13,9 @@
 - [x] Avatar gallery: 415/590 cast to D:\miniville (PuLID tokens + FLAME heads;
       175 males deferred — grow Celebrities via Import-IMDbStarMeter.ps1, re-run builder)
 - [x] Perf: day-start rebuild cached + executemany — 2.4k mean 158→49ms, p99 2796→460ms
-- [ ] Economy stats: wages vs spending drift, rent, household budgets (v0.5)
+- [x] Seasons + holidays + birthdays (v0.5): 365-day calendar, seasons, 9 holidays,
+      school breaks, holiday crowds, per-agent birthdays + coming of age
+- [x] Economy (v0.6): rent/groceries/meals/shopping prices, business P&L + failure,
+      wage dynamics, weekly levy + civic dividend, `economy` cmd + UI tab (docs/ECONOMY.md)
+- [ ] God-mode shocks: inject a factory closure / fire / festival on demand (v0.6 next)
 - [ ] Relationship graph viz in UI (cytoscape-lite canvas, optional)

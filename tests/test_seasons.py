@@ -5,7 +5,7 @@ from dataclasses import replace
 
 import pytest
 
-from miniville import db, encounters, engine, schedules, seasons, world
+from miniville import db, economy, encounters, engine, schedules, seasons, world
 
 
 @pytest.fixture()
@@ -216,13 +216,13 @@ def test_wages_require_a_work_plan(conn):
     assert conn.execute(
         "SELECT 1 FROM plans WHERE agent_id=1 AND activity IN ('work','break')"
     ).fetchone()
-    engine._wages_and_spending(conn, 186 * 48 + 34)
+    economy.pay_wages(conn, 186 * 48 + 34)
     weekday_balance = conn.execute(
         "SELECT money_cents FROM agent_state WHERE agent_id=1").fetchone()[0]
     assert weekday_balance > balance
 
     schedules.rebuild_day_plans(conn, 184, "test")
-    engine._wages_and_spending(conn, 184 * 48 + 34)
+    economy.pay_wages(conn, 184 * 48 + 34)
     holiday_balance = conn.execute(
         "SELECT money_cents FROM agent_state WHERE agent_id=1").fetchone()[0]
     assert holiday_balance == weekday_balance

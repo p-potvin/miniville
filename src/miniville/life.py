@@ -8,23 +8,27 @@ from __future__ import annotations
 import json
 import sqlite3
 
+from . import economy
 from .events import HISTORIC, MAJOR, MINOR, NOTABLE, emit
 from .rng import chance, rng_for
 from .world import workplace_tags_for
 
-P_HIRE, P_FIRE, P_ILL, P_MOVE = 0.02, 0.005, 0.01, 0.004
+P_FIRE, P_ILL, P_MOVE = 0.005, 0.01, 0.004
+P_HIRE_MAX = 0.15        # cap on the derived hiring rate
 
 
 def _hire(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) -> None:
     wid = workplace_tags_for(agent["occupation"] or "")
-    rows = conn.execute(
-        "SELECT id, tags FROM places WHERE kind='workplace'").fetchall()
+    rows = economy.open_workplaces(conn)
+    if not rows:                       # every business in town has closed
+        return
     scored = sorted(rows, key=lambda x: -len(set(json.loads(x["tags"])) & set(wid)))
     place = scored[0]
     conn.execute(
         "INSERT OR REPLACE INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,work_days)"
         " VALUES(?,?,?,?,?,?,62)",
-        (agent["id"], place["id"], agent["occupation"], r.randint(2200, 9000),
+        (agent["id"], place["id"], agent["occupation"],
+         r.randint(economy.WAGE_MIN_CENTS, economy.WAGE_MAX_CENTS),
          r.choice([12, 14, 16, 18]), 0))
     conn.execute(
         "UPDATE jobs SET shift_end=shift_start+? WHERE agent_id=?",
@@ -74,12 +78,20 @@ def daily_life_lottery(conn: sqlite3.Connection, tick: int, seed: str) -> int:
     employed = {r["agent_id"] for r in conn.execute("SELECT agent_id FROM jobs")}
     adults = conn.execute(
         "SELECT * FROM agents WHERE alive=1 AND is_child=0").fetchall()
+    # A flat hiring rate is applied to the unemployed and a flat firing rate to
+    # the employed, so the town shed jobs whenever most people had one. Derive
+    # the hiring rate from the firing rate instead: hiring tracks firing and the
+    # employment level holds steady.
+    n_emp = sum(1 for a in adults if a["id"] in employed)
+    n_unemp = max(1, len(adults) - n_emp)
+    p_hire = min(P_HIRE_MAX, P_FIRE * n_emp / n_unemp)
+
     for a in adults:
         r = rng_for(seed, "life", a["id"], tick)
         if a["id"] in employed:
             if r.random() < P_FIRE:
                 _fire(conn, a, tick); n += 1
-        elif r.random() < P_HIRE:
+        elif r.random() < p_hire:
             _hire(conn, a, tick, r); n += 1
         if r.random() < P_ILL:
             _fall_ill(conn, a, tick, r); n += 1

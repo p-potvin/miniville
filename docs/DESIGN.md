@@ -29,7 +29,7 @@ hobbies, ambitions). The town is an abstract social graph anchored to venues —
 
 ## The world
 
-- 5 districts; 16 civic/public/work venues + generated homes.
+- 5 districts; 17 civic/public/work venues + generated homes.
 - Venues have tags (food, quiet, sport, worship...) and opening ticks.
 - Occupation keywords map to venue tags → workplace assignment (see
   `OCCUPATION_MAP`). 8% baseline unemployment.
@@ -40,7 +40,8 @@ hobbies, ambitions). The town is an abstract social graph anchored to venues —
 - Weekday work (bitmask in `jobs.work_days`); school for children 5-17.
 - Encounters only where agents co-present & awake; ≤12 pairs/venue/tick
   (lifted at an active holiday venue — see Calendar).
-- Wages paid at shift end; dining out costs $14.
+- Wages paid at shift end, but only for days actually worked. Rent, groceries,
+  meals and errands are priced; see `ECONOMY.md`.
 
 ## Calendar (v0.5, `seasons.py`)
 
@@ -71,3 +72,5 @@ hobbies, ambitions). The town is an abstract social graph anchored to venues —
 - No geospatial map/coordinates (venues are nodes, not polygons).
 - No pathfinding, no real-time movement animation.
 - No external API calls; narrator is local Ollama only.
+- No closed money supply: wages are minted and rent is destroyed. The levy and
+  dividend (`ECONOMY.md`) keep the balance sane without a full treasury ledger.

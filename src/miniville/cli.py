@@ -16,14 +16,60 @@ def _conn(args) -> sqlite3.Connection:
 
 
 def cmd_init(args) -> int:
+    from . import economy
     from .ingest import populate
     conn = _conn(args)
     dbmod.init_db(conn)
     stats = populate(conn, args.dataset, args.agents, seed=args.seed)
     dbmod.set_meta(conn, "seed", args.seed)
     dbmod.set_meta(conn, "tick", "0")
+    economy.ensure_businesses(conn)
     conn.commit()
     print(f"Miniville populated: {stats}")
+    return 0
+
+
+def cmd_economy(args) -> int:
+    from . import economy
+    conn = _conn(args)
+    economy.ensure_businesses(conn)
+    conn.commit()
+    s = economy.economy_stats(conn)
+    print(f"money supply:    ${s['money_supply_cents'] / 100:,.0f}")
+    print(f"median wallet:   ${s['median_balance_cents'] / 100:,.0f}   "
+          f"mean ${s['mean_balance_cents'] / 100:,.0f}")
+    print(f"residents in debt: {s['in_debt']}")
+    print(f"unemployment:    {s['unemployment'] * 100:.1f}%")
+    print(f"wage index:      {s['wage_index'] * 100:.0f}% of baseline")
+    print(f"businesses:      {s['businesses_open']} open, "
+          f"{s['businesses_closed']} closed")
+    print()
+    print(f"{'business':<30} {'status':<7} {'balance':>12} {'rev/day':>10} "
+          f"{'pay/day':>10} {'px':>5}")
+    for r in conn.execute(
+            """SELECT p.name, p.kind, b.status, b.balance_cents, b.revenue_total,
+                      b.payroll_total, b.price_index, b.last_settled_day,
+                      b.revenue_today, b.payroll_today
+               FROM businesses b JOIN places p ON p.id=b.place_id
+               ORDER BY b.balance_cents"""):
+        settled = r["last_settled_day"]
+        print(f"{r['name']:<30} {r['status']:<7} "
+              f"${r['balance_cents'] / 100:>11,.0f} "
+              f"${r['revenue_today'] / 100:>9,.0f} ${r['payroll_today'] / 100:>9,.0f} "
+              f"{r['price_index']:>5.2f}")
+    if args.days:
+        print()
+        print(f"{'day':>4} {'revenue':>12} {'payroll':>12} {'rent':>10} "
+              f"{'spending':>10} {'supply':>14} {'unemp':>7} {'closed':>7}")
+        for r in conn.execute(
+                "SELECT * FROM economy_days WHERE money_supply_cents > 0 "
+                "ORDER BY day DESC LIMIT ?", (args.days,)):
+            print(f"{r['day']:>4} ${r['revenue_cents'] / 100:>11,.0f} "
+                  f"${r['payroll_cents'] / 100:>11,.0f} "
+                  f"${r['rent_cents'] / 100:>9,.0f} "
+                  f"${r['spending_cents'] / 100:>9,.0f} "
+                  f"${r['money_supply_cents'] / 100:>13,.0f} "
+                  f"{r['unemployment_bp'] / 100:>6.1f}% {r['businesses_closed']:>7}")
     return 0
 
 
@@ -62,6 +108,8 @@ def cmd_status(args) -> int:
     labels = conn.execute(
         "SELECT label, COUNT(*) c FROM relationships GROUP BY label ORDER BY c DESC").fetchall()
     print("  relationships:", {l["label"]: l["c"] for l in labels})
+    from . import economy
+    print("  economy:", economy.economy_line(conn))
     return 0
 
 
@@ -337,6 +385,10 @@ def main(argv=None) -> int:
     prf = sub.add_parser("reflect", help="distill residents' memories into reflections")
     prf.add_argument("--limit", type=int, default=0)
     prf.set_defaults(fn=cmd_reflect)
+    pec = sub.add_parser("economy", help="money supply, businesses, wages")
+    pec.add_argument("--days", type=int, default=10,
+                     help="also print the last N daily economy rows")
+    pec.set_defaults(fn=cmd_economy)
 
     args = p.parse_args(argv)
     return args.fn(args)

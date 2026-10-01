@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Thu, 01 Oct 2026 09:00
+Last updated: Thu, 01 Oct 2026 12:40
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -153,6 +153,54 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   immigration reservoir seeded per tick; UI moods exclude the dead; Gazette
   selector refreshes; avatar scripts: no caching of transient TMDB failures,
   face_crops removed with retired identities. 54 tests pass.
+- **DUPLICATE WORK — reconciled (Thu, 01 Oct 2026, workstation session).** The
+  workstation session (me) independently built a *second* seasons/holidays
+  implementation while the cloud session was building the one above; we found
+  out on push/pull. **The cloud session's `seasons.py` won** and mine was
+  dropped entirely (my `0854e96` is preserved on `backup/economy-local-autodev`).
+  His calendar is better: real months, fixed dates, per-agent birthdays.
+  Deliberately *not* ported: my `seasonal_tag_weights` — his `OUTDOOR_APPEAL`
+  already covers seasonal leisure, and running both would double-count.
+  My economy commit was rebased onto his tip; both found and fixed the
+  weekend/holiday wage bug independently, and his `engine._wages_and_spending`
+  was replaced by `economy.pay_wages` (his `test_wages_require_a_work_plan`
+  now calls it). **Lesson: pull before starting a milestone, push when done.**
+- v0.6 economy (Thu, 01 Oct 2026): `economy.py` — the town finally has *flows*.
+  Full write-up in `docs/ECONOMY.md`; the short version:
+  - **Prices.** Weekly rent by district ($290–460, split across adults),
+    groceries ($7.50/day), meals out, shopping trips and paid leisure. A new
+    `shopping` activity + retail/workplace venues now being valid destinations
+    gives the shops customers.
+  - **Scarcity.** A household that misses two rent payments is moved to The
+    Flats (`rent_arrears` → `downsize`). Observed: 0–4 households in arrears at
+    any time, ~1 downsizing/week in a long soak.
+  - **Businesses.** Every non-home venue gets a `businesses` row: customer
+    spending is credited, wages debited, public-service venues are town-funded
+    and never fail. A commercial venue bleeding past −$60k closes, lays off its
+    staff, stops being a destination, and reopens after 21 days. Struggling
+    venues raise `price_index` (≤1.6×); comfortable ones drift back to 0.85×.
+  - **Wage dynamics.** `wage_index` (meta) falls 0.5%/wk above 12%
+    unemployment and rises below 5% — wages no longer only go up.
+  - **Town books.** Wages are minted and rent destroyed, so a weekly levy (5% of
+    business reserves) funds the town and rebates 35% as a civic dividend;
+    otherwise money paid to a shop is gone for good and the town bleeds dry.
+  - **Two bugs found and fixed.** (a) `daily_life_lottery` applied a flat firing
+    rate to the employed and a flat hiring rate to the unemployed, so the town
+    steadily shed every job (unemployment climbed 14% → 33% over 120 days); the
+    hiring rate is now derived from the firing rate. (b) the wage pass ignored
+    `jobs.work_days` and paid every job seven days a week — staff are now paid
+    only for days actually worked, with wages raised 7/5 (`economy_v2`
+    migration) so weekly income and the town's balance are unchanged.
+  - **Migrations.** `economy_v1` (×2.0 wages+balances) and `economy_v2` (×1.4
+    wages) are flagged and idempotent in `db.migrate`.
+  - **Surfaces.** `cli economy [--days N]`, `GET /api/economy`, an Economy tab
+    in the observer UI, an "Economy" section in the chronicle, and the Gazette's
+    back page.
+  Verified on a copy of the live world over 120 days: money supply flat
+  (±$1k/day on ~$9M), median wallet −$20/day, unemployment 12–19%, all
+  businesses solvent, moods unchanged (content 726 / miserable 8). 22 new tests.
+  After the merge with the cloud session's seasons work: **82 tests pass**.
+
 - **AVATAR SEX MISMATCH (found Wed, 30 Sep 2026) — 201 male residents hold a
   female identity.** Root cause: `build_avatar_gallery.pool()` filters source
   identities by `face_crops.gender`, which is unreliable (mislabels angled/
@@ -250,9 +298,15 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
 
 ## Resume note for next session
 
-Branch `autodev`. World is seeded (seed=miniville) — `run` continues from tick 384
-(Day 8 00:00 = Jan 8, Year 1, winter; the next holiday is Founders' Day, Apr 18 =
-Day 108, tick 5136). First workstation run after the v0.5 seasons merge: run a day, check
-the chronicle header shows the date and that ~1/365 of residents aged. Do NOT `init` again unless intentionally resetting the town.
+Branch `autodev`. World is seeded (seed=miniville) — `run` continues from tick 1728
+(Day 37 = **Feb 6, Year 1**, winter; next holiday is Founders' Day, Apr 18 = Day 108,
+tick 5136). Do NOT `init` again unless intentionally resetting the town.
+The live world has had both economy migrations applied (wages $62–252/day).
+CAVEAT: days 18–37 of the live world were simulated under the *pre-merge* seasons
+code (my dropped implementation), so a few chronicles say "Spring" where the merged
+calendar says winter, and the ledger contains a couple of holiday events that no
+longer exist (`Spring Blossom Festival`). Cosmetic only — nothing reads it back.
+Next session should confirm the chronicle header shows the date and season, and
+that birthdays fire (a resident ages on their hashed `birth_day`).
 Daily routine for the backup session: read this file → `run` the next day(s) →
 `digest` → write a `narrate-write` entry → update this file → ledger.

@@ -3,7 +3,16 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import chronicle, events, growth, memory, mortality, newspaper, seasons
+from . import (
+    chronicle,
+    economy,
+    events,
+    growth,
+    memory,
+    mortality,
+    newspaper,
+    seasons,
+)
 from .db import get_meta, set_meta
 from .deviations import apply_deviations
 from .encounters import run_encounters
@@ -48,26 +57,38 @@ def _ambient_town_event(conn: sqlite3.Connection, tick: int, seed: str) -> None:
         events.emit(conn, tick, "town_event", importance=2, text=text, tag=kind)
 
 
-def _wages_and_spending(conn: sqlite3.Connection, tick: int) -> None:
-    # pay at end of shift tick
-    tod = tick_of_day(tick)
-    rows = conn.execute(
-        """SELECT j.agent_id, j.wage_cents FROM jobs j
-           WHERE j.shift_end=?
-             AND EXISTS (
-                 SELECT 1 FROM plans p
-                 WHERE p.agent_id=j.agent_id
-                   AND p.activity IN ('work','break')
-             )""",
-        (tod,)).fetchall()
-    for row in rows:
-        conn.execute(
-            "UPDATE agent_state SET money_cents=money_cents+? WHERE agent_id=?",
-            (row["wage_cents"], row["agent_id"]))
-    # dining out cost
-    conn.execute(
-        """UPDATE agent_state SET money_cents=money_cents-1400
-           WHERE activity='eat_out'""")
+def _pay_and_spend(conn: sqlite3.Connection, tick: int) -> dict:
+    """Wages out of the businesses, household spending back into them."""
+    paid = economy.pay_wages(conn, tick)
+    spent = economy.charge_spending(conn, tick)
+    return {"wages": paid, **spent}
+
+
+def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
+    """Settle yesterday's books, age the town, then build today."""
+    # birthdays run before the plan rebuild so a child who comes of age today
+    # is planned as an adult
+    stats: dict = {"birthdays": seasons.birthdays(conn, tick, seed)}
+
+    # record_day must run before settle_businesses zeroes the daily counters,
+    # and settlement must run before plans are rebuilt so a business that
+    # closed overnight is not on anybody's schedule
+    economy.ensure_businesses(conn)
+    economy.record_day(conn, tick)
+    stats["businesses"] = economy.settle_businesses(conn, tick, seed)
+    stats["rent"] = economy.collect_rent(conn, tick, seed)
+    stats["levy"] = economy.weekly_levy(conn, tick, seed)
+    stats["labour"] = economy.wage_dynamics(conn, tick, seed)
+
+    stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
+    seasons.announce_day(conn, tick)
+    stats["life_events"] = daily_life_lottery(conn, tick, seed)
+    stats["betrayals"] = spouse_discovery(conn, tick, seed)
+    # deaths settle before births: a widow is no longer a spouse, so the
+    # couple cannot also welcome a child on the same day
+    stats["deaths"] = mortality.daily_mortality(conn, tick, seed)
+    stats["births"] = growth.births(conn, tick, seed)
+    return stats
 
 
 def step(conn: sqlite3.Connection, seed: str) -> dict:
@@ -75,16 +96,7 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
     tick = int(get_meta(conn, "tick", "0") or 0)
     stats = {"tick": tick}
     if tick_of_day(tick) == 0:
-        stats["birthdays"] = seasons.birthdays(conn, tick, seed)
-        n = rebuild_day_plans(conn, day_of(tick), seed)
-        stats["plans"] = n
-        seasons.announce_day(conn, tick)
-        stats["life_events"] = daily_life_lottery(conn, tick, seed)
-        stats["betrayals"] = spouse_discovery(conn, tick, seed)
-        # deaths settle before births: a widow is no longer a spouse, so the
-        # couple cannot also welcome a child on the same day
-        stats["deaths"] = mortality.daily_mortality(conn, tick, seed)
-        stats["births"] = growth.births(conn, tick, seed)
+        stats.update(_day_start(conn, tick, seed))
     _move_agents(conn, tick)
     apply_conditions(conn, tick)              # sick agents stay home resting
     apply_deviations(conn, tick, seed)        # mood can push agents off-plan
@@ -95,7 +107,7 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
     for row in st:
         apply_needs(conn, row["agent_id"], row["activity"])
     stats["interactions"] = run_encounters(conn, tick, seed)
-    _wages_and_spending(conn, tick)
+    _pay_and_spend(conn, tick)
     _ambient_town_event(conn, tick, seed)
 
     set_meta(conn, "tick", str(tick + 1))

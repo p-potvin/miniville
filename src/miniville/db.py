@@ -176,6 +176,45 @@ CREATE TABLE IF NOT EXISTS debts (
 );
 CREATE INDEX IF NOT EXISTS idx_debts_open ON debts(debtor_id, creditor_id)
     WHERE repaid_tick IS NULL;
+
+-- One row per town business (every non-home venue). Commercial businesses live
+-- or die on customer traffic; public-service venues are funded by the town.
+CREATE TABLE IF NOT EXISTS businesses (
+    place_id INTEGER PRIMARY KEY REFERENCES places(id),
+    status TEXT NOT NULL DEFAULT 'open',       -- open | closed
+    balance_cents INTEGER NOT NULL DEFAULT 0,  -- running profit/loss
+    revenue_today INTEGER NOT NULL DEFAULT 0,
+    payroll_today INTEGER NOT NULL DEFAULT 0,
+    traffic_today INTEGER NOT NULL DEFAULT 0,
+    ema_traffic REAL NOT NULL DEFAULT 0,       -- 14-day moving average
+    revenue_total INTEGER NOT NULL DEFAULT 0,
+    payroll_total INTEGER NOT NULL DEFAULT 0,
+    price_index REAL NOT NULL DEFAULT 1.0,     -- drifts up when the business bleeds
+    opened_tick INTEGER NOT NULL DEFAULT 0,
+    closed_tick INTEGER,
+    last_settled_day INTEGER NOT NULL DEFAULT -1
+);
+
+-- Daily economic time series, written once per simulated day
+CREATE TABLE IF NOT EXISTS economy_days (
+    day INTEGER PRIMARY KEY,
+    revenue_cents INTEGER NOT NULL DEFAULT 0,
+    payroll_cents INTEGER NOT NULL DEFAULT 0,
+    rent_cents INTEGER NOT NULL DEFAULT 0,
+    spending_cents INTEGER NOT NULL DEFAULT 0,
+    money_supply_cents INTEGER NOT NULL DEFAULT 0,
+    unemployment_bp INTEGER NOT NULL DEFAULT 0,   -- basis points
+    businesses_open INTEGER NOT NULL DEFAULT 0,
+    businesses_closed INTEGER NOT NULL DEFAULT 0,
+    wage_index REAL NOT NULL DEFAULT 1.0
+);
+
+-- Household rent arrears, so a family can miss one payment before downsizing
+CREATE TABLE IF NOT EXISTS rent_arrears (
+    household_id INTEGER PRIMARY KEY REFERENCES households(id),
+    missed_payments INTEGER NOT NULL DEFAULT 0,
+    last_missed_day INTEGER NOT NULL DEFAULT -1
+);
 """
 
 
@@ -195,6 +234,11 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _has_table(conn: sqlite3.Connection, name: str) -> bool:
+    return bool(conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone())
+
+
 def _migrate(conn: sqlite3.Connection) -> None:
     """Guarded column migrations — safe on every connect."""
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(agents)")}
@@ -203,6 +247,32 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE agents ADD COLUMN avatar_path TEXT")
     if "birth_day" not in cols:
         conn.execute("ALTER TABLE agents ADD COLUMN birth_day INTEGER")
+
+    # the economy rescalings need the meta table; hand-built or legacy DBs
+    # (which the tests use) may not have it yet
+    if not _has_table(conn, "meta"):
+        return
+
+    # Economy v1 rescaled wages from a toy range ($22-$90/shift) to one that
+    # rent, meals and shopping can be priced against. Existing worlds keep their
+    # relative position: wages and balances scale by the same factor, chosen so
+    # a working household roughly covers its cost of living rather than
+    # inflating. Flagged so it can only ever run once per world.
+    if not get_meta(conn, "economy_v1"):
+        if _has_table(conn, "jobs"):
+            conn.execute("UPDATE jobs SET wage_cents = CAST(wage_cents * 2.0 AS INTEGER)")
+            conn.execute(
+                "UPDATE agent_state SET money_cents = MAX(0, CAST(money_cents * 2.0 AS INTEGER))")
+        set_meta(conn, "economy_v1", "1")
+
+    # Economy v2: wages are now paid for days actually worked (Mon-Fri) rather
+    # than every day of the week, so a day's wage was raised by 7/5 to keep a
+    # worker's weekly income — and therefore the whole balance of the town —
+    # exactly where it was. Wages end up $62-$252 a day.
+    if not get_meta(conn, "economy_v2"):
+        if _has_table(conn, "jobs"):
+            conn.execute("UPDATE jobs SET wage_cents = CAST(wage_cents * 1.4 AS INTEGER)")
+        set_meta(conn, "economy_v2", "1")
 
 
 def get_meta(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:

@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .. import db as dbmod
+from .. import economy
 from ..events import describe
 from ..seasons import fmt_date, holiday_on, season_of
 from ..timekeeper import TICKS_PER_DAY, day_of, fmt_tick
@@ -48,6 +49,25 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     "season": season_of(day),
                     "holiday": holiday.name if holiday else None,
                     "time": fmt_tick(tick), "population": pop, "moods": moods}
+        finally:
+            c.close()
+
+    @app.get("/api/economy")
+    def economy_view(days: int = Query(30, le=400)):
+        c = conn()
+        try:
+            stats = economy.economy_stats(c)
+            businesses = _rows(c,
+                """SELECT p.name, p.kind, p.district, b.status, b.balance_cents,
+                          b.revenue_total, b.payroll_total, b.price_index,
+                          b.ema_traffic, b.closed_tick
+                   FROM businesses b JOIN places p ON p.id=b.place_id
+                   ORDER BY b.balance_cents DESC""")
+            series = _rows(c,
+                """SELECT * FROM economy_days WHERE money_supply_cents > 0
+                   ORDER BY day DESC LIMIT ?""", (days,))
+            series.reverse()
+            return {"stats": stats, "businesses": businesses, "series": series}
         finally:
             c.close()
 

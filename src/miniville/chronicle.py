@@ -46,6 +46,10 @@ def write_day(conn: sqlite3.Connection, day: int, seed: str) -> str:
     lines.append("## By the numbers")
     for k, c in kinds.most_common():
         lines.append(f"- {k}: {c}")
+    lines.append("")
+    lines.append("## Economy")
+    from .economy import economy_line
+    lines.append(f"- {economy_line(conn)}")
     text = "\n".join(lines)
 
     conn.execute(

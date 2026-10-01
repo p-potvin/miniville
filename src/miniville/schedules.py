@@ -21,6 +21,13 @@ SCHOOL_START, SCHOOL_END = 14, 32
 LEISURE_TAGS = ["outdoors", "food", "drink", "nightlife", "sport", "quiet",
                 "arts", "community", "coffee"]
 
+# shops and eateries can be workplaces too (the grocer, the diner, the shops),
+# so customers must be able to plan a trip there
+SHOP_TAGS = ["retail", "trades"]
+SHOP_KINDS = ("workplace", "public")
+DINING_KINDS = ("workplace", "public")
+SHOPPING_WINDOWS = (20, 32, 42)   # 10:00, 16:00, 21:00
+
 
 def _venue_by_tags(conn: sqlite3.Connection, tags: list[str], kinds=("public", "civic")):
     rows = conn.execute(
@@ -38,9 +45,13 @@ def _plan_ctx(conn: sqlite3.Connection) -> dict:
     """Per-day cached venue data — one table scan instead of ~100."""
     venues = []
     for row in conn.execute(
-            "SELECT id, name, kind, tags, open_tick, close_tick FROM places").fetchall():
+            """SELECT p.id, p.name, p.kind, p.tags, p.open_tick, p.close_tick,
+                      COALESCE(b.status, 'open') AS status
+               FROM places p LEFT JOIN businesses b ON b.place_id = p.id""").fetchall():
         v = dict(row)
         v["tags"] = set(json.loads(v["tags"]))
+        if v["status"] == "closed":
+            continue              # a shut business is not a destination
         venues.append(v)
     school = conn.execute(
         "SELECT id FROM places WHERE name='Miniville School'").fetchone()
@@ -96,7 +107,8 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
     leisure_venues = _by_tags(ctx["venues"], _hobby_tags(hobbies))
     if not leisure_venues:
         leisure_venues = _by_tags(ctx["venues"], LEISURE_TAGS)
-    food_venues = _by_tags(ctx["venues"], ["food"])
+    food_venues = _by_tags(ctx["venues"], ["food"], DINING_KINDS)
+    shop_venues = _by_tags(ctx["venues"], SHOP_TAGS, SHOP_KINDS)
     school_id = ctx["school_id"]
 
     for t in range(TICKS_PER_DAY):
@@ -142,6 +154,14 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
                 continue
             plan[t] = (home, "eat")
             continue
+
+        # errands: a shopping trip now and then keeps the shops in business
+        if t in SHOPPING_WINDOWS and shop_venues and not agent["is_child"]:
+            if r.random() < 0.30:
+                v = r.choice(shop_venues)
+                if v["open_tick"] <= t <= v["close_tick"]:
+                    plan[t] = (v["id"], "shopping")
+                    continue
 
         # leisure: prob of going out depends on weekend & hour
         p_out = 0.55 if wknd else (0.35 if 18 <= t <= 30 else 0.2)

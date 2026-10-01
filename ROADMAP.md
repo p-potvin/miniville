@@ -39,8 +39,16 @@ not turn over across years. Closing that loop is the milestone.
   school breaks; season-weighted outdoor leisure and seasonal weather. Every
   resident now ages on their own birthday and children come of age at 18 —
   previously nobody aged at all (`growth.age_children` was never called).
-- **Economy** — wages only go up today. Needs prices, scarcity, and business
-  failure before "economy stats" means anything.
+- **Economy (done, v0.6).** Rent, groceries, meals, shopping and paid leisure
+  give the town a cost of living; a household that misses two rent payments
+  downsizes to The Flats. Every venue has a business that is credited for what
+  customers spend and debited for the wages it pays; a commercial venue that
+  bleeds past −$60k closes, lays off its staff, and reopens weeks later.
+  `wage_index` drifts with unemployment, so wages no longer only go up. A weekly
+  levy on business reserves funds the town and rebates a civic dividend, which
+  keeps money circulating. Full write-up: `docs/ECONOMY.md`.
 - **God-mode interventions** — inject a shock (factory closes, fire, festival)
-  and watch the town absorb it. Only meaningful once the above exist.
+  and watch the town absorb it. The economy now gives a shock something to
+  propagate through: a closed business is already a real shock, and a venue
+  losing its customers already fails. Next: make shocks *injectable* on demand.
 - Multi-town federation — maybe.

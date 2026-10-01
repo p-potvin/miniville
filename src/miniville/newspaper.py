@@ -89,6 +89,10 @@ def publish_week(conn: sqlite3.Connection, week: int,
             lines.append(f"  - {it}")
         lines.append("")
 
+    economy_block = _economy_block(conn, start, end)
+    if economy_block:
+        lines.extend(economy_block)
+
     pop = conn.execute(
         "SELECT COUNT(*) c FROM agents WHERE alive=1").fetchone()["c"]
     lines.append(f"— Population this week: {pop}. "
@@ -102,6 +106,38 @@ def publish_week(conn: sqlite3.Connection, week: int,
         (week, text, int(get_meta(conn, "tick", "0") or 0)))
     conn.commit()
     return text
+
+
+def _economy_block(conn: sqlite3.Connection, start: int, end: int) -> list[str]:
+    """The week's money, jobs and businesses, for the back page."""
+    row = conn.execute(
+        """SELECT SUM(revenue_cents) r, SUM(payroll_cents) p, SUM(rent_cents) rent,
+                  SUM(spending_cents) spend
+           FROM economy_days WHERE day BETWEEN ? AND ?""", (start, end)).fetchone()
+    if not row or not row["p"]:
+        return []
+    first = conn.execute(
+        "SELECT money_supply_cents, unemployment_bp, businesses_closed FROM economy_days "
+        "WHERE day >= ? AND money_supply_cents > 0 ORDER BY day LIMIT 1", (start,)).fetchone()
+    last = conn.execute(
+        "SELECT money_supply_cents, unemployment_bp, businesses_closed, wage_index "
+        "FROM economy_days WHERE day <= ? AND money_supply_cents > 0 "
+        "ORDER BY day DESC LIMIT 1", (end,)).fetchone()
+    if not last:
+        return []
+    drift = last["money_supply_cents"] - (first["money_supply_cents"] if first else 0)
+    lines = ["Economy:"]
+    lines.append(f"  - Wages paid out this week: ${row['p'] / 100:,.0f}; "
+                 f"shops and diners took in ${row['r'] / 100:,.0f}.")
+    lines.append(f"  - Rent collected: ${(row['rent'] or 0) / 100:,.0f}; "
+                 f"households spent ${(row['spend'] or 0) / 100:,.0f} on food and errands.")
+    lines.append(f"  - Money in circulation ${last['money_supply_cents'] / 100:,.0f} "
+                 f"({'+' if drift >= 0 else ''}{drift / 100:,.0f} this week); "
+                 f"unemployment {last['unemployment_bp'] / 100:.1f}%.")
+    lines.append(f"  - Wages stand at {last['wage_index'] * 100:.0f}% of the spring level; "
+                 f"{last['businesses_closed']} business(es) dark.")
+    lines.append("")
+    return lines
 
 
 def polish(text: str, model: str = "") -> str:
