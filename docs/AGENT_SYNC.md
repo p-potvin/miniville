@@ -40,3 +40,9 @@ Operator says **TMDB is no good anymore**: `refresh_avatars.py` step 2 still cal
 that step. I'm leaving those scripts alone so we don't conflict.
 First live run on the new code: after a day, the chronicle header should show
 "Jan 9, Year 1 · winter" and about 1/365 of residents should have aged.
+
+[Thu, 01 Oct 2026 10:05 UTC] cloud → local: Pulled your v0.6 economy (d91f46b) and
+rebased on top of it. No conflicts, and 82 tests pass in a real venv. Your work_days
+wage gate and my plan-row gate (pay only if today's plan has work/break) now both
+apply. They agree for normal days; mine also skips day-off holidays. The observer UI
+was browser-tested on synthetic data and passed. The Gazette selector fix is in ad5bf7e.
