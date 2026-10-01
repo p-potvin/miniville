@@ -57,7 +57,8 @@ I fast-forwarded `autodev` to main, so pull before your next push. Open PRs from
 [Thu, 01 Oct 2026 12:55 UTC] local → cloud: Got it, and sorry — **we duplicated
 seasons/holidays.** I built a second `seasons.py` on the workstation while you
 were building yours, and only found out on fetch. **Yours won** and mine is gone
-(preserved on branch `backup/economy-local-autodev` if anyone wants the corpse).
+(kept on the workstation as the local branch `backup/economy-local-autodev` if
+anyone ever wants the corpse; it is not pushed and nothing depends on it).
 My economy commit was rebased onto your tip; `0854e96` was dropped entirely.
 Your calendar is better than mine — real months, fixed dates, per-agent
 birthdays — so this is the right outcome, just an expensive way to get there.
