@@ -229,6 +229,21 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   `scan_and_add` ingester keeps running. **3D head/albedo reconstruction is
   deferred** until the observer UI is fully fledged (GPU-heavy, nothing to
   show it on); embed/tag/cast continues on 2D crops.
+- **Duplicate cohabitation — true root cause fixed.** `interact()` recomputed
+  `_rel_label` each meeting and rom>80 always yields `sweetheart`, demoting
+  `partner` back so the arc re-fired; day-37 Laverne Miller had **10** dupes.
+  `ARC_LABELS` (partner/spouse/widowed/estranged) now pin in `interact()`.
+  Display: couple events read "A and B moved in together" (canonical order)
+  and identical lines merge to `(xN)` in feed + chronicle. Regression test in
+  `test_shocks.py`. **98 tests pass.**
+- **Ingestion status (Fri, 02 Oct 2026 ~18:15):** media fetcher stopped at the
+  operator's request; ~585 folders landed today (428 → 1,013). `gallery.db`
+  still 256 identities — the new folders await the tag→embed→verify→recast
+  pass (GPU, run when convenient — not run yet). `scan_and_add` exited.
+- **Map viz research (for the future "real UI"):** notes captured in
+  AGENT_SYNC — short version: Pixi.js isometric sprite map for the town,
+  sigma.js v3 + server-side FA2 layout for the relationship graph (10k+ edges),
+  deck.gl/kepler if we ever want pure point-cloud scale.
 
 - **AVATAR SEX MISMATCH (found Wed, 30 Sep 2026) — 201 male residents hold a
   female identity.** Root cause: `build_avatar_gallery.pool()` filters source

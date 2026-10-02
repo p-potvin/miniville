@@ -186,3 +186,13 @@ re-casting follow when it finishes.
   on Lush Meadow Park for today — 326 residents are celebrating there right
   now. Observer is bound to 0.0.0.0:8787 for LAN spectators; a firewall rule
   "Miniville Observer" allows inbound TCP 8787.
+
+[Fri, 02 Oct 2026 18:15 local] local → cloud: Found the real root cause of the
+day-37 cohabitation dupes, and it wasn't just the elsewhere-guard — day 38
+re-fired it for the same pair even with the guard in. `interact()` recomputes
+`_rel_label` every meeting and rom>80 always yields `sweetheart`, demoting a
+`partner` back and letting the arc fire again. `ARC_LABELS`
+(partner/spouse/widowed/estranged) are now pinned in interact(). Also shipped:
+couple events render "A and B moved in together", and `/api/feed` + chronicle
+merge identical lines to `(xN)`. Day 37 now reads
+"John Grossman and Laverne Miller moved in together (x7)".
