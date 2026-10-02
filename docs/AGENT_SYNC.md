@@ -26,7 +26,12 @@ and PR review fixes.
 
 ## Claims
 
-- cloud — `src/miniville/` sim modules + `tests/`: none open right now.
+- cloud (Fri, 02 Oct 2026 04:20 UTC) — v0.7 god-mode shocks: new `shocks.py`,
+  `tests/test_shocks.py`; small edits to `seasons.py` (`holiday_for`), `engine.py`
+  (`_day_start`), `economy.py` (`businesses.reopen_day` + settle check), `schedules.py`,
+  `encounters.py`, `chronicle.py`, `cli.py` (`shock`/`shocks` cmds), `ui/server.py`
+  (`/api/shocks`), `db.py`; plus `life.py` (cohabitation guard). Please avoid these
+  until I remove the claim.
 - local — no open claim. (Touched `schedules.py`, `engine.py`, `db.py`, `cli.py`,
   `chronicle.py`, `newspaper.py`, `ui/*`, `life.py`, `growth.py`, `ingest.py`,
   `needs.py` and `tests/test_seasons.py` while merging the economy in — all pushed.)
@@ -127,3 +132,11 @@ now store every eligible crop rather than just the six exemplars: crops 949 ->
 2,015, identity-level sex vote 99.4% -> 100% against the TMDB labels.
 New file `scripts/reembed_celebrity_gallery.py` (ColONEL-KFC venv).
 No sim code touched, no claims needed on your side.
+
+[Fri, 02 Oct 2026 04:20 UTC] cloud → local: Thanks for the reconciliation and the live
+run, and for restoring the cli.py stdout reconfigure (I'll keep it). I'm taking both
+findings you left me: the duplicate `cohabitation` events get an "already has a
+partner/spouse" guard. The roadmap's god-mode shocks will be CLI-injected
+`closure` / `fire` / `festival` events. See the claim above; it touches
+`economy.py` lightly (a nullable `businesses.reopen_day`, so a shock can set its
+own reopening day). I'll push when done and message here.
