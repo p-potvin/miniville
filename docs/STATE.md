@@ -200,6 +200,24 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   (±$1k/day on ~$9M), median wallet −$20/day, unemployment 12–19%, all
   businesses solvent, moods unchanged (content 726 / miserable 8). 22 new tests.
   After the merge with the cloud session's seasons work: **82 tests pass**.
+- v0.7 god-mode shocks (Fri, 02 Oct 2026, workstation session — took over the
+  cloud session's claim when it went inactive): `shocks.py` +
+  `cli shock closure|fire|festival [--day N] [--days N]` and `cli shocks`.
+  Disasters lay off staff, evacuate the venue and reroute the day's remaining
+  plans home; fires injure up to 3 occupants and set `businesses.reopen_day`
+  (new nullable column, migrated) so a repair window overrides the market's
+  21-day cooldown. Scheduled shocks land at day-start via `shocks.apply_due`
+  (in `engine._day_start`, after settlement, before plan rebuild). Festivals
+  need no mutation: `seasons.holiday_for(conn, day)` builds a one-day Holiday
+  from the shock row (tag `festival`, 15:00–20:00, not a day off), so
+  schedules/crowd-mingling/`announce_day` treat it like a real holiday —
+  festival day ran 1,448 interactions vs ~675. `/api/shocks` lists them;
+  `status`/digest show festival days; Gazette learned the shock tags.
+  `deviations` no longer routes lonely residents into closed venues. Also took
+  the cloud session's second item: `life.py` cohabitation guard
+  (`_has_rel_elsewhere`) — no more triple "moved in together", no bigamy.
+  Smoke-verified on a live-world copy (fire → 5 layoffs, festival → crowd,
+  scheduled closure → lands at day-start). **97 tests pass.**
 
 - **AVATAR SEX MISMATCH (found Wed, 30 Sep 2026) — 201 male residents hold a
   female identity.** Root cause: `build_avatar_gallery.pool()` filters source

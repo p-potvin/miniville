@@ -9,7 +9,8 @@ import json
 import sqlite3
 
 from .seasons import (
-    OUTDOOR_APPEAL, OUTDOOR_TAGS, holiday_on, school_in_session, season_of,
+    OUTDOOR_APPEAL, OUTDOOR_TAGS, holiday_for, holiday_on, school_in_session,
+    season_of,
 )
 from .rng import rng_for
 from .timekeeper import TICKS_PER_DAY, is_weekend, weekday
@@ -92,7 +93,7 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
     wknd = is_weekend(day * TICKS_PER_DAY)
     hobbies = json.loads(agent["hobbies_json"] or "[]")
     season = season_of(day)
-    holiday = holiday_on(day)
+    holiday = holiday_for(conn, day)
 
     job = conn.execute("SELECT * FROM jobs WHERE agent_id=?", (agent["id"],)).fetchone()
     job_venue = next((v for v in ctx["venues"]

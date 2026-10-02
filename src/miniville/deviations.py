@@ -13,8 +13,11 @@ P_LONELY_OUT, P_BORED_OUT, P_MISERABLE_WALLOW = 0.35, 0.25, 0.30
 
 def _open_public_venues(conn: sqlite3.Connection, tick_of_day: int):
     return conn.execute(
-        """SELECT id FROM places WHERE kind='public'
-           AND open_tick <= ? AND close_tick > ?""",
+        """SELECT p.id FROM places p
+           LEFT JOIN businesses b ON b.place_id=p.id
+           WHERE p.kind='public'
+             AND p.open_tick <= ? AND p.close_tick > ?
+             AND COALESCE(b.status,'open')='open'""",
         (tick_of_day, tick_of_day)).fetchall()
 
 

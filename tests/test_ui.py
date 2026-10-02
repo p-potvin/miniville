@@ -78,6 +78,16 @@ def test_newspaper_endpoint(client):
     assert client.get("/api/newspaper?week=99").status_code == 404
 
 
+def test_shocks_endpoint(client, tmp_path):
+    conn = db.connect(tmp_path / "ui.db")
+    from miniville import shocks
+    shocks.inject(conn, "festival", "Miniville Community Center", "t")
+    conn.close()
+    rows = client.get("/api/shocks").json()
+    assert rows and rows[0]["kind"] == "festival"
+    assert rows[0]["venue"] == "Miniville Community Center"
+
+
 def test_economy_endpoint(client):
     body = client.get("/api/economy").json()
     assert "money_supply_cents" in body["stats"]

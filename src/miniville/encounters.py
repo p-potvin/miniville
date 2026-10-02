@@ -8,7 +8,7 @@ from .events import MINOR, NOTABLE, TRIVIAL, emit
 from .favors import maybe_affair, maybe_ask_favor, maybe_repay_debt
 from .life import dating_arc_check, romance_allowed
 from .rng import rng_for
-from .seasons import holiday_on
+from .seasons import holiday_for
 
 REL_THRESHOLDS = [
     (0, "stranger"), (3, "acquaintance"), (10, "familiar"), (25, "friend"),
@@ -167,7 +167,7 @@ def run_encounters(conn: sqlite3.Connection, tick: int, seed: str,
                    max_pairs_per_place: int = 12) -> int:
     """Pair up co-present agents at public venues. Returns # interactions."""
     tick_of_day = tick % 48
-    holiday = holiday_on(tick // 48)
+    holiday = holiday_for(conn, tick // 48)
     holiday_place_id = None
     if (holiday and holiday.venue
             and holiday.start_tick <= tick_of_day < holiday.end_tick):

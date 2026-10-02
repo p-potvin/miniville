@@ -6,7 +6,7 @@ import sqlite3
 from collections import Counter
 
 from .events import describe
-from .seasons import fmt_date, holiday_on, season_of
+from .seasons import fmt_date, holiday_for, season_of
 from .timekeeper import DAY_NAMES
 
 HEADLINES = {
@@ -72,7 +72,7 @@ def day_digest(conn: sqlite3.Connection, day: int, max_events: int = 20) -> str:
            WHERE a.alive=1 GROUP BY s.mood ORDER BY c DESC""").fetchall()
     lines = [f"Day {day+1} in Miniville ({pop} residents).",
              f"Date: {fmt_date(day)}, {season_of(day)}"]
-    holiday = holiday_on(day)
+    holiday = holiday_for(conn, day)
     if holiday:
         lines.append(f"Holiday: {holiday.name}")
     lines.extend([

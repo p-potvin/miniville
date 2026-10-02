@@ -114,6 +114,18 @@ def apply_conditions(conn: sqlite3.Connection, tick: int) -> None:
     conn.commit()
 
 
+def _has_rel_elsewhere(conn: sqlite3.Connection, agent_id: int,
+                       exclude_id: int, labels: tuple[str, ...]) -> bool:
+    """True if `agent_id` already holds one of `labels` with someone else —
+    the guard that keeps one resident from moving in with three sweethearts
+    or marrying while already somebody's spouse."""
+    marks = ",".join("?" * len(labels))
+    return conn.execute(
+        f"""SELECT 1 FROM relationships WHERE label IN ({marks})
+            AND ((a_id=? AND b_id<>?) OR (b_id=? AND a_id<>?)) LIMIT 1""",
+        (*labels, agent_id, exclude_id, agent_id, exclude_id)).fetchone() is not None
+
+
 def dating_arc_check(conn: sqlite3.Connection, a_id: int, b_id: int,
                      rel: sqlite3.Row, tick: int, seed: str) -> str | None:
     """Progress sweetheart -> partner (move in) -> spouse (marry).
@@ -122,6 +134,10 @@ def dating_arc_check(conn: sqlite3.Connection, a_id: int, b_id: int,
     r = rng_for(seed, "dating", lo, hi, tick)
     rom, fam = rel["romance"], rel["familiarity"]
     if rel["label"] == "sweetheart" and rom >= 70 and r.random() < 0.15:
+        # moving in is for pairs who are not already living with someone else
+        if (_has_rel_elsewhere(conn, a_id, b_id, ("partner", "spouse"))
+                or _has_rel_elsewhere(conn, b_id, a_id, ("partner", "spouse"))):
+            return None
         mover, keeper = (b_id, a_id) if r.random() < 0.5 else (a_id, b_id)
         hid = conn.execute(
             "SELECT household_id, home_place_id FROM agents WHERE id=?",
@@ -136,6 +152,10 @@ def dating_arc_check(conn: sqlite3.Connection, a_id: int, b_id: int,
              text="moved in together", tag="cohabitation")
         return "cohabitation"
     if rel["label"] == "partner" and rom >= 85 and fam >= 40 and r.random() < 0.08:
+        # no bigamy: a spouse elsewhere blocks the wedding
+        if (_has_rel_elsewhere(conn, a_id, b_id, ("spouse",))
+                or _has_rel_elsewhere(conn, b_id, a_id, ("spouse",))):
+            return None
         for aid in (a_id, b_id):
             conn.execute(
                 "UPDATE agents SET marital_status='married_present' WHERE id=?", (aid,))

@@ -47,8 +47,11 @@ not turn over across years. Closing that loop is the milestone.
   `wage_index` drifts with unemployment, so wages no longer only go up. A weekly
   levy on business reserves funds the town and rebates a civic dividend, which
   keeps money circulating. Full write-up: `docs/ECONOMY.md`.
-- **God-mode interventions** — inject a shock (factory closes, fire, festival)
-  and watch the town absorb it. The economy now gives a shock something to
-  propagate through: a closed business is already a real shock, and a venue
-  losing its customers already fails. Next: make shocks *injectable* on demand.
+- **God-mode interventions (done, v0.7).** `cli shock closure|fire|festival`
+  injects a shock now or on a future day. Disasters lay off staff, evacuate the
+  venue and reroute the day's plans; fires injure bystanders and take a repair
+  window (`businesses.reopen_day`) instead of the market's cooldown; festivals
+  surface through `seasons.holiday_for` as one-day holidays that pull the town
+  into one venue. Everything lands in the event ledger (`shocks` table),
+  `/api/shocks`, the chronicle and the Gazette.
 - Multi-town federation — maybe.

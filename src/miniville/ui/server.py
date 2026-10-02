@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from .. import db as dbmod
 from .. import economy
 from ..events import describe
-from ..seasons import fmt_date, holiday_on, season_of
+from ..seasons import fmt_date, holiday_for, season_of
 from ..timekeeper import TICKS_PER_DAY, day_of, fmt_tick
 
 STATIC = Path(__file__).parent / "static"
@@ -44,7 +44,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             pop = c.execute(
                 "SELECT COUNT(*) n FROM agents WHERE alive=1").fetchone()["n"]
             day = day_of(tick)
-            holiday = holiday_on(day)
+            holiday = holiday_for(c, day)
             return {"tick": tick, "day": day + 1, "date": fmt_date(day),
                     "season": season_of(day),
                     "holiday": holiday.name if holiday else None,
@@ -223,6 +223,15 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 q += " WHERE d.repaid_tick IS NULL"
             q += " ORDER BY d.created_tick DESC LIMIT ?"
             return _rows(c, q, (limit,))
+        finally:
+            c.close()
+
+    @app.get("/api/shocks")
+    def shocks_view():
+        c = conn()
+        try:
+            from .. import shocks
+            return shocks.list_shocks(c)
         finally:
             c.close()
 

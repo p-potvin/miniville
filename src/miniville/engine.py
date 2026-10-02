@@ -12,6 +12,7 @@ from . import (
     mortality,
     newspaper,
     seasons,
+    shocks,
 )
 from .db import get_meta, set_meta
 from .deviations import apply_deviations
@@ -79,6 +80,9 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     stats["rent"] = economy.collect_rent(conn, tick, seed)
     stats["levy"] = economy.weekly_levy(conn, tick, seed)
     stats["labour"] = economy.wage_dynamics(conn, tick, seed)
+    # operator shocks land after the books settle but before the town plans
+    # its day, so a venue that burnt overnight is nobody's destination
+    stats["shocks"] = shocks.apply_due(conn, tick, seed)
 
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)

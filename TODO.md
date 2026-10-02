@@ -17,5 +17,8 @@
       school breaks, holiday crowds, per-agent birthdays + coming of age
 - [x] Economy (v0.6): rent/groceries/meals/shopping prices, business P&L + failure,
       wage dynamics, weekly levy + civic dividend, `economy` cmd + UI tab (docs/ECONOMY.md)
-- [ ] God-mode shocks: inject a factory closure / fire / festival on demand (v0.6 next)
+- [x] God-mode shocks (v0.7): `shock`/`shocks` CLI — closure & fire lay off staff,
+      evacuate the venue, reroute the day; fire injures bystanders + reopen_day
+      repair window; festivals ride the holiday machinery (`holiday_for`);
+      `/api/shocks` + Gazette sections; cohabitation guard in life.py
 - [ ] Relationship graph viz in UI (cytoscape-lite canvas, optional)
