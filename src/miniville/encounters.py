@@ -15,6 +15,11 @@ REL_THRESHOLDS = [
     (60, "close_friend"),
 ]
 
+# Labels owned by the dating arc / mortality / betrayal — _rel_label must never
+# demote them back to a threshold label (a partner is not "sweetheart" again
+# at the next encounter, which would re-fire cohabitation every time).
+ARC_LABELS = {"partner", "spouse", "widowed", "estranged"}
+
 HOLIDAY_P_INTERACT = 0.5
 
 
@@ -113,6 +118,8 @@ def interact(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row,
         rom = max(0.0, rom - 0.2)
 
     new_label = _rel_label(fam, aff, rom)
+    if label in ARC_LABELS:
+        new_label = label
     importance = TRIVIAL
     if new_label != label:
         importance = NOTABLE if new_label in ("friend", "sweetheart", "rival") else MINOR

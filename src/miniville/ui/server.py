@@ -95,10 +95,22 @@ def create_app(db_path: str | None = None) -> FastAPI:
             rows = _rows(c,
                 "SELECT * FROM events WHERE day=? ORDER BY importance DESC, id DESC LIMIT ?",
                 (d, limit))
+            # identical rendered lines (e.g. a pre-guard duplicate cohabitation)
+            # merge into one row with a xN badge rather than repeating verbatim
+            counts = {}
             for e in rows:
                 e["text"] = describe(c, e)
                 e["tick_of_day"] = e["tick"] % TICKS_PER_DAY
-            return rows
+                counts[e["text"]] = counts.get(e["text"], 0) + 1
+            merged, seen = [], set()
+            for e in rows:
+                if e["text"] in seen:
+                    continue
+                seen.add(e["text"])
+                if counts[e["text"]] > 1:
+                    e["text"] += f" (x{counts[e['text']]})"
+                merged.append(e)
+            return merged
         finally:
             c.close()
 

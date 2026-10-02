@@ -258,6 +258,30 @@ def test_a_taken_resident_does_not_move_in_with_a_second_sweetheart(conn):
     ).fetchone()["household_id"] == home_before
 
 
+def test_partners_are_not_demoted_back_to_sweethearts(conn):
+    """Regression: interact() recomputed 'sweetheart' from rom>80 and demoted
+    'partner' back to it, so the same pair could emit 'moved in together'
+    every time they met (day-37 Laverne Miller x10)."""
+    from miniville.encounters import interact
+    _rel(conn, 1, 2, "partner", rom=82, fam=50)   # rom<85: no marriage path
+    a = conn.execute("SELECT * FROM agents WHERE id=1").fetchone()
+    b = conn.execute("SELECT * FROM agents WHERE id=2").fetchone()
+    home = a["home_place_id"]
+    before = conn.execute(
+        """SELECT COUNT(*) n FROM events
+           WHERE kind='life_event' AND json_extract(data,'$.tag')='cohabitation'"""
+    ).fetchone()["n"]
+    for tick in range(60):
+        interact(conn, a, b, home, tick, "test")
+    # they may legitimately marry, but must never slip back to sweetheart
+    assert _get_rel(conn, 1, 2)["label"] in ("partner", "spouse")
+    after = conn.execute(
+        """SELECT COUNT(*) n FROM events
+           WHERE kind='life_event' AND json_extract(data,'$.tag')='cohabitation'"""
+    ).fetchone()["n"]
+    assert after == before
+
+
 def test_cohabitation_still_fires_for_a_free_pair(conn):
     _rel(conn, 1, 2, "sweetheart", rom=80)
     fired = False

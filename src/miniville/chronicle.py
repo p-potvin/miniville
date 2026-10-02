@@ -5,7 +5,7 @@ import json
 import sqlite3
 from collections import Counter
 
-from .events import describe
+from .events import describe, describe_many
 from .seasons import fmt_date, holiday_for, season_of
 from .timekeeper import DAY_NAMES
 
@@ -35,13 +35,13 @@ def write_day(conn: sqlite3.Connection, day: int, seed: str) -> str:
 
     if notable:
         lines.append("## Headlines")
-        for r in notable:
-            lines.append(f"- {describe(conn, r)}")
+        for text in describe_many(conn, notable):
+            lines.append(f"- {text}")
         lines.append("")
     if minor:
         lines.append("## Around town")
-        for r in minor[:10]:
-            lines.append(f"- {describe(conn, r)}")
+        for text in describe_many(conn, minor[:10]):
+            lines.append(f"- {text}")
         lines.append("")
     lines.append("## By the numbers")
     for k, c in kinds.most_common():
