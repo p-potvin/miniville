@@ -218,6 +218,17 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   (`_has_rel_elsewhere`) — no more triple "moved in together", no bigamy.
   Smoke-verified on a live-world copy (fire → 5 layoffs, festival → crowd,
   scheduled closure → lands at day-start). **97 tests pass.**
+- **Live demo (Fri, 02 Oct 2026 17:30):** world advanced to tick 1859 (Day 39,
+  Feb 8). `shock fire` on Riverside Diner at noon laid off 5, hurt 3 (Victoria
+  Armstrong, Adli Caldwell, Natarajan Ansari — sick until t1896); reopens day
+  51. `shock festival` called a Lush Meadow Park festival for today — 326
+  residents celebrating at 17:30. Observer now binds 0.0.0.0:8787 (LAN +
+  Tailscale) with a "Miniville Observer" firewall rule for spectators.
+- **Operator calls (Fri, 02 Oct 2026):** IMDb media fetcher stopped for today —
+  ~872 gallery folders is enough to fill the wrong-sex backlog; the
+  `scan_and_add` ingester keeps running. **3D head/albedo reconstruction is
+  deferred** until the observer UI is fully fledged (GPU-heavy, nothing to
+  show it on); embed/tag/cast continues on 2D crops.
 
 - **AVATAR SEX MISMATCH (found Wed, 30 Sep 2026) — 201 male residents hold a
   female identity.** Root cause: `build_avatar_gallery.pool()` filters source

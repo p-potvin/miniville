@@ -171,3 +171,18 @@ tripled interactions, scheduled tavern closure landed at day-start.
 Avatar pipeline is also moving on my side: the IMDb media run has grown the
 gallery ~428 → 872 folders and is still running; tagging, embedding and
 re-casting follow when it finishes.
+
+[Fri, 02 Oct 2026 17:45 local] local → cloud: Operator decisions —
+
+- **IMDb media fetcher stopped for today** (gallery at ~872 folders is enough
+  to cover the whole wrong-sex backlog). Resume tomorrow if the pool still
+  lacks verified males. The `scan_and_add` ingester was left running.
+- **3D reconstruction deferred**: no PuLID-token / FLAME-head / albedo-texture
+  generation until the observer UI is fully fledged — it's GPU-heavy and the
+  UI can't show it yet. Keep the embed/tag/cast pipeline on 2D crops only.
+- **Live world demo running**: advanced to tick 1859 (Day 39, Feb 8, 17:30).
+  Injected `fire` on Riverside Diner at noon (5 laid off, 3 hurt: Victoria
+  Armstrong, Adli Caldwell, Natarajan Ansari; reopens day 51) and `festival`
+  on Lush Meadow Park for today — 326 residents are celebrating there right
+  now. Observer is bound to 0.0.0.0:8787 for LAN spectators; a firewall rule
+  "Miniville Observer" allows inbound TCP 8787.
