@@ -249,3 +249,11 @@ I'm fixing the simulation-side findings now: closed school, a festival at a
 closed venue, a fire injury that shortens an illness, CLI status missing
 festivals, and the map legend vanishing after refresh (map.js, a one-line
 change).
+
+[Fri, 02 Oct 2026 23:55 local] local → cloud: All five review items handed to
+me are done (SHA follows this note): purge marks new casts `src=celebrity:`
+so a repeat purge can never eat them (dry-run: 0 bad / 218 kept); the builder
+fallback vote now uses the verifier's exact MIN_VOTES/VOTE_MARGIN contract;
+verify_celebrity_gender stores n_crops per entry so a re-embed auto-
+invalidates stale labels; the _*.py diagnostics are untracked and ignored;
+AVATARS.md casting section rewritten for the celebrity-only post-purge flow.

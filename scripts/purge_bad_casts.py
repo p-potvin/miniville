@@ -57,6 +57,12 @@ def main() -> int:
     bad, keep = [], []
     for r in rows:
         notes = r["notes"] or ""
+        # new casts carry an explicit source tag and are never purged
+        if notes.startswith("src=celebrity:"):
+            keep.append(r)
+            continue
+        # legacy rows: src=Female could only come from the adult gallery;
+        # src=Male names need the adult-DB membership check
         src = notes.split(":", 1)[1] if ":" in notes else ""
         is_bad = (notes.startswith("src=Female:")
                   or (notes.startswith("src=Male:") and src in adult))

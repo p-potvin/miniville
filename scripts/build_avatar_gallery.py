@@ -25,7 +25,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
 from miniville import db as mvdb  # noqa: E402
+from verify_celebrity_gender import MIN_VOTES, VOTE_MARGIN  # noqa: E402
 
 # G:\Gallery is an adult gallery — never a casting source.
 FEMALE_SRC = Path(r"G:\Galleries\Celebrities")
@@ -65,7 +67,9 @@ def _sex_votes(conn: sqlite3.Connection) -> dict[int, int]:
 
     The identity-level vote is 99.4% accurate vs TMDB (per-crop is only
     90.3%), so it decides sex for identities that have no verified-map entry.
-    A clear majority (>60%) is required; ambiguous votes are skipped.
+    It uses the verifier's contract verbatim — at least MIN_VOTES ballots and
+    a strictly better-than-VOTE_MARGIN win (a 4-2 split stays undecided) — so
+    the fallback can never admit an identity the verifier rejected.
     """
     rows = conn.execute(
         """SELECT f.identity_id, f.gender FROM face_crops f
@@ -77,9 +81,12 @@ def _sex_votes(conn: sqlite3.Connection) -> dict[int, int]:
     out = {}
     for iid, g in votes.items():
         fem = sum(1 for x in g if x == 0)
-        if fem > len(g) * 0.6:
+        male = len(g) - fem
+        if male + fem < MIN_VOTES:
+            continue
+        if fem > VOTE_MARGIN * male:
             out[iid] = 0
-        elif (len(g) - fem) > len(g) * 0.6:
+        elif male > VOTE_MARGIN * fem:
             out[iid] = 1
     return out
 
@@ -212,7 +219,7 @@ def main() -> int:
                 "INSERT OR IGNORE INTO identities(name,status,sample_count,notes) "
                 "VALUES(?,?,?,?)",
                 (dirname, "locked", len(ident["rows"]),
-                 f"src={sex}:{ident['name']}"))
+                 f"src=celebrity:{sex}:{ident['name']}"))
             new_iid = out.execute(
                 "SELECT id FROM identities WHERE name=?", (dirname,)).fetchone()["id"]
             for j, crop in enumerate(ident["rows"]):

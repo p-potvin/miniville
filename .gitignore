@@ -22,3 +22,4 @@ build/
 data/
 assets/gemini_generated_map.jpg
 imdb-media-log.txt
+scripts/_*.py

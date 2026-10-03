@@ -20,15 +20,22 @@ unused source are deferred until the galleries grow.
 
 `scripts/build_avatar_gallery.py` (miniville venv; stdlib + pillow):
 
-- Female residents → `G:\Gallery` exemplars (gender=0, ~930 identities)
-- Male residents → `G:\Galleries\Celebrities` exemplars (gender=1; currently
-  ~90 male identities, so ~190 of 281 males defer until growth)
+- **Both sexes now draw from `G:\Galleries\Celebrities`.** `G:\Gallery` is an
+  adult gallery and is banned as a casting source — its 364 casts were
+  stripped by `scripts/purge_bad_casts.py` (Fri, 02 Oct 2026).
+- Identity sex comes from the verified map (`D:\miniville\celebrity_gender.json`)
+  where present, else the identity-level crop vote — never the per-crop
+  `face_crops.gender` column. New casts are recorded `src=celebrity:<sex>:<name>`
+  so the purge can never confuse them with the banned source.
 - Picks the unused identity with median exemplar age nearest the resident,
   copies up to 4 exemplar images + their `face_crops` rows (embeddings and
   landmarks copied verbatim — identical vectors to a `vw reindex-gallery`
   re-embed, zero GPU cost), crops the portrait, sets `avatar_path`.
+- `--only-missing` casts only residents whose `avatar_path` is NULL (the
+  post-purge recast mode); it also skips identities already worn by another
+  resident and merges the cast list instead of overwriting it.
 
-## Gallery growth (male pool)
+## Gallery growth
 
 Grow `G:\Galleries\Celebrities` via the IMDb importer (NOT TMDb):
 `..\ColONEL-KFC\Import-IMDbStarMeter.ps1 -Phase both -StartNm <N>` scans
@@ -94,7 +101,7 @@ this way). Identity-level sex vote: 251/254 correct against the TMDB labels.
 with >=6 eligible images has now been embedded, so there is nothing left to
 extract from the current photo set — the pool only grows by downloading new
 identities (`Import-IMDbStarMeter.ps1`). `G:\Gallery` (931 identities) is
-female-only (929F/1M) and cannot help.
+an adult gallery and is permanently banned as a casting source.
 
 ## Identity sex: how it is decided
 

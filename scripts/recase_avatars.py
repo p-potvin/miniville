@@ -128,7 +128,8 @@ def main(argv=None) -> int:
         out.execute(
             "INSERT OR IGNORE INTO identities(name,status,sample_count,notes) "
             "VALUES(?,?,?,?)",
-            (dirname, "locked", len(ident["rows"]), f"src=Male:{ident['name']}"))
+            (dirname, "locked", len(ident["rows"]),
+             f"src=celebrity:Male:{ident['name']}"))
         new_iid = out.execute(
             "SELECT id FROM identities WHERE name=?", (dirname,)).fetchone()["id"]
         for j, crop in enumerate(ident["rows"]):

@@ -13,8 +13,9 @@ network.
 
 The output format is unchanged — `{gallery_dir: {"gender": 1|2|0}}` with the
 TMDB convention (1 female, 2 male, 0 unknown) — so `build_avatar_gallery.py`
-and `recase_avatars.py` keep working. Existing entries are preserved; only
-identities that are missing, or that were left unknown, are resolved.
+and `recase_avatars.py` keep working. Each entry also stores `n_crops`: a
+re-embed that changes an identity's crop set invalidates its cached label and
+the identity is re-voted on the next run.
 
 Run (needs insightface; use the ColONEL-KFC venv):
     .\.venv\Scripts\python.exe scripts\verify_celebrity_gender.py [--force]
@@ -111,11 +112,17 @@ def main(argv=None) -> int:
     conn.row_factory = sqlite3.Row
     dirs = sorted(p.name for p in gallery.iterdir()
                   if p.is_dir() and not p.name.startswith("."))
+    crop_counts = dict(conn.execute(
+        """SELECT i.name, COUNT(*) FROM face_crops f
+           JOIN identities i ON i.id = f.identity_id
+           WHERE f.image_path IS NOT NULL GROUP BY i.name""").fetchall())
 
     todo = []
     for d in dirs:
         entry = cache.get(d) or {}
-        if args.force or entry.get("gender") not in (1, 2):
+        resolved = entry.get("gender") in (1, 2)
+        fresh = entry.get("n_crops") == crop_counts.get(d, 0)
+        if args.force or not (resolved and fresh):
             todo.append(d)
     if args.limit:
         todo = todo[: args.limit]
@@ -133,10 +140,11 @@ def main(argv=None) -> int:
         paths = identity_crops(conn, d)
         if not paths:
             cache[d] = {"name": None, "gender": 0, "source": "local",
-                        "error": "no face crops"}
+                        "n_crops": 0, "error": "no face crops"}
             continue
         gender, male, female = vote_sex(app, paths, args.max_crops)
         cache[d] = {"name": None, "gender": gender, "source": "local",
+                    "n_crops": len(paths),
                     "votes": {"male": male, "female": female}}
         if gender:
             changed += 1
