@@ -14,6 +14,7 @@
 </header>
 <nav id="tabs">
   <button data-tab="feed" class="on">Feed</button>
+  <button data-tab="map">Map</button>
   <button data-tab="venues">Venues</button>
   <button data-tab="residents">Residents</button>
   <button data-tab="chronicle">Chronicle</button>
@@ -26,6 +27,10 @@
   <section id="feed" class="panel on">
     <h2>Happenings — <span id="feed-day"></span></h2>
     <ul id="feed-list"></ul>
+  </section>
+  <section id="map" class="panel">
+    <h2>Town map <small id="map-hint" class="muted">drag to pan · scroll to zoom · click a dot for the resident</small></h2>
+    <div id="map-host"></div>
   </section>
   <section id="venues" class="panel">
     <h2>Venues</h2>
@@ -75,6 +80,8 @@
     </tr></thead><tbody id="econ-days"></tbody></table>
   </section>
 </main>
+<script src="/vendor/pixi.min.js"></script>
 <script src="/app.js"></script>
+<script src="/map.js"></script>
 </body>
 </html>

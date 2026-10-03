@@ -149,7 +149,8 @@ async function economy() {
      <td>${d.businesses_closed}</td></tr>`).join("");
 }
 
-const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts, gazette, economy };
+const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts, gazette, economy,
+  map: () => renderMap($("#map-host")) };
 for (const b of document.querySelectorAll("#tabs button"))
   b.onclick = () => {
     document.querySelectorAll("#tabs button").forEach(x => x.classList.remove("on"));
@@ -158,10 +159,21 @@ for (const b of document.querySelectorAll("#tabs button"))
     $("#" + b.dataset.tab).classList.add("on");
     loaders[b.dataset.tab]();
   };
+
+// clicking a map dot jumps to that resident's card
+window.mvPick = (agent) => {
+  document.querySelector('[data-tab="residents"]').click();
+  residentCard(agent.id);
+};
+
 $("#q").oninput = (e) => residents(e.target.value);
 $("#chron-go").onclick = chronicle;
 $("#rel-filter").onchange = rels;
 $("#debts-all").onchange = debts;
 
 status().then(feed);
-setInterval(async () => { await status(); if ($("#feed").classList.contains("on")) feed(); }, 5000);
+setInterval(async () => {
+  await status();
+  if ($("#feed").classList.contains("on")) feed();
+  if ($("#map").classList.contains("on") && window._map) window._map.refresh();
+}, 5000);

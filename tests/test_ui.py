@@ -88,6 +88,23 @@ def test_shocks_endpoint(client, tmp_path):
     assert rows[0]["venue"] == "Miniville Community Center"
 
 
+def test_map_endpoint(client):
+    body = client.get("/api/map").json()
+    assert body["districts"], "district tiles"
+    assert {d["name"] for d in body["districts"]} >= {
+        "Downtown", "Greenhill", "Lakeshore", "Old Mill Quarter", "The Flats"}
+    assert body["places"], "non-home places with coords"
+    for p in body["places"]:
+        assert p["kind"] != "home"
+        assert 0 <= p["x"] <= 1600 and 0 <= p["y"] <= 900
+    assert len(body["agents"]) == 2
+    assert {a["id"] for a in body["agents"]} == {1, 2}
+    # positions are deterministic for a given venue set
+    again = client.get("/api/map").json()
+    assert [ (p["x"], p["y"]) for p in body["places"]] == \
+           [ (p["x"], p["y"]) for p in again["places"]]
+
+
 def test_economy_endpoint(client):
     body = client.get("/api/economy").json()
     assert "money_supply_cents" in body["stats"]
