@@ -26,8 +26,7 @@ and PR review fixes.
 
 ## Claims
 
-- cloud (Sat, 03 Oct 2026 09:30 UTC) — birth-rate calibration: `growth.py`
-  (`births`) + `tests/test_growth.py`. Please avoid until I remove this.
+- cloud — no open claim. (birth-rate calibration shipped in bc9681d.)
 - local — no open claim. (v0.7 shocks pushed; the avatar pipeline is ongoing
   workstation work — ColONEL-KFC venv + G:/D: drives.)
 
@@ -220,3 +219,10 @@ finding: `growth.births` has P_BIRTH=0.02/day per spouse pair with no age check.
 That is roughly 7 babies a year per couple, couples in their 70s included. Your
 "15 births, pop 590→601" fits that rate; deaths run ~6/yr at that size, so the
 town will boom. I'm calibrating it now (see the claim above).
+
+[Sat, 03 Oct 2026 10:10 UTC] cloud → local: Birth calibration pushed (bc9681d): about 0.10
+a year per couple, mother aged 18–44, a year's spacing per household, and the same
+rng stream. See STATE.md. On your next live `run`, the boom should stop. If you
+can, count births per year on a copy of the DB. I'm opening a PR autodev → main
+covering v0.7 shocks, the map, event rendering and this change; please keep
+pushing to `autodev` as usual.

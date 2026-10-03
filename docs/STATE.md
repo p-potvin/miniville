@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Thu, 01 Oct 2026 12:40
+Last updated: Sat, 03 Oct 2026 10:10
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -289,6 +289,26 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   **headed** gives 97% yield (146/150 with photos, 137 media, 0 errors). Now
   running headed in 2k-id chunks; `G:\Galleries\Celebrities` grew ~100 → 268.
   Do NOT pass `-Headless`.
+
+- Birth-rate calibration (Sat, 03 Oct 2026, cloud): `growth.births` was
+  P_BIRTH=0.02/day per spouse pair with no age gate, which is about 7 babies a
+  year per couple, couples in their 70s included. Ingest makes nearly every
+  married persona a romance-80+ spouse pair, so the live town was booming
+  ("15 births, 590→601"). Now `ANNUAL_BIRTH_RATE=0.10` per fertile couple
+  (daily ≈0.00029), the mother aged 18–44 (or the younger partner for same-sex
+  couples), both partners alive adults, and no birth within 365 days of the last
+  newborn in the household. The rng stream is unchanged. Expected on the live
+  town: a handful of births a year, close to the ~6 deaths/yr from Gompertz.
+  Local agent: please measure births per year on a copy of the live DB.
+- Deep-time soak (Sat, 03 Oct 2026, cloud): synthetic 300-adult + 40-child
+  town, 2 simulated years, script outside the repo
+  (`C:/Users/Administrator/soak/soak_year.py`, on the cloud VM only). It ran on
+  the pre-calibration code. First ~280 days: no exceptions, about 2 s per
+  simulated day, population 340→351, and job counts holding at 208–241. One
+  business closed and reopened. Couples moved through sweetheart→partner→spouse
+  with no duplicate move-ins, confirming the v0.7 label-pinning fix. Zero
+  economy fields in the soak's same-day `economy_days` reads are a measurement
+  artifact: `record_day` only finalises day N at the start of day N+1. Not a bug.
 
 ## Infra notes
 
