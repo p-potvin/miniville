@@ -236,14 +236,26 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   Display: couple events read "A and B moved in together" (canonical order)
   and identical lines merge to `(xN)` in feed + chronicle. Regression test in
   `test_shocks.py`. **98 tests pass.**
-- **Ingestion status (Fri, 02 Oct 2026 ~18:15):** media fetcher stopped at the
-  operator's request; ~585 folders landed today (428 → 1,013). `gallery.db`
-  still 256 identities — the new folders await the tag→embed→verify→recast
-  pass (GPU, run when convenient — not run yet). `scan_and_add` exited.
-- **Map viz research (for the future "real UI"):** notes captured in
-  AGENT_SYNC — short version: Pixi.js isometric sprite map for the town,
-  sigma.js v3 + server-side FA2 layout for the relationship graph (10k+ edges),
-  deck.gl/kepler if we ever want pure point-cloud scale.
+- **Casting purge (Fri, 02 Oct 2026 evening):** `scripts/purge_bad_casts.py`
+  removed **364 casts** sourced from `G:\Gallery` (317 `src=Female` + 47
+  wrong-sex `src=Male`) from `D:\miniville\gallery\gallery.db`; the **218
+  real-celebrity casts were kept**, `avatar_path` nulled for the purged.
+  `G:\Gallery` is permanently banned as a casting source.
+- **Bounded ingest running:** `scripts/tag_celebrity_bounded.py` tags ≤12
+  evenly-spaced images per unembedded folder (759 folders) via the
+  vault-commander TaggerEngine, then chains into
+  `reembed_celebrity_gallery.py --resume`. Recast when it lands:
+  `build_avatar_gallery.py --only-missing` — the female pool now draws from
+  the celebrity gallery too, with sex decided by TMDB map else >60% all-crop
+  vote. Male pool is currently 0 (all verified males already worn) — new
+  male folders in the embed pass will refill it.
+- **Map viz shipped:** Pixi.js **Map tab** in the observer — fixed district
+  tiles, venue squares sized by capacity (closed venues dimmed, marked red),
+  all 636 residents as activity-colored dots (golden-angle scatter at venues,
+  home crowd pooled in the district homes strip), drag/zoom, hover tooltip,
+  click → resident card, 5s refresh. `/api/map` endpoint; pixi v7 vendored.
+  Next candidates: resident-dot→resident-card already done; sigma.js bond
+  graph; per-district heat/trend overlays.
 
 - **AVATAR SEX MISMATCH (found Wed, 30 Sep 2026) — 201 male residents hold a
   female identity.** Root cause: `build_avatar_gallery.pool()` filters source

@@ -196,3 +196,18 @@ re-fired it for the same pair even with the guard in. `interact()` recomputes
 couple events render "A and B moved in together", and `/api/feed` + chronicle
 merge identical lines to `(xN)`. Day 37 now reads
 "John Grossman and Laverne Miller moved in together (x7)".
+
+[Fri, 02 Oct 2026 19:50 local] local → cloud: Purged the casting pool and
+started the bounded ingest the operator asked for. scripts/purge_bad_casts.py
+deleted 364 casts sourced from G:\Gallery (317 src=Female + 47 wrong-sex
+src=Male) from D:\miniville\gallery\gallery.db - the 218 real-celebrity casts
+stay, avatar_path nulled for the purged residents. scripts/tag_celebrity_
+bounded.py is running now: <=12 evenly-spaced images per unembedded folder
+(759 folders) through the vault-commander TaggerEngine then
+reembed_celebrity_gallery.py --resume - should land ~600 new identities at a
+fraction of the full-pass cost. build_avatar_gallery.py now draws BOTH sexes
+from the celebrity gallery and decides sex via TMDB map else >60% all-crop
+vote; --only-missing recasts the purged set once embedding finishes. Also:
+new Pixi.js "Map" tab in the observer - district tiles, venue squares, 636
+resident dots by activity, pan/zoom, click-through to resident card; the
+326-person festival crowd at Lush Meadow Park looks great on it.
