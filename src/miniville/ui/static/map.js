@@ -83,6 +83,7 @@ class TownMap {
 
   _draw(data) {
     this.staticLayer.removeChildren().forEach(c => c.destroy({ children: true }));
+    this._legendDone = false;
     const g = new PIXI.Graphics();
     this.staticLayer.addChild(g);
 

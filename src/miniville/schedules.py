@@ -54,12 +54,11 @@ def _plan_ctx(conn: sqlite3.Connection) -> dict:
         if v["status"] == "closed":
             continue              # a shut business is not a destination
         venues.append(v)
-    school = conn.execute(
-        "SELECT id FROM places WHERE name='Miniville School'").fetchone()
+    ids_by_name = {v["name"]: v["id"] for v in venues}
     return {
         "venues": venues,
-        "ids_by_name": {v["name"]: v["id"] for v in venues},
-        "school_id": school["id"] if school else None,
+        "ids_by_name": ids_by_name,
+        "school_id": ids_by_name.get("Miniville School"),
     }
 
 

@@ -139,8 +139,12 @@ def holiday_for(conn: sqlite3.Connection, day: int) -> Holiday | None:
     venue = None
     if row["place_id"] is not None:
         p = conn.execute(
-            "SELECT name FROM places WHERE id=?", (row["place_id"],)).fetchone()
-        venue = p["name"] if p else None
+            """SELECT p.name, COALESCE(b.status, 'open') AS status
+               FROM places p LEFT JOIN businesses b ON b.place_id=p.id
+               WHERE p.id=?""", (row["place_id"],)).fetchone()
+        if p is None or p["status"] == "closed":
+            return None
+        venue = p["name"]
     return Holiday(
         name=d.get("name", "Town Festival"), month=0, dom=0, venue=venue,
         start_tick=int(d.get("start", 30)), end_tick=int(d.get("end", 40)),

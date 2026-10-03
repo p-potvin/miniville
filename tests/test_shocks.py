@@ -128,6 +128,25 @@ def test_fire_injures_occupants_and_schedules_repairs(conn):
     assert data["tag"] == "shock_fire" and ev["importance"] == 5
 
 
+def test_fire_does_not_shorten_an_existing_illness(conn):
+    diner = _place(conn, "Riverside Diner")
+    conn.execute(
+        "UPDATE agent_state SET place_id=?, activity='leisure' WHERE agent_id=1",
+        (diner,))
+    existing_until = 10 * DAY
+    conn.execute(
+        "INSERT INTO conditions(agent_id,kind,until_tick) VALUES(1,'sick',?)",
+        (existing_until,))
+
+    out = shocks.inject(conn, "fire", "Riverside Diner", "test")
+
+    assert out["ok"] and "1 hurt" in out["message"]
+    condition = conn.execute(
+        "SELECT until_tick FROM conditions WHERE agent_id=1 AND kind='sick'"
+    ).fetchone()
+    assert condition["until_tick"] == existing_until
+
+
 def test_shock_reroutes_the_rest_of_the_days_plans(conn):
     diner = _place(conn, "Riverside Diner")
     home = conn.execute(
@@ -163,6 +182,43 @@ def test_scheduled_closure_lands_at_day_start(conn):
     assert stats["shocks"] == 1
     assert _biz(conn, "Riverside Diner")["status"] == "closed"
     assert conn.execute("SELECT COUNT(*) n FROM jobs").fetchone()["n"] == 0
+
+
+def _add_school_child(conn):
+    conn.execute("UPDATE agents SET age=10, is_child=1 WHERE id=2")
+
+
+def _assert_no_school_plans(conn, school_id):
+    assert conn.execute(
+        """SELECT COUNT(*) n FROM plans
+           WHERE activity='school' OR place_id=?""",
+        (school_id,)).fetchone()["n"] == 0
+
+
+def test_closed_school_has_no_plans_after_immediate_closure(conn):
+    _add_school_child(conn)
+    school_id = _place(conn, "Miniville School")
+    mvdb.set_meta(conn, "tick", str(2 * DAY))
+
+    out = shocks.inject(conn, "closure", "Miniville School", "test", days=14)
+    assert out["ok"]
+    schedules.rebuild_day_plans(conn, 3, "test")
+
+    _assert_no_school_plans(conn, school_id)
+
+
+def test_closed_school_has_no_plans_after_scheduled_closure(conn):
+    _add_school_child(conn)
+    school_id = _place(conn, "Miniville School")
+    out = shocks.inject(conn, "closure", "Miniville School", "test",
+                        day=3, days=14)
+    assert out["ok"]
+
+    mvdb.set_meta(conn, "tick", str(3 * DAY))
+    assert shocks.apply_due(conn, 3 * DAY, "test") == 1
+    schedules.rebuild_day_plans(conn, 3, "test")
+
+    _assert_no_school_plans(conn, school_id)
 
 
 def test_shock_rejects_homes_unknown_venues_and_the_past(conn):
@@ -204,6 +260,37 @@ def test_festival_day_draws_a_crowd(conn):
     celebrated = [t for t, place, act in plan
                   if act == "celebrate" and place == park]
     assert celebrated == list(range(shocks.FESTIVAL_START, shocks.FESTIVAL_END))
+
+
+def test_festival_at_closed_venue_is_cancelled_once(conn):
+    park = _place(conn, "Lush Meadow Park")
+    assert shocks.inject(conn, "festival", "Lush Meadow Park", "test",
+                         day=1)["ok"]
+    assert shocks.inject(conn, "fire", "Lush Meadow Park", "test")["ok"]
+
+    mvdb.set_meta(conn, "tick", str(DAY))
+    assert shocks.apply_due(conn, DAY, "test") == 1
+    assert holiday_for(conn, 1) is None
+    schedules.rebuild_day_plans(conn, 1, "test")
+    assert conn.execute(
+        "SELECT COUNT(*) n FROM plans WHERE activity='celebrate'"
+    ).fetchone()["n"] == 0
+
+    assert shocks.apply_due(conn, DAY, "test") == 0
+    rows = conn.execute(
+        "SELECT importance, place_id, data FROM events WHERE kind='town_event'"
+    ).fetchall()
+    cancelled = [r for r in rows
+                 if json.loads(r["data"]).get("tag") == "festival_cancelled"]
+    assert len(cancelled) == 1
+    assert cancelled[0]["importance"] == 3
+    assert cancelled[0]["place_id"] == park
+    assert json.loads(cancelled[0]["data"])["text"] == (
+        "Lush Meadow Park Festival at Lush Meadow Park was cancelled — "
+        "the venue is closed")
+    assert conn.execute(
+        "SELECT applied FROM shocks WHERE kind='festival'"
+    ).fetchone()["applied"] == 1
 
 
 def test_festival_is_announced_at_day_start(conn):

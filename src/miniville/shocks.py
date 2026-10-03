@@ -69,8 +69,10 @@ def _apply_disaster(conn: sqlite3.Connection, kind: str, place_id: int,
         for v in victims:
             days = r.randint(1, 3)
             conn.execute(
-                """INSERT OR REPLACE INTO conditions(agent_id,kind,until_tick)
-                   VALUES(?,?,?)""",
+                """INSERT INTO conditions(agent_id,kind,until_tick)
+                   VALUES(?,?,?)
+                   ON CONFLICT(agent_id,kind) DO UPDATE
+                   SET until_tick=MAX(until_tick, excluded.until_tick)""",
                 (v["agent_id"], "sick", tick + days * TICKS_PER_DAY))
             emit(conn, tick, "life_event", a=v["agent_id"], importance=MINOR,
                  text=f"was hurt in the fire at {name}", tag="injured")
@@ -207,9 +209,8 @@ def inject(conn: sqlite3.Connection, kind: str, venue: str, seed: str,
 
 def apply_due(conn: sqlite3.Connection, tick: int, seed: str) -> int:
     """Land scheduled disasters whose day has come. Runs at each day start,
-    after settlement and before the day's plans are rebuilt. Festivals need no
-    mutation — holiday_for surfaces them on their day — so they're only marked
-    applied once the day has passed."""
+    after settlement and before the day's plans are rebuilt. Festivals are
+    announced by holiday_for; a festival at a closed venue is cancelled."""
     day = day_of(tick)
     rows = conn.execute(
         """SELECT s.id, s.kind, s.place_id, s.detail, p.name
@@ -221,12 +222,32 @@ def apply_due(conn: sqlite3.Connection, tick: int, seed: str) -> int:
         _apply_disaster(conn, s["kind"], s["place_id"], s["name"], tick,
                         detail.get("reopen_day"), seed)
         conn.execute("UPDATE shocks SET applied=1 WHERE id=?", (s["id"],))
-    conn.execute(
+    festivals = conn.execute(
+        """SELECT s.id, s.place_id, s.detail, p.name,
+                  COALESCE(b.status, 'open') AS status
+           FROM shocks s JOIN places p ON p.id=s.place_id
+           LEFT JOIN businesses b ON b.place_id=p.id
+           WHERE s.applied=0 AND s.kind='festival' AND s.day=?""",
+        (day,)).fetchall()
+    cancelled = 0
+    for festival in festivals:
+        if festival["status"] != "closed":
+            continue
+        detail = json.loads(festival["detail"] or "{}")
+        name = detail.get("name", f"{festival['name']} Festival")
+        emit(conn, tick, "town_event", place_id=festival["place_id"],
+             importance=3,
+             text=f"{name} at {festival['name']} was cancelled — the venue is closed",
+             tag="festival_cancelled")
+        conn.execute("UPDATE shocks SET applied=1 WHERE id=?",
+                     (festival["id"],))
+        cancelled += 1
+    expired = conn.execute(
         "UPDATE shocks SET applied=1 WHERE applied=0 AND kind='festival' AND day<?",
         (day,))
-    if rows:
+    if rows or cancelled or expired.rowcount:
         conn.commit()
-    return len(rows)
+    return len(rows) + cancelled
 
 
 def list_shocks(conn: sqlite3.Connection) -> list[dict]:
