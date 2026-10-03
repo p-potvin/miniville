@@ -53,3 +53,6 @@ li.mem.refl { border-left: 3px solid var(--accent); background: #1a2028;
 h3 { font-family: Georgia, serif; color: var(--dim); font-size: .95rem;
   margin: 1.4rem 0 .4rem; font-weight: normal; }
 td.closed { color: var(--warm); }
+
+.muted { color: var(--dim); font-size: .8rem; font-weight: normal; }
+#map-host { width: 100%; }

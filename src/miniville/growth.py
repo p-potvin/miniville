@@ -7,8 +7,8 @@ sources are modelled:
   moved in as fully-formed adults (home, household, job, state). Because the
   dataset is far larger than the town, immigration is effectively unbounded and
   deterministic per (seed, tick, index).
-* **Births** — married couples with high romance occasionally have a child, who
-  joins the household as a child agent and ages in place.
+* **Births** — fertile married couples with high romance have about a 10%
+  annual chance of a child, with at least a year between births per household.
 
 Both are additive: nothing here removes or rewrites existing residents.
 """
@@ -24,8 +24,11 @@ from .rng import rng_for
 from .timekeeper import day_of
 from .world import workplace_tags_for
 
-P_BIRTH = 0.02          # per married couple per day
+ANNUAL_BIRTH_RATE = 0.10
+P_BIRTH = 1 - (1 - ANNUAL_BIRTH_RATE) ** (1 / 365)
 BIRTH_ROMANCE = 80.0    # couples below this are not trying
+FERTILE_AGES = (18, 44)
+BIRTH_SPACING_DAYS = 365
 
 _CHILD_FIRST = ["Ada", "Ben", "Cora", "Dex", "Elsie", "Finn", "Gwen", "Hugo",
                 "Ivy", "Jonah", "Kira", "Lena", "Milo", "Nora", "Otto", "Pia",
@@ -137,12 +140,37 @@ def immigrate(conn: sqlite3.Connection, n: int, tick: int, seed: str,
 
 
 def births(conn: sqlite3.Connection, tick: int, seed: str) -> int:
-    """Married couples with high romance may welcome a child."""
+    """Fertile married couples may welcome a child, spaced a year apart."""
     couples = conn.execute(
-        """SELECT a_id, b_id, romance FROM relationships
-           WHERE label='spouse' AND romance >= ?""", (BIRTH_ROMANCE,)).fetchall()
+        """SELECT r.a_id, r.b_id, r.romance,
+                  a.age AS a_age, a.sex AS a_sex, a.household_id AS household_id,
+                  b.age AS b_age, b.sex AS b_sex
+           FROM relationships r
+           JOIN agents a ON a.id=r.a_id
+           JOIN agents b ON b.id=r.b_id
+           WHERE r.label='spouse' AND r.romance >= ?
+             AND a.alive=1 AND b.alive=1
+             AND a.is_child=0 AND b.is_child=0""",
+        (BIRTH_ROMANCE,)).fetchall()
     n = 0
     for c in couples:
+        if c["a_age"] is None or c["b_age"] is None:
+            continue
+        a_sex = (c["a_sex"] or "").casefold()
+        b_sex = (c["b_sex"] or "").casefold()
+        if a_sex == "female" and b_sex == "male":
+            fertile_age = c["a_age"]
+        elif a_sex == "male" and b_sex == "female":
+            fertile_age = c["b_age"]
+        else:
+            fertile_age = min(c["a_age"], c["b_age"])
+        if not FERTILE_AGES[0] <= fertile_age <= FERTILE_AGES[1]:
+            continue
+        if conn.execute(
+                """SELECT 1 FROM agents WHERE alive=1 AND household_id=?
+                   AND birth_day IS NOT NULL AND birth_day>? LIMIT 1""",
+                (c["household_id"], day_of(tick) - BIRTH_SPACING_DAYS)).fetchone():
+            continue
         r = rng_for(seed, "birth", c["a_id"], c["b_id"], tick)
         if r.random() >= P_BIRTH:
             continue

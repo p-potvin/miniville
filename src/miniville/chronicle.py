@@ -5,8 +5,8 @@ import json
 import sqlite3
 from collections import Counter
 
-from .events import describe
-from .seasons import fmt_date, holiday_on, season_of
+from .events import describe, describe_many
+from .seasons import fmt_date, holiday_for, season_of
 from .timekeeper import DAY_NAMES
 
 HEADLINES = {
@@ -35,13 +35,13 @@ def write_day(conn: sqlite3.Connection, day: int, seed: str) -> str:
 
     if notable:
         lines.append("## Headlines")
-        for r in notable:
-            lines.append(f"- {describe(conn, r)}")
+        for text in describe_many(conn, notable):
+            lines.append(f"- {text}")
         lines.append("")
     if minor:
         lines.append("## Around town")
-        for r in minor[:10]:
-            lines.append(f"- {describe(conn, r)}")
+        for text in describe_many(conn, minor[:10]):
+            lines.append(f"- {text}")
         lines.append("")
     lines.append("## By the numbers")
     for k, c in kinds.most_common():
@@ -72,7 +72,7 @@ def day_digest(conn: sqlite3.Connection, day: int, max_events: int = 20) -> str:
            WHERE a.alive=1 GROUP BY s.mood ORDER BY c DESC""").fetchall()
     lines = [f"Day {day+1} in Miniville ({pop} residents).",
              f"Date: {fmt_date(day)}, {season_of(day)}"]
-    holiday = holiday_on(day)
+    holiday = holiday_for(conn, day)
     if holiday:
         lines.append(f"Holiday: {holiday.name}")
     lines.extend([

@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Thu, 01 Oct 2026 12:40
+Last updated: Sat, 03 Oct 2026 12:30
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -200,6 +200,62 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   (±$1k/day on ~$9M), median wallet −$20/day, unemployment 12–19%, all
   businesses solvent, moods unchanged (content 726 / miserable 8). 22 new tests.
   After the merge with the cloud session's seasons work: **82 tests pass**.
+- v0.7 god-mode shocks (Fri, 02 Oct 2026, workstation session — took over the
+  cloud session's claim when it went inactive): `shocks.py` +
+  `cli shock closure|fire|festival [--day N] [--days N]` and `cli shocks`.
+  Disasters lay off staff, evacuate the venue and reroute the day's remaining
+  plans home; fires injure up to 3 occupants and set `businesses.reopen_day`
+  (new nullable column, migrated) so a repair window overrides the market's
+  21-day cooldown. Scheduled shocks land at day-start via `shocks.apply_due`
+  (in `engine._day_start`, after settlement, before plan rebuild). Festivals
+  need no mutation: `seasons.holiday_for(conn, day)` builds a one-day Holiday
+  from the shock row (tag `festival`, 15:00–20:00, not a day off), so
+  schedules/crowd-mingling/`announce_day` treat it like a real holiday —
+  festival day ran 1,448 interactions vs ~675. `/api/shocks` lists them;
+  `status`/digest show festival days; Gazette learned the shock tags.
+  `deviations` no longer routes lonely residents into closed venues. Also took
+  the cloud session's second item: `life.py` cohabitation guard
+  (`_has_rel_elsewhere`) — no more triple "moved in together", no bigamy.
+  Smoke-verified on a live-world copy (fire → 5 layoffs, festival → crowd,
+  scheduled closure → lands at day-start). **97 tests pass.**
+- **Live demo (Fri, 02 Oct 2026 17:30):** world advanced to tick 1859 (Day 39,
+  Feb 8). `shock fire` on Riverside Diner at noon laid off 5, hurt 3 (Victoria
+  Armstrong, Adli Caldwell, Natarajan Ansari — sick until t1896); reopens day
+  51. `shock festival` called a Lush Meadow Park festival for today — 326
+  residents celebrating at 17:30. Observer now binds 0.0.0.0:8787 (LAN +
+  Tailscale) with a "Miniville Observer" firewall rule for spectators.
+- **Operator calls (Fri, 02 Oct 2026):** IMDb media fetcher stopped for today —
+  ~872 gallery folders is enough to fill the wrong-sex backlog; the
+  `scan_and_add` ingester keeps running. **3D head/albedo reconstruction is
+  deferred** until the observer UI is fully fledged (GPU-heavy, nothing to
+  show it on); embed/tag/cast continues on 2D crops.
+- **Duplicate cohabitation — true root cause fixed.** `interact()` recomputed
+  `_rel_label` each meeting and rom>80 always yields `sweetheart`, demoting
+  `partner` back so the arc re-fired; day-37 Laverne Miller had **10** dupes.
+  `ARC_LABELS` (partner/spouse/widowed/estranged) now pin in `interact()`.
+  Display: couple events read "A and B moved in together" (canonical order)
+  and identical lines merge to `(xN)` in feed + chronicle. Regression test in
+  `test_shocks.py`. **98 tests pass.**
+- **Casting purge (Fri, 02 Oct 2026 evening):** `scripts/purge_bad_casts.py`
+  removed **364 casts** sourced from `G:\Gallery` (317 `src=Female` + 47
+  wrong-sex `src=Male`) from `D:\miniville\gallery\gallery.db`; the **218
+  real-celebrity casts were kept**, `avatar_path` nulled for the purged.
+  `G:\Gallery` is permanently banned as a casting source.
+- **Bounded ingest running:** `scripts/tag_celebrity_bounded.py` tags ≤12
+  evenly-spaced images per unembedded folder (759 folders) via the
+  vault-commander TaggerEngine, then chains into
+  `reembed_celebrity_gallery.py --resume`. Recast when it lands:
+  `build_avatar_gallery.py --only-missing` — the female pool now draws from
+  the celebrity gallery too, with sex decided by TMDB map else >60% all-crop
+  vote. Male pool is currently 0 (all verified males already worn) — new
+  male folders in the embed pass will refill it.
+- **Map viz shipped:** Pixi.js **Map tab** in the observer — fixed district
+  tiles, venue squares sized by capacity (closed venues dimmed, marked red),
+  all 636 residents as activity-colored dots (golden-angle scatter at venues,
+  home crowd pooled in the district homes strip), drag/zoom, hover tooltip,
+  click → resident card, 5s refresh. `/api/map` endpoint; pixi v7 vendored.
+  Next candidates: resident-dot→resident-card already done; sigma.js bond
+  graph; per-district heat/trend overlays.
 
 - **AVATAR SEX MISMATCH (found Wed, 30 Sep 2026) — 201 male residents hold a
   female identity.** Root cause: `build_avatar_gallery.pool()` filters source
@@ -233,6 +289,29 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   **headed** gives 97% yield (146/150 with photos, 137 media, 0 errors). Now
   running headed in 2k-id chunks; `G:\Galleries\Celebrities` grew ~100 → 268.
   Do NOT pass `-Headless`.
+
+- Birth-rate calibration (Sat, 03 Oct 2026, cloud): `growth.births` was
+  P_BIRTH=0.02/day per spouse pair with no age gate, which is about 7 babies a
+  year per couple, couples in their 70s included. Ingest makes nearly every
+  married persona a romance-80+ spouse pair, so the live town was booming
+  ("15 births, 590→601"). Now `ANNUAL_BIRTH_RATE=0.10` per fertile couple
+  (daily ≈0.00029), the mother aged 18–44 (or the younger partner for same-sex
+  couples), both partners alive adults, and no birth within 365 days of the last
+  newborn in the household. The rng stream is unchanged. Expected on the live
+  town: a handful of births a year, close to the ~6 deaths/yr from Gompertz.
+  Local agent: please measure births per year on a copy of the live DB.
+- Deep-time soak (Sat, 03 Oct 2026, cloud): synthetic 300-adult + 40-child
+  town, 2 simulated years, script outside the repo
+  (`C:/Users/Administrator/soak/soak_year.py`, on the cloud VM only). It ran on
+  the pre-calibration code. First ~280 days: no exceptions, about 2 s per
+  simulated day, population 340→351, and job counts holding at 208–241. One
+  business closed and reopened. Couples moved through sweetheart→partner→spouse
+  with no duplicate move-ins, confirming the v0.7 label-pinning fix. Zero
+  economy fields in the soak's same-day `economy_days` reads are a measurement
+  artifact: `record_day` only finalises day N at the start of day N+1. Not a bug.
+  Final: the VM restart killed it at day 476 (of 730): no exceptions,
+  population 340→380, jobs 204, no business closed at the end, ~8 s per
+  simulated day late in the run. A post-calibration rerun is still owed.
 
 ## Infra notes
 
@@ -295,18 +374,78 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
 - TMDB is retired (operator, Thu, 01 Oct 2026): `refresh_avatars` step 2
   (`verify_celebrity_gender.py`) must be dropped or replaced; local agent owns
   avatars. Two agents now share the repo; coordinate via `docs/AGENT_SYNC.md`.
+  DONE (Thu, 01 Oct 2026, workstation): `verify_celebrity_gender.py` is now
+  **offline** — insightface `genderage` over each identity's own face crops,
+  same cache file and JSON shape, so the builder and re-caster are untouched.
+  A plain majority was unsafe (it voted Nicole Kidman male 4-2 — the exact
+  false-male error behind the original 201-resident bug), so the winner must now
+  beat the loser by better than 2:1 and ambiguous identities stay unresolved.
+  Validated on the 162 identities with both a cached label and usable crops:
+  34 agree / 0 disagree / 6 refused. Nothing in the avatar path hits the network.
+- Ledger debt cleared: the cloud session's entry (owed because its VM had no
+  `record-agent-change.ps1`) is recorded on the workstation.
+- Celebrity gallery re-embedded (Thu, 01 Oct 2026, workstation). The operator
+  suspected the sex mislabels came from a pre-smart-picker gallery with stale
+  embeddings. Measured, the opposite is true: **the gallery is already
+  smart-picked and the embeddings reproduce exactly** — for Nicole Kidman, Tom
+  Hanks and Kaya Scodelario, `select_smart_exemplars(valid, 6)` returns
+  precisely the six crops already stored, and a fresh `FaceEngine` run
+  reproduces every `quality_score`/`feature_norm` to 3 decimals. The real cause
+  of the original bug is that `pool()` read the **per-crop** `gender` column:
+  90.3% accurate per crop, but 99.4% as an identity-level majority.
+  What *did* need doing, and is now done: `scripts/reembed_celebrity_gallery.py`
+  re-ran the engine over every tag-eligible photo and stored **every** kept crop
+  instead of only the six exemplars — crops 949 -> 2,015, exemplars unchanged,
+  identity-level sex vote 99.4% -> **100%** against TMDB, and Nicole Kidman
+  (the one identity it got wrong, M4/F2 over six crops) now votes correctly
+  (F6/M4 over ten). `verify_celebrity_gender.py` was fixed to vote over *all* a
+  person's crops, not the first six — sampling six left lola_petticrew
+  undecided (M3/F11 overall, but M2/F4 over the first six, an exact 2:1 tie).
+  `docs/AVATARS.md` records the method and the measurements.
+  The binding constraint was *tagging*, and it is now cleared. `rapidocr` was
+  missing from both the vault-commander and ColONEL-KFC venvs; installed into
+  ColONEL-KFC with `uv pip install --python <KFC python> rapidocr` (6 small
+  packages, no CUDA), which the operator had pointed me at as the vision venv.
+  Then ran the whole chain (tag -> re-embed -> verify -> re-cast), 62 min of
+  tagging at ~3 img/s plus ~15 min of embedding:
+
+  | | before | after |
+  | --- | --- | --- |
+  | folders with >=6 eligible images | 133 | **371** |
+  | identities in `gallery.db` | 163 | **256** |
+  | face crops | 2,015 | **4,826** |
+  | exemplars | 949 | **1,535** |
+  | residents on a wrong-sex identity | 171 | **125** |
+  47 residents re-cast onto a correct-sex identity (John Cleese, James Cameron,
+  Kirk Douglas, Robert Mitchum, Henry Mancini joined the pool). Identity-level
+  sex vote 251/254 correct vs the TMDB labels. Pipeline documented in
+  `docs/AVATARS.md`.
+  **Remaining 125 need people not in the gallery yet** — every folder with >=6
+  eligible images has now been embedded, so the pool only grows by downloading
+  new identities (`Import-IMDbStarMeter.ps1`). `G:\Gallery` (931 identities) is
+  female-only (929F/1M). Also fixed `reembed_celebrity_gallery.py` marking
+  untagged folders "done" (so `--resume` skipped them) and
+  `verify_celebrity_gender.py` sampling only the first 6 crops.
 
 ## Resume note for next session
 
-Branch `autodev`. World is seeded (seed=miniville) — `run` continues from tick 1728
-(Day 37 = **Feb 6, Year 1**, winter; next holiday is Founders' Day, Apr 18 = Day 108,
-tick 5136). Do NOT `init` again unless intentionally resetting the town.
-The live world has had both economy migrations applied (wages $62–252/day).
+Branch `autodev`, both agents pushing. World is seeded (seed=miniville) — `run`
+continues from tick 1776 (Day 38 = **Feb 7, Year 1**, winter; next holiday is
+Founders' Day, Apr 18 = Day 108, tick 5136). Do NOT `init` again unless
+intentionally resetting the town. Both economy migrations are applied (wages
+$62–252/day).
+
+**Read `docs/AGENT_SYNC.md` first** — claims and messages between the workstation
+and cloud sessions live there. Pull before starting work; push small commits.
+
 CAVEAT: days 18–37 of the live world were simulated under the *pre-merge* seasons
 code (my dropped implementation), so a few chronicles say "Spring" where the merged
 calendar says winter, and the ledger contains a couple of holiday events that no
 longer exist (`Spring Blossom Festival`). Cosmetic only — nothing reads it back.
-Next session should confirm the chronicle header shows the date and season, and
-that birthdays fire (a resident ages on their hashed `birth_day`).
+
+Open items the next session could take: the two findings left for the cloud agent
+in `AGENT_SYNC.md` (duplicate `cohabitation` events; keep the `cli.py` stdout
+reconfigure), and the roadmap's next milestone — **God-mode shocks** (inject a
+factory closure / fire / festival and watch the town absorb it).
 Daily routine for the backup session: read this file → `run` the next day(s) →
 `digest` → write a `narrate-write` entry → update this file → ledger.

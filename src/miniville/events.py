@@ -56,9 +56,29 @@ def describe(conn: sqlite3.Connection, e: sqlite3.Row) -> str:
     if k == "work_buddy":
         return f"{a} and {b} became work buddies at {p or 'the shop'}"
     if k == "life_event":
+        # couple events read naturally with both names, canonical order, so
+        # duplicate rows merge into one line: "A and B moved in together"
+        if d.get("tag") in ("cohabitation", "marriage") and b:
+            return f"{' and '.join(sorted((a, b)))} {d.get('text','something happened')}"
         return f"{a}: {d.get('text','something happened')}"
     if k == "town_event":
         return f"Town: {d.get('text','')} ({p or 'everywhere'})"
     if k == "world":
         return d.get("text", k)
     return f"{k}: {d}"
+
+
+def describe_many(conn: sqlite3.Connection, rows) -> list[str]:
+    """describe() each row, merging identical lines into '... (xN)'.
+
+    Historical duplicates can exist in the ledger (e.g. the same cohabitation
+    emitted twice before the guard); the reader should see one line.
+    """
+    order: list[str] = []
+    counts: dict[str, int] = {}
+    for r in rows:
+        t = describe(conn, r)
+        if t not in counts:
+            order.append(t)
+        counts[t] = counts.get(t, 0) + 1
+    return [t if counts[t] == 1 else f"{t} (x{counts[t]})" for t in order]

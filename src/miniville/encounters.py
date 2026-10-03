@@ -8,12 +8,17 @@ from .events import MINOR, NOTABLE, TRIVIAL, emit
 from .favors import maybe_affair, maybe_ask_favor, maybe_repay_debt
 from .life import dating_arc_check, romance_allowed
 from .rng import rng_for
-from .seasons import holiday_on
+from .seasons import holiday_for
 
 REL_THRESHOLDS = [
     (0, "stranger"), (3, "acquaintance"), (10, "familiar"), (25, "friend"),
     (60, "close_friend"),
 ]
+
+# Labels owned by the dating arc / mortality / betrayal — _rel_label must never
+# demote them back to a threshold label (a partner is not "sweetheart" again
+# at the next encounter, which would re-fire cohabitation every time).
+ARC_LABELS = {"partner", "spouse", "widowed", "estranged"}
 
 HOLIDAY_P_INTERACT = 0.5
 
@@ -113,6 +118,8 @@ def interact(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row,
         rom = max(0.0, rom - 0.2)
 
     new_label = _rel_label(fam, aff, rom)
+    if label in ARC_LABELS:
+        new_label = label
     importance = TRIVIAL
     if new_label != label:
         importance = NOTABLE if new_label in ("friend", "sweetheart", "rival") else MINOR
@@ -167,7 +174,7 @@ def run_encounters(conn: sqlite3.Connection, tick: int, seed: str,
                    max_pairs_per_place: int = 12) -> int:
     """Pair up co-present agents at public venues. Returns # interactions."""
     tick_of_day = tick % 48
-    holiday = holiday_on(tick // 48)
+    holiday = holiday_for(conn, tick // 48)
     holiday_place_id = None
     if (holiday and holiday.venue
             and holiday.start_tick <= tick_of_day < holiday.end_tick):

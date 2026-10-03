@@ -192,6 +192,7 @@ CREATE TABLE IF NOT EXISTS businesses (
     price_index REAL NOT NULL DEFAULT 1.0,     -- drifts up when the business bleeds
     opened_tick INTEGER NOT NULL DEFAULT 0,
     closed_tick INTEGER,
+    reopen_day INTEGER,                        -- set by shocks; overrides closed_tick math
     last_settled_day INTEGER NOT NULL DEFAULT -1
 );
 
@@ -214,6 +215,19 @@ CREATE TABLE IF NOT EXISTS rent_arrears (
     household_id INTEGER PRIMARY KEY REFERENCES households(id),
     missed_payments INTEGER NOT NULL DEFAULT 0,
     last_missed_day INTEGER NOT NULL DEFAULT -1
+);
+
+-- Operator-injected shocks (god mode). A row is written when the shock is
+-- injected; applied flips once it has landed. detail holds per-kind payload
+-- (festival window, reopen day for disasters).
+CREATE TABLE IF NOT EXISTS shocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,              -- closure | fire | festival
+    place_id INTEGER,
+    day INTEGER NOT NULL,            -- day index the shock lands on
+    tick INTEGER NOT NULL,           -- tick it was injected at
+    applied INTEGER NOT NULL DEFAULT 0,
+    detail TEXT NOT NULL DEFAULT '{}'
 );
 """
 
@@ -247,6 +261,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE agents ADD COLUMN avatar_path TEXT")
     if "birth_day" not in cols:
         conn.execute("ALTER TABLE agents ADD COLUMN birth_day INTEGER")
+
+    # shocks can schedule a venue's reopening day (fire repairs take as long as
+    # they take, not the market's 21 days)
+    if _has_table(conn, "businesses"):
+        bcols = {r["name"] for r in conn.execute("PRAGMA table_info(businesses)")}
+        if "reopen_day" not in bcols:
+            conn.execute("ALTER TABLE businesses ADD COLUMN reopen_day INTEGER")
 
     # the economy rescalings need the meta table; hand-built or legacy DBs
     # (which the tests use) may not have it yet

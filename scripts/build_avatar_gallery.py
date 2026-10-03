@@ -1,7 +1,8 @@
 r"""Build the Miniville resident gallery from ColONEL-KFC galleries.
 
-Female residents  <- G:\Gallery        (adult gallery, ~930 identities w/ exemplars)
-Male residents    <- G:\Galleries\Celebrities (~90 male identities; reuse allowed)
+Both pools come from G:\Galleries\Celebrities (the IMDb/TMDb gallery).
+G:\Gallery is an adult gallery and is banned as a source — see
+scripts/purge_bad_casts.py which stripped its 364 casts from the pool DB.
 
 Per resident we:
   1. pick an identity whose exemplar crops' median age is closest (same gender),
@@ -24,9 +25,12 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
 from miniville import db as mvdb  # noqa: E402
+from verify_celebrity_gender import MIN_VOTES, VOTE_MARGIN  # noqa: E402
 
-FEMALE_SRC = Path(r"G:\Gallery")
+# G:\Gallery is an adult gallery — never a casting source.
+FEMALE_SRC = Path(r"G:\Galleries\Celebrities")
 MALE_SRC = Path(r"G:\Galleries\Celebrities")
 OUT_ROOT = Path(r"D:\miniville")
 SAMPLES = 4          # exemplar source images per resident (>= vw reindex minimum)
@@ -58,13 +62,43 @@ def load_verified(path: Path = VERIFIED_SEX) -> dict[str, int]:
     return {k: (v or {}).get("gender", 0) for k, v in raw.items()}
 
 
+def _sex_votes(conn: sqlite3.Connection) -> dict[int, int]:
+    """identity_id -> voted sex (0 female, 1 male) over ALL stored crops.
+
+    The identity-level vote is 99.4% accurate vs TMDB (per-crop is only
+    90.3%), so it decides sex for identities that have no verified-map entry.
+    It uses the verifier's contract verbatim — at least MIN_VOTES ballots and
+    a strictly better-than-VOTE_MARGIN win (a 4-2 split stays undecided) — so
+    the fallback can never admit an identity the verifier rejected.
+    """
+    rows = conn.execute(
+        """SELECT f.identity_id, f.gender FROM face_crops f
+           JOIN identities i ON i.id = f.identity_id
+           WHERE f.gender IS NOT NULL AND i.status != 'invalid'""").fetchall()
+    votes: dict[int, list[int]] = {}
+    for r in rows:
+        votes.setdefault(r["identity_id"], []).append(r["gender"])
+    out = {}
+    for iid, g in votes.items():
+        fem = sum(1 for x in g if x == 0)
+        male = len(g) - fem
+        if male + fem < MIN_VOTES:
+            continue
+        if fem > VOTE_MARGIN * male:
+            out[iid] = 0
+        elif male > VOTE_MARGIN * fem:
+            out[iid] = 1
+    return out
+
+
 def pool(conn: sqlite3.Connection, gender: int,
          verified: dict[str, int] | None = None) -> dict[int, dict]:
     """identity_id -> {name, median_age, crops:[rows]} from a source gallery.
 
-    `gender` uses the insightface convention (0 female / 1 male). When
-    `verified` is supplied it decides membership instead of the per-crop
-    `f.gender` column, which is what let female faces into the male pool.
+    `gender` uses the insightface convention (0 female / 1 male). Sex is
+    decided by the verified map where present, else by the identity-level
+    vote over all crops — never by the per-crop `f.gender` column, which is
+    what let female faces into the male pool (and vice versa).
     """
     crops = conn.execute(
         """SELECT f.identity_id, i.name, f.age, f.bbox, f.image_path, f.rel_path,
@@ -74,12 +108,13 @@ def pool(conn: sqlite3.Connection, gender: int,
            WHERE f.is_exemplar = 1 AND i.status != 'invalid'
            ORDER BY f.quality_score DESC""").fetchall()
     want = 1 if gender == 0 else 2          # insightface 0/1 -> TMDB 1/2
+    votes = _sex_votes(conn)
     by_id: dict[int, dict] = {}
     for r in crops:
-        if verified is not None:
-            if verified.get(r["name"], 0) != want:
+        if verified is not None and r["name"] in verified:
+            if verified[r["name"]] != want:
                 continue
-        elif r["gender"] != gender:
+        elif votes.get(r["identity_id"]) != gender:
             continue
         d = by_id.setdefault(r["identity_id"], {"name": r["name"], "ages": [], "rows": []})
         if r["age"]:
@@ -121,15 +156,20 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--only-missing", action="store_true",
+                    help="cast only residents with no avatar_path (recast mode)")
     a = ap.parse_args()
 
     mv = mvdb.connect()
-    residents = mv.execute(
-        "SELECT id, name, sex, age FROM agents WHERE alive=1 ORDER BY id").fetchall()
+    q = """SELECT id, name, sex, age FROM agents WHERE alive=1
+           {extra} ORDER BY id""".format(
+        extra="AND avatar_path IS NULL" if a.only_missing else "")
+    residents = mv.execute(q).fetchall()
     if a.limit:
         residents = residents[: a.limit]
 
-    srcs = {"Female": FEMALE_SRC, "Male": MALE_SRC}
+    # both sexes draw from the celebrity gallery now
+    srcs = {"Female": MALE_SRC, "Male": MALE_SRC}
     conns = {s: sqlite3.connect(p / "gallery.db") for s, p in srcs.items() if p.exists()}
     for c in conns.values():
         c.row_factory = sqlite3.Row
@@ -137,10 +177,10 @@ def main() -> int:
     if verified:
         print(f"verified sex map: {len(verified)} identities from {VERIFIED_SEX}")
     else:
-        print("WARNING: no verified sex map — falling back to the unreliable "
-              "face_crops.gender column. Run scripts/verify_celebrity_gender.py")
+        print("WARNING: no verified sex map — the identity-level crop vote "
+              "decides sex instead. Run scripts/verify_celebrity_gender.py")
     pools = {s: pool(conns[s], 0 if s == "Female" else 1,
-                     verified=verified if s == "Male" else None) for s in conns}
+                     verified=verified) for s in conns}
     # insightface gender: 0=female, 1=male; the male pool is TMDB-verified
     used: dict[str, set[int]] = {s: set() for s in pools}
     gal_dir = OUT_ROOT / "gallery"
@@ -151,6 +191,15 @@ def main() -> int:
     out = sqlite3.connect(OUT_DB)
     out.row_factory = sqlite3.Row
     out.executescript(FACE_DB_SCHEMA)
+
+    # never put a face on two residents: identities already in the pool DB
+    # are spoken for (a0001_name -> name)
+    taken = {r["name"][6:] for r in
+             out.execute("SELECT name FROM identities WHERE name LIKE 'a%'")}
+    for s in pools:
+        pools[s] = {iid: d for iid, d in pools[s].items()
+                    if d["name"] not in taken}
+    print("pools:", {s: len(p) for s, p in pools.items()})
 
     mapping, deferred, done = [], [], 0
     for r in residents:
@@ -170,7 +219,7 @@ def main() -> int:
                 "INSERT OR IGNORE INTO identities(name,status,sample_count,notes) "
                 "VALUES(?,?,?,?)",
                 (dirname, "locked", len(ident["rows"]),
-                 f"src={sex}:{ident['name']}"))
+                 f"src=celebrity:{sex}:{ident['name']}"))
             new_iid = out.execute(
                 "SELECT id FROM identities WHERE name=?", (dirname,)).fetchone()["id"]
             for j, crop in enumerate(ident["rows"]):
@@ -202,8 +251,13 @@ def main() -> int:
             print(f"{done}/{len(residents)}")
     if not a.dry_run:
         out.commit(); mv.commit()
-    (OUT_ROOT / "avatar_mapping.json").write_text(
-        json.dumps({"cast": mapping, "deferred_ids": deferred}, indent=1),
+    mp = OUT_ROOT / "avatar_mapping.json"
+    cast = mapping
+    if a.only_missing and mp.is_file():
+        prev = json.loads(mp.read_text(encoding="utf-8")).get("cast", [])
+        cast = prev + mapping          # keep correctly-cast residents' entries
+    mp.write_text(
+        json.dumps({"cast": cast, "deferred_ids": deferred}, indent=1),
         encoding="utf-8")
     uniq = len({m["identity"] for m in mapping})
     print(f"done: {done} cast ({uniq} identities), {len(deferred)} deferred "

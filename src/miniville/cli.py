@@ -9,6 +9,16 @@ from pathlib import Path
 
 from . import db as dbmod
 
+# The Windows console defaults to cp1252, and a stray non-ASCII character in
+# any command's output (the `·` separators, an em dash in a chronicle) makes
+# the whole write fail — silently, in a piped shell. Force UTF-8 so no command
+# can lose its output to a punctuation mark.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:                                   # noqa: BLE001
+        pass
+
 
 def _conn(args) -> sqlite3.Connection:
     conn = dbmod.connect(args.db)
@@ -85,14 +95,14 @@ def cmd_run(args) -> int:
 
 def cmd_status(args) -> int:
     conn = _conn(args)
-    from .seasons import fmt_date, holiday_on, season_of
+    from .seasons import fmt_date, holiday_for, season_of
     from .timekeeper import day_of
     from .timekeeper import fmt_tick
     tick = int(dbmod.get_meta(conn, "tick", "0") or 0)
     print(f"time: {fmt_tick(tick)} (tick {tick})")
     day = day_of(tick)
     print(f"date: {fmt_date(day)} ({season_of(day)})")
-    holiday = holiday_on(day)
+    holiday = holiday_for(conn, day)
     if holiday:
         print(f"holiday: {holiday.name}")
     alive = conn.execute("SELECT COUNT(*) c FROM agents WHERE alive=1").fetchone()["c"]
@@ -285,6 +295,35 @@ def cmd_daily(args) -> int:
     return 0
 
 
+def cmd_shock(args) -> int:
+    from . import shocks
+    conn = _conn(args)
+    seed = dbmod.get_meta(conn, "seed", "miniville")
+    out = shocks.inject(conn, args.kind, args.venue, seed or "miniville",
+                        day=None if args.day is None else args.day - 1,
+                        days=args.days)
+    print(out["message"])
+    return 0 if out["ok"] else 1
+
+
+def cmd_shocks(args) -> int:
+    from . import shocks
+    from .seasons import fmt_date
+    conn = _conn(args)
+    rows = shocks.list_shocks(conn)
+    if not rows:
+        print("no shocks on record")
+        return 0
+    for r in rows:
+        detail = json.loads(r["detail"] or "{}")
+        reopen = (f"reopens day {detail['reopen_day'] + 1}"
+                  if detail.get("reopen_day") is not None else "")
+        state = "applied" if r["applied"] else "scheduled"
+        print(f"#{r['id']:<3} {r['kind']:<8} {r['venue'] or '?':<28} "
+              f"day {r['day'] + 1:<4} {fmt_date(r['day']):<14} {state:<9} {reopen}")
+    return 0
+
+
 def cmd_serve(args) -> int:
     from .ui.server import serve
     serve(args.db, args.host, args.port)
@@ -389,6 +428,18 @@ def main(argv=None) -> int:
     pec.add_argument("--days", type=int, default=10,
                      help="also print the last N daily economy rows")
     pec.set_defaults(fn=cmd_economy)
+    psk = sub.add_parser("shock", help="god mode: inject a closure | fire | festival")
+    psk.add_argument("kind", choices=["closure", "fire", "festival"])
+    psk.add_argument("venue", help="venue name (substring match) or place id")
+    psk.add_argument("--day", type=int, default=None,
+                     help="1-based day the shock lands (default: today for "
+                          "closure/fire, tomorrow for festival)")
+    psk.add_argument("--days", type=int, default=None,
+                     help="days until the venue reopens (fire default 14; "
+                          "closure default follows the market's 21-day rule)")
+    psk.set_defaults(fn=cmd_shock)
+    plk = sub.add_parser("shocks", help="list injected shocks")
+    plk.set_defaults(fn=cmd_shocks)
 
     args = p.parse_args(argv)
     return args.fn(args)

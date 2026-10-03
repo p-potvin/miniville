@@ -1,6 +1,7 @@
 """Calendar, seasons, holidays, and birthdays for Miniville."""
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 
@@ -29,6 +30,7 @@ class Holiday:
     p_attend: float
     adults_only: bool
     text: str
+    tag: str = "holiday"   # "festival" for injected festival shocks
 
 
 HOLIDAYS = (
@@ -118,6 +120,39 @@ def holiday_on(day: int) -> Holiday | None:
     return None
 
 
+def holiday_for(conn: sqlite3.Connection, day: int) -> Holiday | None:
+    """The holiday in effect on `day`: a calendar holiday, or a festival shock.
+
+    Festival shocks are stored in the `shocks` table at injection time; the
+    operator needs no schema access to call one off. Calendar holidays always
+    win — `shocks.inject` refuses to schedule a festival on a holiday anyway.
+    """
+    holiday = holiday_on(day)
+    if holiday is not None:
+        return holiday
+    row = conn.execute(
+        "SELECT place_id, detail FROM shocks WHERE kind='festival' AND day=?",
+        (day,)).fetchone()
+    if row is None:
+        return None
+    d = json.loads(row["detail"] or "{}")
+    venue = None
+    if row["place_id"] is not None:
+        p = conn.execute(
+            """SELECT p.name, COALESCE(b.status, 'open') AS status
+               FROM places p LEFT JOIN businesses b ON b.place_id=p.id
+               WHERE p.id=?""", (row["place_id"],)).fetchone()
+        if p is None or p["status"] == "closed":
+            return None
+        venue = p["name"]
+    return Holiday(
+        name=d.get("name", "Town Festival"), month=0, dom=0, venue=venue,
+        start_tick=int(d.get("start", 30)), end_tick=int(d.get("end", 40)),
+        day_off=False, p_attend=float(d.get("p_attend", 0.55)),
+        adults_only=False,
+        text=d.get("text", "Miniville holds a festival."), tag="festival")
+
+
 def school_in_session(day: int) -> bool:
     _, month, dom = date_of(day)
     if (month == 6 and dom >= 15) or month in (7, 8):
@@ -161,7 +196,7 @@ def birthdays(conn: sqlite3.Connection, tick: int, seed: str) -> int:
 def announce_day(conn: sqlite3.Connection, tick: int) -> None:
     """Record any holiday or seasonal arrival at the start of this day."""
     day = day_of(tick)
-    holiday = holiday_on(day)
+    holiday = holiday_for(conn, day)
     if holiday:
         place_id = None
         if holiday.venue:
@@ -169,7 +204,7 @@ def announce_day(conn: sqlite3.Connection, tick: int) -> None:
                 "SELECT id FROM places WHERE name=?", (holiday.venue,)).fetchone()
             place_id = place["id"] if place else None
         emit(conn, tick, "town_event", place_id=place_id, importance=3,
-             text=holiday.text, tag="holiday")
+             text=holiday.text, tag=holiday.tag)
 
     _, month, dom = date_of(day)
     if dom == 1 and month in (3, 6, 9, 12):

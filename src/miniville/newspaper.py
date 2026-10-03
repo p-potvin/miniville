@@ -35,8 +35,15 @@ SECTIONS = {
     "favor_repaid": "Neighbors",
     "work_buddy": "Working Life",
     "holiday": "Town Life",
+    "festival": "Town Life",
+    "festival_announced": "Town Life",
     "season": "Town Life",
     "coming_of_age": "Town Life",
+    "injured": "Town Life",
+    "shock_fire": "Town Life",
+    "shock_closure": "Working Life",
+    "business_closed": "Working Life",
+    "business_reopened": "Working Life",
 }
 
 

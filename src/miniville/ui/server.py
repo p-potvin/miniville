@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from .. import db as dbmod
 from .. import economy
 from ..events import describe
-from ..seasons import fmt_date, holiday_on, season_of
+from ..seasons import fmt_date, holiday_for, season_of
 from ..timekeeper import TICKS_PER_DAY, day_of, fmt_tick
 
 STATIC = Path(__file__).parent / "static"
@@ -24,6 +24,32 @@ STATIC = Path(__file__).parent / "static"
 
 def _rows(conn: sqlite3.Connection, sql: str, params: tuple = ()) -> list[dict]:
     return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+# Map canvas is 1600x900; districts get fixed tiles so the geography reads the
+# same for every spectator. Lake is up north, The Flats down south.
+DISTRICT_TILES = {
+    "Lakeshore":        (30,    20, 560, 300),
+    "Greenhill":        (30,   340, 560, 300),
+    "Downtown":         (620,  170, 430, 400),
+    "Old Mill Quarter": (1070,  20, 500, 300),
+    "The Flats":        (1070, 340, 500, 300),
+}
+
+
+def _district_layout() -> dict:
+    zones = {name: {"name": name, "x": x, "y": y, "w": w, "h": h}
+             for name, (x, y, w, h) in DISTRICT_TILES.items()}
+    zones["_other"] = {"name": "Elsewhere", "x": 620, "y": 600, "w": 950, "h": 270}
+    return zones
+
+
+def _venue_xy(zone: dict, index: int) -> tuple[int, int]:
+    """Grid layout inside the venue strip of a district tile (the bottom band
+    is reserved for the homes block)."""
+    cols = max(1, (zone["w"] - 20) // 110)
+    col, row = index % cols, index // cols
+    return (zone["x"] + 60 + col * 110, zone["y"] + 70 + row * 90)
 
 
 def create_app(db_path: str | None = None) -> FastAPI:
@@ -44,7 +70,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             pop = c.execute(
                 "SELECT COUNT(*) n FROM agents WHERE alive=1").fetchone()["n"]
             day = day_of(tick)
-            holiday = holiday_on(day)
+            holiday = holiday_for(c, day)
             return {"tick": tick, "day": day + 1, "date": fmt_date(day),
                     "season": season_of(day),
                     "holiday": holiday.name if holiday else None,
@@ -95,10 +121,22 @@ def create_app(db_path: str | None = None) -> FastAPI:
             rows = _rows(c,
                 "SELECT * FROM events WHERE day=? ORDER BY importance DESC, id DESC LIMIT ?",
                 (d, limit))
+            # identical rendered lines (e.g. a pre-guard duplicate cohabitation)
+            # merge into one row with a xN badge rather than repeating verbatim
+            counts = {}
             for e in rows:
                 e["text"] = describe(c, e)
                 e["tick_of_day"] = e["tick"] % TICKS_PER_DAY
-            return rows
+                counts[e["text"]] = counts.get(e["text"], 0) + 1
+            merged, seen = [], set()
+            for e in rows:
+                if e["text"] in seen:
+                    continue
+                seen.add(e["text"])
+                if counts[e["text"]] > 1:
+                    e["text"] += f" (x{counts[e['text']]})"
+                merged.append(e)
+            return merged
         finally:
             c.close()
 
@@ -223,6 +261,55 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 q += " WHERE d.repaid_tick IS NULL"
             q += " ORDER BY d.created_tick DESC LIMIT ?"
             return _rows(c, q, (limit,))
+        finally:
+            c.close()
+
+    @app.get("/api/map")
+    def map_view():
+        """Town map: district tiles, venue positions (deterministic per id),
+        and every resident's current place + activity."""
+        c = conn()
+        try:
+            districts = _district_layout()
+            places = _rows(c, """
+                SELECT p.id, p.name, p.kind, p.district, p.capacity,
+                       p.open_tick, p.close_tick,
+                       COALESCE(b.status,'open') AS bstatus
+                FROM places p
+                LEFT JOIN businesses b ON b.place_id=p.id
+                WHERE p.kind != 'home'""")
+            agents = _rows(c, """
+                SELECT s.agent_id id, s.place_id place, s.activity, s.mood,
+                       a.name, a.sex, hp.district AS hdist
+                FROM agent_state s JOIN agents a ON a.id=s.agent_id
+                LEFT JOIN places hp ON hp.id=a.home_place_id
+                WHERE a.alive=1""")
+            by_district = {}
+            for p in places:
+                by_district.setdefault(p["district"], []).append(p)
+            for district, plist in by_district.items():
+                zone = districts.get(district, districts["_other"])
+                for i, p in enumerate(sorted(plist, key=lambda q: q["id"])):
+                    p["x"], p["y"] = _venue_xy(zone, i)
+                    p["closed"] = p["bstatus"] == "closed"
+            home_counts = {name: c.execute(
+                "SELECT COUNT(*) n FROM places WHERE kind='home' AND district=?",
+                (name,)).fetchone()["n"] for name in DISTRICT_TILES}
+            return {
+                "districts": [dict(z, homes=home_counts.get(z["name"], 0))
+                              for z in districts.values()],
+                "places": places,
+                "agents": agents,
+            }
+        finally:
+            c.close()
+
+    @app.get("/api/shocks")
+    def shocks_view():
+        c = conn()
+        try:
+            from .. import shocks
+            return shocks.list_shocks(c)
         finally:
             c.close()
 

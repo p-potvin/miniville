@@ -20,6 +20,7 @@ replying, no git worktrees.
 .\.venv\Scripts\python.exe -m miniville.cli init --agents 500   # bootstrap (resets world!)
 .\.venv\Scripts\python.exe -m miniville.cli run --ticks 96      # advance 2 days
 .\.venv\Scripts\python.exe -m miniville.cli status
+.\.venv\Scripts\python.exe -m miniville.cli economy --days 10   # money, businesses, wages
 .\.venv\Scripts\python.exe -m miniville.cli inspect "Name"
 .\.venv\Scripts\python.exe -m miniville.cli chronicle 3         # day digest
 .\.venv\Scripts\python.exe -m miniville.cli narrate --day 3     # local Ollama prose (bounded)

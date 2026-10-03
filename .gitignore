@@ -17,3 +17,9 @@ assets/avatars/
 dist/
 build/
 .env
+
+.playwright-cli/
+data/
+assets/gemini_generated_map.jpg
+imdb-media-log.txt
+scripts/_*.py

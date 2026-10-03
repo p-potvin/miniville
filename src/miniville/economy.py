@@ -461,9 +461,16 @@ def settle_businesses(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
             if balance < FAIL_THRESHOLD_CENTS:
                 closed += _close_business(conn, b, tick, balance)
         elif b["status"] == "closed":
-            closed_at = b["closed_tick"] if b["closed_tick"] is not None else tick
-            if tick - closed_at >= REOPEN_AFTER_DAYS * TICKS_PER_DAY:
-                reopened += _reopen_business(conn, b, tick)
+            # a shock-set reopen_day overrides the market's 21-day cooldown;
+            # settle runs at midnight for the day that ended, so the venue is
+            # open in time for that day's plans
+            if b["reopen_day"] is not None:
+                if day_of(tick) >= b["reopen_day"]:
+                    reopened += _reopen_business(conn, b, tick)
+            else:
+                closed_at = b["closed_tick"] if b["closed_tick"] is not None else tick
+                if tick - closed_at >= REOPEN_AFTER_DAYS * TICKS_PER_DAY:
+                    reopened += _reopen_business(conn, b, tick)
 
     conn.commit()
     return {"settled": settled, "closed": closed, "reopened": reopened}
@@ -479,7 +486,7 @@ def _close_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int,
                  (b["place_id"],))
     conn.execute(
         """UPDATE businesses SET status='closed', closed_tick=?, balance_cents=0,
-               price_index=1.0 WHERE place_id=?""",
+               price_index=1.0, reopen_day=NULL WHERE place_id=?""",
         (tick, b["place_id"]))
     emit(conn, tick, "town_event", place_id=b["place_id"], importance=MAJOR,
          text=f"{b['name']} has closed after months of losses; "
@@ -491,7 +498,7 @@ def _close_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int,
 def _reopen_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int) -> int:
     conn.execute(
         """UPDATE businesses SET status='open', closed_tick=NULL,
-               balance_cents=0, ema_traffic=0, price_index=1.0
+               balance_cents=0, ema_traffic=0, price_index=1.0, reopen_day=NULL
            WHERE place_id=?""", (b["place_id"],))
     emit(conn, tick, "town_event", place_id=b["place_id"], importance=NOTABLE,
          text=f"{b['name']} has reopened under new management", tag="business_reopened")
