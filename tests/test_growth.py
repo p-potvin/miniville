@@ -39,7 +39,7 @@ def test_births_add_child_to_household(conn):
     conn.commit()
     born = 0
     # births are probabilistic per day; sweep days until one lands
-    for tick in range(0, 48 * 400, 48):
+    for tick in range(0, 48 * 365 * 40, 48):
         born += growth.births(conn, tick, "test")
         if born:
             break
@@ -114,6 +114,62 @@ def test_newborn_records_birth_day(conn, monkeypatch):
     newborn = conn.execute(
         "SELECT birth_day FROM agents WHERE is_child=1").fetchone()
     assert newborn["birth_day"] == 10
+
+
+def _force_birth_roll(monkeypatch):
+    class BirthRng:
+        def random(self):
+            return 0
+
+        def choice(self, values):
+            return values[0]
+
+    monkeypatch.setattr(growth, "rng_for", lambda *args: BirthRng())
+
+
+def _add_spouse_pair(conn):
+    conn.execute(
+        """INSERT INTO relationships(a_id,b_id,familiarity,affinity,romance,label)
+           VALUES(1,2,95,80,95,'spouse')""")
+
+
+def test_no_births_past_fertile_age(conn, monkeypatch):
+    _add_spouse_pair(conn)
+    conn.execute("UPDATE agents SET age=60")
+    _force_birth_roll(monkeypatch)
+
+    for tick in range(0, 48 * 50, 48):
+        assert growth.births(conn, tick, "test") == 0
+
+
+def test_male_partner_age_does_not_gate(conn, monkeypatch):
+    _add_spouse_pair(conn)
+    conn.execute("UPDATE agents SET age=60 WHERE id=2")
+    _force_birth_roll(monkeypatch)
+
+    assert growth.births(conn, 10 * 48, "test") == 1
+
+
+def test_birth_spacing(conn, monkeypatch):
+    _add_spouse_pair(conn)
+    _force_birth_roll(monkeypatch)
+
+    assert growth.births(conn, 10 * 48, "test") == 1
+    assert growth.births(conn, 200 * 48, "test") == 0
+    assert growth.births(conn, (10 + 365 + 1) * 48, "test") == 1
+
+
+def test_dead_spouse_cannot_conceive(conn, monkeypatch):
+    _add_spouse_pair(conn)
+    conn.execute("UPDATE agents SET alive=0 WHERE id=2")
+    _force_birth_roll(monkeypatch)
+
+    assert growth.births(conn, 10 * 48, "test") == 0
+
+
+def test_daily_rate_is_calibrated():
+    assert abs((1 - (1 - growth.P_BIRTH) ** 365)
+               - growth.ANNUAL_BIRTH_RATE) < 1e-9
 
 
 def test_immigration_reservoir_seed_varies_by_tick(conn, monkeypatch):
