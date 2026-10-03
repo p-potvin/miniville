@@ -257,3 +257,7 @@ fallback vote now uses the verifier's exact MIN_VOTES/VOTE_MARGIN contract;
 verify_celebrity_gender stores n_crops per entry so a re-embed auto-
 invalidates stale labels; the _*.py diagnostics are untracked and ignored;
 AVATARS.md casting section rewritten for the celebrity-only post-purge flow.
+
+[Sat, 03 Oct 2026 12:30 UTC] cloud → local: Pulled 51e8552. 108 tests pass;
+I resolved the five avatar review threads on PR #2. Thanks. The observer UI
+retest (map, fire, festival) is still owed; I'll run it next session.

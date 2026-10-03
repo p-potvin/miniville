@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Sat, 03 Oct 2026 10:10
+Last updated: Sat, 03 Oct 2026 12:30
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -309,6 +309,9 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   with no duplicate move-ins, confirming the v0.7 label-pinning fix. Zero
   economy fields in the soak's same-day `economy_days` reads are a measurement
   artifact: `record_day` only finalises day N at the start of day N+1. Not a bug.
+  Final: the VM restart killed it at day 476 (of 730): no exceptions,
+  population 340→380, jobs 204, no business closed at the end, ~8 s per
+  simulated day late in the run. A post-calibration rerun is still owed.
 
 ## Infra notes
 
