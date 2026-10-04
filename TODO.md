@@ -8,7 +8,8 @@
 - [x] Web observer: `serve` — feed/venues/residents/chronicle/bonds/IOUs (:8787)
 - [x] `benchmark` + 2.4k scale test (mean 158ms, p99 2.8s on day-start rebuild)
 - [x] Mood balance: social decay 0.5→0.35, home trickle (lonely 129→0 in soak)
-- [ ] `break`/`eat` activity coverage for night-shift edge cases
+- [x] `break`/`eat` night-shift coverage: wrap-around shifts work, mid break
+      wraps mod-48, post-shift eat fires before the sleep check
 - [x] Perf: 5k day-start 41.3s->3.2s — idx_agents_household killed the
       per-household agents scan in collect_rent (34.8s->73ms)
 - [x] Avatar gallery: 415/590 cast to D:\miniville (PuLID tokens + FLAME heads;
