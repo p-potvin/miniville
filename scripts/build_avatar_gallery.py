@@ -249,7 +249,9 @@ def main() -> int:
                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (new_iid, dirname, str(dst_img), src_img.name, crop["bbox"],
                      crop["landmarks_5pts"], crop.get("landmarks_106"),
-                     0 if sex == "Female" else 1, crop["age"], crop["embedding"],
+                     # keep the crop's OWN detected sex, not the identity's:
+                     # the portrait picker needs it to avoid a co-star's face
+                     crop.get("gender"), crop["age"], crop["embedding"],
                      crop["feature_norm"], crop["quality_score"], 1))
                 if crop is portrait_row:
                     if src_img.exists():

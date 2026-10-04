@@ -1,11 +1,17 @@
 r"""Purge adult-gallery casts from the Miniville resident gallery.
 
-`build_avatar_gallery.py` originally drew the female pool from `G:\Gallery`,
-which turned out to be an adult gallery — so `src=Female:*` identities and the
-`src=Male:*` ones whose source name exists in that gallery are all wrong-cast.
-This deletes them from `D:\miniville\gallery\gallery.db`, removes their sample
-dirs and portraits, and nulls `agents.avatar_path` so the residents queue for a
-proper recast. Real celebrity casts (`src=Male:<name>_nm*`) are kept.
+`build_avatar_gallery.py` originally drew the female pool from adult galleries
+(`G:\Gallery`, and `F:\amd\gallery` in an earlier revision) — so `src=Female:*`
+identities and the `src=Male:*` ones whose source name exists in either gallery
+are all wrong-cast. This deletes them from `D:\miniville\gallery\gallery.db`,
+removes their sample dirs and portraits, and nulls `agents.avatar_path` so the
+residents queue for a proper recast. Real celebrity casts (`src=celebrity:*`,
+and legacy `src=Male:<name>_nm*`) are kept.
+
+Both adult galleries are checked: the first purge pass only knew about
+`G:\Gallery`, so 78 casts from `F:\amd\gallery` survived until the recast
+audit (Sat, 04 Oct 2026) — every legacy `src=Female:` row is purged by
+prefix regardless of gallery, which is what catches those.
 
 Run:
     .\.venv\Scripts\python.exe scripts\purge_bad_casts.py [--dry-run]
@@ -29,13 +35,22 @@ OUT_DB = OUT_ROOT / "gallery" / "gallery.db"
 GAL_DIR = OUT_ROOT / "gallery"
 AV_DIR = OUT_ROOT / "avatars"
 MAPPING = OUT_ROOT / "avatar_mapping.json"
-ADULT_DB = Path(r"G:\Gallery\gallery.db")
+ADULT_DBS = [Path(r"G:\Gallery\gallery.db"), Path(r"F:\amd\gallery\gallery.db")]
+ADULT_DIRS = [Path(r"G:\Gallery"), Path(r"F:\amd\gallery")]
 
 
 def adult_names() -> set[str]:
-    conn = sqlite3.connect(ADULT_DB)
-    names = {r[0] for r in conn.execute("SELECT name FROM identities")}
-    conn.close()
+    """Every identity name in either adult gallery — db rows where available,
+    folder names otherwise (case-folded: the two sources disagree on case)."""
+    names: set[str] = set()
+    for db in ADULT_DBS:
+        if db.is_file():
+            conn = sqlite3.connect(db)
+            names |= {r[0].lower() for r in conn.execute("SELECT name FROM identities")}
+            conn.close()
+    for d in ADULT_DIRS:
+        if d.is_dir():
+            names |= {p.name.lower() for p in d.iterdir() if p.is_dir()}
     return names
 
 
@@ -61,11 +76,12 @@ def main() -> int:
         if notes.startswith("src=celebrity:"):
             keep.append(r)
             continue
-        # legacy rows: src=Female could only come from the adult gallery;
-        # src=Male names need the adult-DB membership check
+        # legacy rows: src=Female could only come from an adult gallery (both
+        # are female-only); src=Male names need the membership check, and the
+        # two galleries disagree on case so fold it
         src = notes.split(":", 1)[1] if ":" in notes else ""
         is_bad = (notes.startswith("src=Female:")
-                  or (notes.startswith("src=Male:") and src in adult))
+                  or (notes.startswith("src=Male:") and src.lower() in adult))
         (bad if is_bad else keep).append(r)
     print(f"identities: {len(rows)} total, {len(bad)} to purge, {len(keep)} kept")
 
