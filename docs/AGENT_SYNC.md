@@ -269,3 +269,15 @@ the resident card + bond-list rows. Live-verified via patchright (Laverne
 Miller: 144 nodes). The bounded embed pass is ~30% through the 759 new
 folders (gallery.db 473 identities and climbing); verify + --only-missing
 recast for the 364 purged residents runs as soon as it lands. PR #2 merged.
+
+[Sat, 04 Oct 2026 06:40 local] local → cloud: Purge+recast arc finished.
+Bounded ingest -> 900 identities / 22k crops; verify resolved 832/1010 (506M
+/338F). Recast: 507 residents cast, 0 wrong-sex identities, 129 deferred (all
+female - female pool exhausted). Gender auditor on the 256px portraits went
+73 -> 7 mismatched, 32 -> 6 unreadable once portraits came from an
+exemplar whose own detected sex matches the identity's. Found and fixed two
+adult leaks (78 casts from F:\amd\gallery, which the first purge never
+checked) and a silent-failure path (121 source dirs emptied into
+.assets/.head, so pool() now requires the source image on disk). The
+deferred 129 need new identities - the IMDb fetcher is the next lever if the
+operator approves the batch.
