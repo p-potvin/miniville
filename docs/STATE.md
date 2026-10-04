@@ -256,6 +256,17 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   click → resident card, 5s refresh. `/api/map` endpoint; pixi v7 vendored.
   Next candidates: resident-dot→resident-card already done; sigma.js bond
   graph; per-district heat/trend overlays.
+- **Bond wheel shipped (Sat, 04 Oct 2026):** `/api/graph/<id>` ego network +
+  `graph.js` radial layout on the Bonds tab — strongest bond at twelve
+  o'clock, ring-2 clustered by parent, click to re-centre; launched from the
+  resident card and bond-list rows.
+- **PR #2 merged** (both agents' v0.7 + fixes + birth calibration + map).
+- **Bounded embed in flight:** 759 folders tagged ≤12 imgs each (done);
+  `reembed --resume` embedding now (≈500 done of ~1,013). Next: verify →
+  `build_avatar_gallery.py --only-missing` recasts the 364 purged residents.
+- **Schedules:** wrap-around shifts (`start>end`) now cover the night window
+  and post-shift dinner fires before the sleep check — graveyard workers
+  work and eat.
 
 - **AVATAR SEX MISMATCH (found Wed, 30 Sep 2026) — 201 male residents hold a
   female identity.** Root cause: `build_avatar_gallery.pool()` filters source
