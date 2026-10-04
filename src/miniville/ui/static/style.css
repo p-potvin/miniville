@@ -56,3 +56,7 @@ td.closed { color: var(--warm); }
 
 .muted { color: var(--dim); font-size: .8rem; font-weight: normal; }
 #map-host { width: 100%; }
+
+button.mini { font: .72rem Consolas, monospace; padding: .15rem .5rem; margin-left: .5rem; cursor: pointer; }
+li.click { cursor: pointer; }
+li.click:hover { background: var(--panel); }

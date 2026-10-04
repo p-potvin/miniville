@@ -105,6 +105,20 @@ def test_map_endpoint(client):
            [ (p["x"], p["y"]) for p in again["places"]]
 
 
+def test_graph_endpoint(client):
+    rows = client.get("/api/residents").json()
+    rid = rows[0]["id"]
+    body = client.get(f"/api/graph/{rid}").json()
+    assert body["ego"]["id"] == rid
+    rings = {n["ring"] for n in body["nodes"]}
+    assert 0 in rings
+    assert body["nodes"][0]["id"] == rid
+    for e in body["edges"]:
+        ids = {n["id"] for n in body["nodes"]}
+        assert e["a_id"] in ids and e["b_id"] in ids
+    assert client.get("/api/graph/99999").json() == {"error": "no such agent"}
+
+
 def test_economy_endpoint(client):
     body = client.get("/api/economy").json()
     assert "money_supply_cents" in body["stats"]

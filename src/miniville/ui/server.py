@@ -304,6 +304,68 @@ def create_app(db_path: str | None = None) -> FastAPI:
         finally:
             c.close()
 
+    @app.get("/api/graph/{agent_id}")
+    def graph(agent_id: int):
+        """Ego relationship network: the resident, their partners (ring 1) and
+        their partners' partners (ring 2). The client lays it out radially.
+        Bounded to ~120 nodes / 160 edges so it stays readable."""
+        c = conn()
+        try:
+            ego = c.execute(
+                "SELECT id, name, sex FROM agents WHERE id=?",
+                (agent_id,)).fetchone()
+            if not ego:
+                return {"error": "no such agent"}
+            rels = _rows(c, """
+                SELECT a_id, b_id, label, affinity, familiarity, romance
+                FROM relationships
+                WHERE a_id=? OR b_id=?""", (agent_id, agent_id))
+            ring1 = sorted({(r["b_id"] if r["a_id"] == agent_id else r["a_id"])
+                            for r in rels})
+            # second ring: partners of partners, strongest first, capped
+            ring2_raw = {}
+            if ring1:
+                ph = ",".join("?" * len(ring1))
+                rows = c.execute(
+                    f"""SELECT a_id, b_id, label, affinity, familiarity
+                        FROM relationships
+                        WHERE (a_id IN ({ph}) OR b_id IN ({ph}))
+                          AND a_id != ? AND b_id != ?""",
+                    (*ring1, *ring1, agent_id, agent_id)).fetchall()
+                for r in rows:
+                    for end in (r["a_id"], r["b_id"]):
+                        if end != agent_id and end not in ring1:
+                            ring2_raw[end] = max(
+                                ring2_raw.get(end, 0), r["familiarity"])
+                ring2_edges = [r for r in rows
+                               if r["a_id"] in ring1 or r["b_id"] in ring1]
+            else:
+                ring2_edges = []
+            ring2 = [k for k, _ in sorted(
+                ring2_raw.items(), key=lambda kv: -kv[1])][:100]
+            ids = [agent_id] + ring1 + ring2
+            ph = ",".join("?" * len(ids))
+            names = {r["id"]: r for r in c.execute(
+                f"SELECT id, name, sex FROM agents WHERE id IN ({ph})", ids)}
+            node_set = set(ids)
+            edges = rels + ring2_edges
+            # cap edges by familiarity for readability
+            edges = [e for e in edges
+                     if e["a_id"] in node_set and e["b_id"] in node_set]
+            edges.sort(key=lambda e: -e["familiarity"])
+            edges = edges[:160]
+            nodes = ([{"id": agent_id, "name": ego["name"],
+                       "sex": ego["sex"], "ring": 0}]
+                     + [{"id": i, "name": names[i]["name"],
+                         "sex": names[i]["sex"], "ring": 1}
+                        for i in ring1 if i in names]
+                     + [{"id": i, "name": names[i]["name"],
+                         "sex": names[i]["sex"], "ring": 2}
+                        for i in ring2 if i in names])
+            return {"ego": dict(ego), "nodes": nodes, "edges": edges}
+        finally:
+            c.close()
+
     @app.get("/api/shocks")
     def shocks_view():
         c = conn()

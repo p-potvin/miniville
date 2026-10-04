@@ -46,7 +46,7 @@ async function residentCard(id) {
   $("#resident-card").hidden = false;
   $("#resident-card").innerHTML = `
     ${a.avatar_path ? `<img class="avatar" src="${esc(a.avatar_path)}" alt="">` : ""}
-    <h3>${esc(a.name)}</h3>
+    <h3>${esc(a.name)} <button class="mini" onclick="mvBond(${id})">bond wheel</button></h3>
     <p>${a.age} ${esc(a.sex)} · ${esc(a.occupation)} · ${esc(a.marital_status)}
        ${r.job ? `· works at ${esc(r.job.place)}` : "· unemployed"}</p>
     <p class="state">energy ${Math.round(s.energy ?? 0)} · hunger ${Math.round(s.hunger ?? 0)}
@@ -93,10 +93,17 @@ async function debts() {
 async function rels() {
   const rows = await api("/api/relationships?label=" + $("#rel-filter").value);
   $("#rels-list").innerHTML = rows.map(r =>
-    `<li><b>${r.label}</b> ${esc(r.a_name)} &amp; ${esc(r.b_name)}
+    `<li class="click" onclick="mvBond(${r.a_id})"><b>${r.label}</b>
+     ${esc(r.a_name)} &amp; ${esc(r.b_name)}
      <span class="t">fam ${Math.round(r.familiarity)} aff ${Math.round(r.affinity)}
      rom ${Math.round(r.romance)}</span></li>`).join("");
 }
+
+// open a resident's ego network on the Bonds tab
+window.mvBond = (id) => {
+  document.querySelector('[data-tab="rels"]').click();
+  renderBond($("#bond-host"), id);
+};
 
 async function gazette() {
   const r = await api("/api/newspaper");
