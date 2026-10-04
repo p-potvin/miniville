@@ -158,6 +158,11 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_memories_agent ON memories(agent_id, tick);
 CREATE INDEX IF NOT EXISTS idx_memories_day ON memories(day);
 
+-- household membership is queried per household (rent, downsizing,
+-- adoption): at thousands of households each unindexed lookup is a full
+-- agents scan, which made weekly rent the slowest tick in the engine
+CREATE INDEX IF NOT EXISTS idx_agents_household ON agents(household_id);
+
 -- Weekly newspaper front pages, distilled from the chronicle
 CREATE TABLE IF NOT EXISTS newspapers (
     week INTEGER PRIMARY KEY,
