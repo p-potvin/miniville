@@ -113,10 +113,16 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
 
     for t in range(TICKS_PER_DAY):
         place, act = home, "sleep"
-        in_work_shift = works_today and job["shift_start"] <= t < job["shift_end"]
+        if works_today and job["shift_start"] < job["shift_end"]:
+            in_work_shift = job["shift_start"] <= t < job["shift_end"]
+        elif works_today:
+            in_work_shift = t >= job["shift_start"] or t < job["shift_end"]
+        else:
+            in_work_shift = False
         if in_work_shift:
             # lunch break mid-shift so workers don't starve
-            mid = (job["shift_start"] + job["shift_end"]) // 2
+            length = (job["shift_end"] - job["shift_start"]) % TICKS_PER_DAY
+            mid = (job["shift_start"] + length // 2) % TICKS_PER_DAY
             plan[t] = (job["place_id"], "break" if t == mid else "work")
             continue
 
@@ -138,13 +144,14 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
             plan[t] = (venue_id or home, "celebrate")
             continue
 
-        if t < WAKE_TICK or t >= SLEEP_TICK:
-            plan[t] = (place, act)
-            continue
-
-        # post-shift dinner for workers whose shift ends at/past dinner time
+        # post-shift dinner before the sleep check: a worker who finishes
+        # after bedtime still gets their meal on the way home
         if works_today and t == job["shift_end"]:
             plan[t] = (home, "eat")
+            continue
+
+        if t < WAKE_TICK or t >= SLEEP_TICK:
+            plan[t] = (place, act)
             continue
 
         if t in (14, 26, 38):  # meal windows

@@ -81,6 +81,24 @@ def _add_job(conn, agent_id, place_name):
     return place_id
 
 
+def test_overnight_shift_covers_the_wrap_window(conn):
+    """A 21:00-03:00 job must fill the wrap ticks and still feed the worker."""
+    place_id = conn.execute(
+        "SELECT id FROM places WHERE name='Miniville General Hospital'"
+    ).fetchone()["id"]
+    conn.execute(
+        """INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,
+           shift_end,work_days) VALUES(1,?, 'nurse',2500,42,6,62)""",
+        (place_id,))
+    agent = conn.execute("SELECT * FROM agents WHERE id=1").fetchone()
+    plan = schedules.build_plan(conn, agent, 186, "test")
+    work = {t: a for t, _, a in plan}
+    # both sides of midnight are covered
+    assert all(work[t] == "work" for t in (42, 44, 46, 47, 1, 3, 5))
+    assert work[0] == "break"      # mid = (42 + 12//2) % 48 = 0
+    assert work[6] == "eat"        # post-shift meal fires before the sleep check
+
+
 def test_day_off_closes_town_hall_but_not_hospital(conn):
     _add_job(conn, 1, "Town Hall")
     agent = conn.execute("SELECT * FROM agents WHERE id=1").fetchone()
