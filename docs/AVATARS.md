@@ -16,6 +16,28 @@ unused source are deferred until the galleries grow.
   `deferred_ids` for residents awaiting new gallery members
 - `agents.avatar_path` stores the URL (`/avatars/aNNNN.jpg`)
 
+### Result of the purge + recast (Sat, 04 Oct 2026)
+
+Bounded re-ingest (≤12 imgs/folder over 759 folders) grew the gallery to
+**900 identities / 22k crops**; `verify_celebrity_gender` resolved 832 of
+1,010 (506 male, 338 female). The recast then cast **507 residents, 0
+wrong-sex identities**, and the gender auditor (which runs genderage on each
+256px portrait) went **73 → 7 mismatched, 32 → 6 unreadable** after portraits
+were re-cropped from an exemplar whose own detected sex matches the identity's.
+
+Two adult-gallery leaks were found and fixed on the way:
+
+- 78 casts came from `F:\amd\gallery` (the second adult gallery, 7k dirs) —
+  the first purge only knew `G:\Gallery`; `purge_bad_casts.py` now unions both.
+- 121 source folders were emptied into `.assets/.head` by the head pipeline;
+  their db rows survived and the pool offered them, producing 56 residents
+  with an `avatar_path` pointing at nothing. `pool()` now requires the source
+  image to exist.
+
+**129 residents are deferred** (all female — the female pool is exhausted at
+current gallery size). Growing it needs new identities via
+`Import-IMDbStarMeter.ps1`.
+
 ## Casting
 
 `scripts/build_avatar_gallery.py` (miniville venv; stdlib + pillow):
