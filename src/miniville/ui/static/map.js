@@ -147,6 +147,16 @@ class TownMap {
     const dotTex = this._dotTexture();
     for (const [pid, list] of Object.entries(byVenue)) {
       const v = this.venues[pid];
+      if (list.length) {
+        const n = new PIXI.Text(String(list.length), {
+          fontFamily: "Consolas, monospace", fontSize: 13,
+          fontWeight: "bold", fill: 0xffffff,
+          stroke: 0x000000, strokeThickness: 4,
+        });
+        n.anchor.set(0.5, 1);
+        n.position.set(v.x, v.y - v.size / 2 - 3);
+        this.staticLayer.addChild(n);
+      }
       list.forEach((a, i) => {
         const r = v.size / 2 + 8 + Math.floor(i / 14) * 8;
         const ang = i * 2.399963;                    // golden angle scatter
@@ -156,6 +166,15 @@ class TownMap {
     for (const [dname, list] of Object.entries(byDistrict)) {
       const zone = zones[dname] || zones._other || data.districts.at(-1);
       const rect = zone._homesRect || { x: zone.x + 16, y: zone.y + zone.h - 60, w: zone.w - 32, h: 40 };
+      if (list.length) {
+        const n = new PIXI.Text(`${list.length} home`, {
+          fontFamily: "Consolas, monospace", fontSize: 11,
+          fontWeight: "bold", fill: 0xb8c0d0,
+        });
+        n.anchor.set(1, 1);
+        n.position.set(zone.x + zone.w - 12, zone.y + zone.h - 22);
+        this.staticLayer.addChild(n);
+      }
       const cols = Math.max(1, Math.floor(rect.w / 12));
       list.forEach((a, i) => {
         const cx = rect.x + 6 + (i % cols) * 12;
