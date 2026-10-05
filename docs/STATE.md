@@ -467,6 +467,31 @@ power by association.
 Live world: 35 groups, 505 memberships across 360 residents (57%), 58
 gathering slots on a meeting day, interactions 119 → 883 when the rooms fill.
 
+**Measured, then fixed the thing that made them irrelevant.** A controlled A/B
+(60 days, same snapshot, one world with the memberships cleared) showed the
+clubs were a rounding error: 53.7% of club-mates met with groups against
+50.4% without, and 76,241 town relationships against 76,008. The cause was
+`encounters.py`: it shuffled everyone present and paired them at random, up
+to twelve pairs, every tick, at every venue — ~9,800 pair-encounters a day,
+which mixed the whole town into a fog of one-off meetings (92% of all
+relationships sat at familiarity 1-3) and drowned every institution in it.
+
+Encounters are now **scarce and chosen**: four conversations per venue per
+half-hour, drawn from the best-scoring pairs among at most fourteen people,
+scored for repeat contact (+3: you talk to people you know), shared group
+(+2), shared faith (+1), similar age (+0.75) and shared hobbies (+0.5).
+Festivals still mix everybody. Re-measured: club-mates are now **2.1x more
+familiar** with groups than without (10.24 against 4.84), while the town's
+total tie count is unchanged — fewer, deeper ties instead of a fog. The
+benchmark got faster too (p50 tick 30.8ms).
+
+**Two bugs found on the way.** A gathering no longer overrides a meal window
+(nobody misses dinner for the club). And children were eating only dinner —
+the school branch (06:30-17:00) won the breakfast and lunch ticks outright, so
+children ran at mean hunger 47 against the adults' 93 and the town carried
+~140 permanently hungry residents. School now feeds them; hunger fell from
+140 to 3 and the town went from ~475 content to 626 of 634.
+
 **Next (phases 2-3, not started):** a council with seats and elections whose
 decisions move real sim parameters (levy, rent, dividend), an influence
 index over standing/rank/wealth/seat/flock, and organized conflict with

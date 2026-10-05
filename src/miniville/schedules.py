@@ -29,6 +29,7 @@ SHOP_KINDS = ("workplace", "public")
 DINING_KINDS = ("workplace", "public")
 SHOPPING_WINDOWS = (20, 32, 42)   # 10:00, 16:00, 21:00
 GATHERING_TICKS = 3               # a club night runs two hours, not thirty minutes
+MEAL_TICKS = (14, 26, 38)         # breakfast, lunch, dinner — see build_plan
 
 
 def _venue_by_tags(conn: sqlite3.Connection, tags: list[str], kinds=("public", "civic")):
@@ -133,7 +134,11 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
             and school_id
         )
         if in_school:
-            plan[t] = (school_id, "school")
+            # school runs 06:30-17:00, which covers breakfast and lunch: the
+            # school branch used to win those ticks outright, so children ate
+            # only dinner and drifted permanently hungry (mean hunger 47
+            # against the adults' 93)
+            plan[t] = (school_id, "eat" if t in MEAL_TICKS else "school")
             continue
 
         in_holiday = (
@@ -195,6 +200,8 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
         venue_id, meet_tick, _name = meeting
         if in_work_shift_for(works_today, job, meet_tick) is False:
             for t in range(meet_tick, min(meet_tick + GATHERING_TICKS, TICKS_PER_DAY)):
+                if t in MEAL_TICKS:
+                    continue      # nobody misses dinner for the club
                 plan[t] = (venue_id, "gathering")
 
     return [(t, p, a) for t, (p, a) in sorted(plan.items())]

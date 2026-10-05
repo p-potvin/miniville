@@ -234,8 +234,9 @@ def form_groups(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
             used_venues.add(venue)
             # clubs meet Mon-Sat (0-5); Sunday is the congregations' day, and
             # leaving Monday out meant some days had no gathering at all
+            # evening, but clear of the dinner window (tick 38)
             gid = _create(conn, name, "club", venue, meets_day=r.randrange(0, 6),
-                          meets_tick=r.choice([36, 38, 40]), tick=tick)
+                          meets_tick=r.choice([32, 34, 42]), tick=tick)
             _seat(conn, gid, members, tick, r)
             for aid in members:
                 free_count[aid] = free_count.get(aid, 0) + 1
