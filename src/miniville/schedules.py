@@ -28,6 +28,7 @@ SHOP_TAGS = ["retail", "trades"]
 SHOP_KINDS = ("workplace", "public")
 DINING_KINDS = ("workplace", "public")
 SHOPPING_WINDOWS = (20, 32, 42)   # 10:00, 16:00, 21:00
+GATHERING_TICKS = 3               # a club night runs two hours, not thirty minutes
 
 
 def _venue_by_tags(conn: sqlite3.Connection, tags: list[str], kinds=("public", "civic")):
@@ -184,13 +185,17 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
                 continue
         plan[t] = (home, "home")
 
-    # a gathering outranks whatever else was planned for that hour: the club
-    # meets, the congregation worships, and the room fills with your people
+    # A gathering outranks whatever else was planned for that hour, and it
+    # lasts GATHERING_TICKS: one tick of co-presence is a single encounter and
+    # nothing accumulates from it, which is why the town's whole social graph
+    # sat at familiarity 1-3 — a fog of one-off meetings. A club that sits
+    # together for two hours builds something.
     meeting = ctx.get("meetings", {}).get(agent["id"])
     if meeting:
         venue_id, meet_tick, _name = meeting
         if in_work_shift_for(works_today, job, meet_tick) is False:
-            plan[meet_tick] = (venue_id, "gathering")
+            for t in range(meet_tick, min(meet_tick + GATHERING_TICKS, TICKS_PER_DAY)):
+                plan[t] = (venue_id, "gathering")
 
     return [(t, p, a) for t, (p, a) in sorted(plan.items())]
 
