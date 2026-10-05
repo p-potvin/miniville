@@ -86,6 +86,9 @@ BUSINESS_TAX_RATE = 0.05
 # school, the town hall) and only the surplus is handed back out, so the
 # dividend stays a modest rebate rather than becoming the town's main income.
 LEVY_DIVIDEND_SHARE = 0.35
+# how many weeks of public payroll the town keeps in the purse before the
+# surplus goes back out to residents as extra dividend
+PURSE_BUFFER_WEEKS = 6
 WAGE_INDEX_MIN, WAGE_INDEX_MAX = 0.6, 1.6
 UNEMPLOYMENT_HIGH = 0.12   # above this, wages drift down
 UNEMPLOYMENT_LOW = 0.05    # below this, wages drift up
@@ -96,6 +99,45 @@ PAID_LEISURE = {"coffee", "drink", "arts", "nightlife", "fitness"}
 
 def wage_index(conn: sqlite3.Connection) -> float:
     return float(get_meta(conn, "wage_index", "1.0") or 1.0)
+
+
+# --- the town's purse -------------------------------------------------------
+
+
+def town_balance(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT balance_cents FROM town_account WHERE id=1").fetchone()
+    return int(row["balance_cents"]) if row else 0
+
+
+def town_credit(conn: sqlite3.Connection, cents: int) -> None:
+    if cents:
+        conn.execute(
+            "UPDATE town_account SET balance_cents=balance_cents+? WHERE id=1",
+            (int(cents),))
+
+
+def public_payroll_week(conn: sqlite3.Connection) -> int:
+    """What a week of public-service payroll costs, from the posts on the books."""
+    rows = conn.execute(
+        """SELECT j.wage_cents, p.tags, p.kind FROM jobs j
+           JOIN places p ON p.id=j.place_id""").fetchall()
+    total = 0
+    for r in rows:
+        tags = set(json.loads(r["tags"] or "[]"))
+        if tags & PUBLIC_TAGS or r["kind"] == "civic":
+            total += int(r["wage_cents"]) * 5      # five working days
+    return total
+
+
+def town_debit(conn: sqlite3.Connection, cents: int) -> int:
+    """Spend from the purse. Returns the shortfall that had to be minted."""
+    cents = int(cents)
+    if cents <= 0:
+        return 0
+    available = town_balance(conn)
+    conn.execute("UPDATE town_account SET balance_cents=balance_cents-? WHERE id=1",
+                 (cents,))
+    return max(0, cents - available)
 
 
 def venue_price(tags: set[str], activity: str, price_index: float = 1.0) -> int:
@@ -316,6 +358,9 @@ def collect_rent(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         collected += rent
 
     if collected:
+        # rent is the town's income, not a bonfire: it funds the public
+        # services whose payroll the town pays
+        town_credit(conn, collected)
         _bump_day(conn, day, rent=collected)
     conn.commit()
     return {"collected": collected, "missed": missed, "downsized": downsized}
@@ -345,8 +390,18 @@ def weekly_levy(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         return {"levied": 0, "dividend": 0, "residents": 0}
 
     # the rest of the levy is what the town runs on — the hospital, the school,
-    # the town hall — so it leaves circulation here
+    # the town hall — so it goes into the purse that pays their payroll
+    town_credit(conn, levied - int(levied * LEVY_DIVIDEND_SHARE))
     pot = int(levied * LEVY_DIVIDEND_SHARE)
+    # the purse keeps a few weeks of payroll in hand; anything above that is
+    # the residents' money sitting in a drawer, so it goes back out with the
+    # dividend. Without this valve the purse swallowed rent forever and every
+    # wallet in town drained while the town account grew.
+    buffer = PURSE_BUFFER_WEEKS * public_payroll_week(conn)
+    surplus = max(0, town_balance(conn) - buffer)
+    if surplus:
+        town_debit(conn, surplus)
+        pot += surplus
     adults = conn.execute(
         "SELECT id FROM agents WHERE alive=1 AND is_child=0 ORDER BY id").fetchall()
     if pot <= 0 or not adults:
@@ -419,7 +474,7 @@ def settle_businesses(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         return {"settled": 0, "closed": 0, "reopened": 0}
 
     ensure_businesses(conn)
-    closed = reopened = settled = 0
+    closed = reopened = settled = deficits = 0
     rows = conn.execute(
         """SELECT b.*, p.name, p.tags, p.kind FROM businesses b
            JOIN places p ON p.id=b.place_id WHERE b.last_settled_day < ?""",
@@ -435,6 +490,17 @@ def settle_businesses(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         payroll = b["payroll_today"]
         if public and staffed:
             revenue = payroll                    # funded by the town
+            # ...and the town actually pays it, out of rent and the levy. The
+            # purse can run dry; the shortfall is a municipal deficit and is
+            # reported rather than silently minted every week.
+            short = town_debit(conn, payroll)
+            if short:
+                deficits += short
+                emit(conn, tick, "town_event", place_id=b["place_id"],
+                     importance=NOTABLE,
+                     text=f"the town ran short paying {b['name']}; "
+                          f"${short / 100:,.0f} went on the town's slate",
+                     tag="town_deficit")
         elif not staffed:
             revenue = b["revenue_today"]         # owner-operated: no failure
         balance = b["balance_cents"] + revenue - payroll
@@ -473,7 +539,8 @@ def settle_businesses(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
                     reopened += _reopen_business(conn, b, tick)
 
     conn.commit()
-    return {"settled": settled, "closed": closed, "reopened": reopened}
+    return {"settled": settled, "closed": closed, "reopened": reopened,
+            "deficit": deficits}
 
 
 def _close_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int,
@@ -601,6 +668,8 @@ def economy_stats(conn: sqlite3.Connection) -> dict:
         "in_debt": broke,
         "unemployment": unemployment(conn),
         "wage_index": wage_index(conn),
+        "town_purse_cents": town_balance(conn),
+        "public_payroll_week_cents": public_payroll_week(conn),
         "businesses_open": counts.get("open", 0),
         "businesses_closed": counts.get("closed", 0),
         "last_day": dict(day_row) if day_row else None,

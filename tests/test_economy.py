@@ -400,13 +400,44 @@ def test_weekly_levy_recycles_business_reserves_to_residents():
     taxed = int(100_000 * economy.BUSINESS_TAX_RATE)
     assert out["levied"] == taxed
     assert out["residents"] == 2
-    # the surplus share comes back out as a dividend; the rest funds the town
-    expected = int(taxed * economy.LEVY_DIVIDEND_SHARE)
-    assert out["dividend"] == expected // 2
+    # the town has no public payroll to fund in this fixture, so the purse
+    # needs no buffer and the whole levy comes back out as the dividend
+    assert economy.public_payroll_week(conn) == 0
+    assert out["dividend"] == taxed // 2
     assert conn.execute("SELECT SUM(money_cents) s FROM agent_state"
-                        ).fetchone()["s"] == expected
+                        ).fetchone()["s"] == taxed
+    assert economy.town_balance(conn) == 0
     assert conn.execute("SELECT balance_cents FROM businesses WHERE place_id=?",
                         (diner,)).fetchone()["balance_cents"] == 100_000 - taxed
+
+
+def test_levy_funds_public_payroll_and_banks_a_buffer(conn=None):
+    """With public staff on the books the purse keeps a buffer, and the levy
+    still funds the payroll rather than vanishing."""
+    conn = _world()
+    home = _place(conn, "Town Hall")
+    hospital = _place(conn, "Miniville General Hospital")
+    diner = _place(conn, "Riverside Diner")
+    _add_adult(conn, 1, home, 0)
+    _add_adult(conn, 2, home, 0)
+    conn.execute(
+        """INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,
+           work_days) VALUES(1,?,'nurse',20000,16,34,62)""", (hospital,))
+    conn.execute("UPDATE businesses SET balance_cents=10_000_000 WHERE place_id=?",
+                 (diner,))
+
+    week = economy.public_payroll_week(conn)
+    assert week == 100_000                       # one post, five days
+    out = economy.weekly_levy(conn, 7 * DAY, "s")
+    taxed = int(10_000_000 * economy.BUSINESS_TAX_RATE)
+    assert out["levied"] == taxed
+    # the purse banks up to its buffer instead of handing everything out
+    assert economy.town_balance(conn) <= economy.PURSE_BUFFER_WEEKS * week
+    assert out["dividend"] * 2 <= taxed
+    # and the payroll comes out of the purse, not out of thin air
+    before = economy.town_balance(conn)
+    economy.settle_businesses(conn, 7 * DAY + 48, "s")
+    assert economy.town_balance(conn) <= before
 
 
 def test_economy_stats_reports_the_town():

@@ -49,6 +49,8 @@ def cmd_economy(args) -> int:
     print(f"median wallet:   ${s['median_balance_cents'] / 100:,.0f}   "
           f"mean ${s['mean_balance_cents'] / 100:,.0f}")
     print(f"residents in debt: {s['in_debt']}")
+    print(f"town purse:      ${s['town_purse_cents'] / 100:,.0f}   "
+          f"(public payroll ${s['public_payroll_week_cents'] / 100:,.0f}/week)")
     print(f"unemployment:    {s['unemployment'] * 100:.1f}%")
     print(f"wage index:      {s['wage_index'] * 100:.0f}% of baseline")
     print(f"businesses:      {s['businesses_open']} open, "

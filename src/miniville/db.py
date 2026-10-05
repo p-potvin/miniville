@@ -201,6 +201,17 @@ CREATE TABLE IF NOT EXISTS businesses (
     last_settled_day INTEGER NOT NULL DEFAULT -1
 );
 
+-- The town's own purse. Weekly rent and the non-rebated part of the business
+-- levy flow in; public-service payroll (hospital, school, town hall, library,
+-- church, park) flows out. Before this existed, rent was destroyed outright
+-- and public wages were minted, so the money supply drained about 8% every
+-- two months and the wage index deflated with it.
+CREATE TABLE IF NOT EXISTS town_account (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    balance_cents INTEGER NOT NULL DEFAULT 0
+);
+INSERT OR IGNORE INTO town_account(id, balance_cents) VALUES (1, 0);
+
 -- Daily economic time series, written once per simulated day
 CREATE TABLE IF NOT EXISTS economy_days (
     day INTEGER PRIMARY KEY,
