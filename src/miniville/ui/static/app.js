@@ -141,7 +141,9 @@ async function economy() {
      <div class="stat"><b>${Math.round(s.wage_index * 100)}%</b><span>wages vs baseline</span></div>
      <div class="stat"><b>${s.businesses_open}</b><span>open</span></div>
      <div class="stat"><b>${s.businesses_closed}</b><span>dark</span></div>
-     <div class="stat"><b>${s.in_debt}</b><span>in debt</span></div>`;
+     <div class="stat"><b>${s.in_debt}</b><span>in debt</span></div>
+     <div class="stat"><b>${money(s.town_purse_cents)}</b><span>town purse</span></div>
+     <div class="stat"><b>${money(s.public_payroll_week_cents)}</b><span>public payroll /wk</span></div>`;
   $("#econ-body").innerHTML = r.businesses.map(b =>
     `<tr><td>${esc(b.name)}</td><td>${esc(b.kind)}</td>
      <td class="${b.status === "closed" ? "closed" : ""}">${b.status}</td>

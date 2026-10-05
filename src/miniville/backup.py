@@ -21,6 +21,13 @@ def backup_db(conn: sqlite3.Connection, keep: int = KEEP_BACKUPS) -> Path:
     out_dir = src.parent.parent / "backups"
     out_dir.mkdir(parents=True, exist_ok=True)
     dest = out_dir / f"miniville-t{int(tick):06d}.db"
+    # snapshots are named by tick, so two backups without an intervening run
+    # would collide — the second silently replaced the first, which cost us the
+    # pre-migration snapshot of the live world. Suffix instead.
+    n = 2
+    while dest.exists():
+        dest = out_dir / f"miniville-t{int(tick):06d}-{n}.db"
+        n += 1
     conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     conn.commit()
     from .db import snapshot_to
