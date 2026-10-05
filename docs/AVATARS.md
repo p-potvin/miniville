@@ -34,9 +34,40 @@ Two adult-gallery leaks were found and fixed on the way:
   with an `avatar_path` pointing at nothing. `pool()` now requires the source
   image to exist.
 
-**129 residents are deferred** (all female — the female pool is exhausted at
-current gallery size). Growing it needs new identities via
-`Import-IMDbStarMeter.ps1`.
+**129 residents are deferred.** The operator asked whether 1,000 identities
+against ~590 residents really cannot cover 150 female casts — the answer is
+that the *identities* exist but the *photos* do not:
+
+| | count |
+| --- | --- |
+| verified female identities | 338 |
+| ...already cast | 280 |
+| ...uncast, images on disk | **0** |
+| ...uncast, folder emptied into `.assets`/`.head` | 58 |
+| unresolved-sex identities (vote ambiguous) | 169, of which **161 still have photos** |
+
+So the free female pool is genuinely 0; the lever is the 161 unresolved
+identities, whose votes were polluted by multi-person photos.
+
+### Gallery cleanup (Sun, 04 Oct 2026, operator request)
+
+"Keep only those with 1 person facing the camera and remove the rest."
+`scripts/clean_gallery_images.py` keeps an image iff its sidecar says exactly
+1 person, facing camera, with a visible face and no quality exclusion;
+everything else moves to `<gallery>\.rejected\<identity>\` (reversible).
+
+```
+kept (exemplar-usable): 21,085
+quarantined:            54,626   (2-people 23,850; 3-people 10,476;
+                                  4-people 5,797; … over-shoulder 359;
+                                  facing away 174; large_text 1,258;
+                                  color_tint 20; nobody 632)
+```
+
+72% of the gallery was multi-person scenes — that is what left 169 identities
+undecided and produced bad portrait crops. `verify_celebrity_gender --force`
+then re-votes every identity on the surviving clean images only (quarantined
+crops fail to read and simply do not vote).
 
 ## Casting
 
