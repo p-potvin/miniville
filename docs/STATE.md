@@ -438,6 +438,37 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   untagged folders "done" (so `--resume` skipped them) and
   `verify_celebrity_gender.py` sampling only the first 6 crops.
 
+## v0.9 — the money loop closes, and careers begin (Sun, 05 Oct 2026)
+
+**The economy destroyed money it should have been spending.** Rent was
+collected and vanished; the business levy's non-rebated share was destroyed
+even though its own comment said it was "spent on the town's public
+services"; and public-service payroll was minted by faking each public
+venue's revenue to equal its payroll. Measured over 60 days on the live
+world: **the money supply fell $734,088 (7.8%)**, rent alone destroying
+$974,470, with town-wide payroll ($1.67M) outrunning revenue ($1.41M).
+Left alone the town deflated itself broke over a few simulated years — and a
+town that gets poorer gets *less* eventful, which is the opposite of alive.
+
+There is now a **town purse** (`town_account`): rent is credited to it, the
+levy's non-rebated share is credited to it, public-service payroll is debited
+from it (a shortfall is a `town_deficit` event rather than silent minting),
+and it keeps `PURSE_BUFFER_WEEKS` of payroll in hand and hands the surplus
+back out with the dividend so it cannot hoard the rent roll forever.
+
+Over 90 days after the change: total money **+$108,944** instead of
+-$734,088, wallets flat, purse bounded, zero deficit. A 2-year soak from the
+live world holds the line: unemployment 33% -> 11%, full venue staffing,
+wage index stabilised at 0.85, money supply $9.15M -> $9.28M (growing),
+close friendships 8 -> 1,161.
+
+**Careers.** A post used to be just a post — same job, same wage, until death
+or dismissal, so a decade produced no careers. `jobs` now carries
+`started_tick` and `rank`; a weekly pass gives tenure a yearly raise and at
+most one promotion a year (worker -> senior -> head of the venue, +12% pay,
+NOTABLE event). Education finally matters: a degree promotes at 0.75/year
+against 0.55.
+
 ## v0.8 — the labour market (Sat/Sun, 03-05 Oct 2026)
 
 A 2-year soak on the pre-v0.8 code showed employment only ever falling:
