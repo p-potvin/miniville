@@ -35,7 +35,16 @@ def cmd_init(args) -> int:
     dbmod.set_meta(conn, "tick", "0")
     economy.ensure_businesses(conn)
     conn.commit()
+    # a town comes with its congregations and clubs already in it
+    from .groups import assign_faith, form_groups, refresh_standing
+    faith = assign_faith(conn)
+    founded = form_groups(conn, 0, args.seed)
+    refresh_standing(conn)
+    conn.commit()
     print(f"Miniville populated: {stats}")
+    print(f"  faith parsed from personas: {faith['named']} named, "
+          f"{faith['inherited']} children inherited")
+    print(f"  affiliations founded: {len(founded['founded'])}")
     return 0
 
 

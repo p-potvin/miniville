@@ -438,6 +438,40 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   untagged folders "done" (so `--resume` skipped them) and
   `verify_celebrity_gender.py` sampling only the first 6 crops.
 
+## v0.10 — affiliations: congregations, clubs, societies (Sun, 05 Oct 2026)
+
+Everything social was pairwise (a `relationships` row) or private (a
+household). Real towns are made of overlapping groups, and that layer was
+missing. New `groups` + `memberships` tables and `src/miniville/groups.py`.
+
+**Faith comes from the persona, not from me.** Each persona's own
+`cultural_background` names a tradition often enough to parse (28%); the rest
+say nothing and are left saying nothing. Children inherit the household's.
+Live world of 636: protestant 55, catholic 44, baptist 21, lutheran 14,
+methodist 13, hindu 2, quaker 1, unaffiliated 1 — 458 silent. Measured across
+272,728 personas the generator's mix is catholic 10.4% / protestant 9.0% /
+baptist 2.9% / methodist 2.4% / lutheran 1.6%, with **71.9% naming nothing**,
+which is why faith is a *flavour* of group rather than the town's social
+foundation — and why the minority traditions (2 muslims, 2 hindus, a fraction
+of a jewish resident) cannot form congregations in a town this size.
+
+**Groups shape who is where when; the rest is emergent.** A meeting is a
+schedule slot that puts members in the same room (`gathering`), and the
+existing encounter engine does the social work. A gathering never pulls
+anyone off a shift. Clubs stay small and voluntary: matching an interest
+against free-text hobbies catches half the town, so a crowd splits into
+several clubs named for where they meet (the Greenhill reading circle, the
+Lakeshore fishing club). A group's standing is the mean of its members' —
+power by association.
+
+Live world: 35 groups, 505 memberships across 360 residents (57%), 58
+gathering slots on a meeting day, interactions 119 → 883 when the rooms fill.
+
+**Next (phases 2-3, not started):** a council with seats and elections whose
+decisions move real sim parameters (levy, rent, dividend), an influence
+index over standing/rank/wealth/seat/flock, and organized conflict with
+consequences (boycott, slander, schism, election challenge).
+
 ## v0.9 — the money loop closes, and careers begin (Sun, 05 Oct 2026)
 
 **The economy destroyed money it should have been spending.** Rent was
