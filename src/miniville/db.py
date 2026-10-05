@@ -38,7 +38,9 @@ CREATE TABLE IF NOT EXISTS agents (
     home_place_id INTEGER,
     work_place_id INTEGER,
     alive INTEGER NOT NULL DEFAULT 1,
-    is_child INTEGER NOT NULL DEFAULT 0
+    is_child INTEGER NOT NULL DEFAULT 0,
+    -- what the town thinks of them, accrued from the ledger (reputation.py)
+    standing INTEGER NOT NULL DEFAULT 0
 );
 
 -- Mutable per-agent state, updated every tick
@@ -302,6 +304,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE agents ADD COLUMN avatar_path TEXT")
     if "birth_day" not in cols:
         conn.execute("ALTER TABLE agents ADD COLUMN birth_day INTEGER")
+    if "standing" not in cols:
+        # what the town thinks of them, accrued from the ledger by reputation.py
+        conn.execute("ALTER TABLE agents ADD COLUMN standing INTEGER NOT NULL DEFAULT 0")
 
     # careers: tenure and rank on the post. Existing worlds start accruing
     # tenure from now rather than instantly promoting everyone.

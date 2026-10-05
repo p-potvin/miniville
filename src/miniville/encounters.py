@@ -40,8 +40,13 @@ def _compatible(a: sqlite3.Row, b: sqlite3.Row) -> bool:
     return abs(a["age"] - b["age"]) <= 20 and not a["is_child"] and not b["is_child"]
 
 
-def _interaction_tone(r, affinity: float) -> tuple[str, float]:
-    """Returns (tone, affinity_delta)."""
+def _interaction_tone(r, affinity: float, standing: float = 0.0) -> tuple[str, float]:
+    """Returns (tone, affinity_delta).
+
+    `standing` is the pair's combined reputation: people are a little warmer
+    to someone the town already thinks well of, and warier of someone it does
+    not, so a reputation is felt before it is explained.
+    """
     roll = r.random()
     if affinity < -20:
         table = [("hostile", -3, 0.20), ("tense", -1.5, 0.35),
@@ -56,7 +61,7 @@ def _interaction_tone(r, affinity: float) -> tuple[str, float]:
     for tone, delta, p in table:
         acc += p
         if roll < acc:
-            return tone, delta
+            return tone, delta * (1 + max(-0.6, min(0.6, standing / 200)))
     return "routine", +0.5
 
 
@@ -97,7 +102,8 @@ def interact(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row,
     label = rel["label"] if rel else "stranger"
     n = rel["interactions"] if rel else 0
 
-    tone, d_aff = _interaction_tone(r, aff)
+    tone, d_aff = _interaction_tone(
+        r, aff, float((a["standing"] or 0) + (b["standing"] or 0)))
     # shared hobbies spark
     ha = set(json.loads(a["hobbies_json"] or "[]"))
     hb = set(json.loads(b["hobbies_json"] or "[]"))

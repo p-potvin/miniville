@@ -154,7 +154,7 @@ def hiring_pass(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
 
     # candidate pool: unemployed working-age adults, never the retired
     candidates = conn.execute(
-        """SELECT a.id, a.occupation FROM agents a
+        """SELECT a.id, a.occupation, COALESCE(a.standing,0) standing FROM agents a
            WHERE a.alive=1 AND a.is_child=0 AND a.age >= 18 AND a.age < ?
              AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.agent_id=a.id)
            ORDER BY a.id""", (RETIRE_AGE,)).fetchall()
@@ -179,6 +179,8 @@ def hiring_pass(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     pool = {pid: n for pid, n in slots}
     order = list(candidates)
     r.shuffle(order)
+    # a good name gets you in the door: the shuffle decides the rest
+    order.sort(key=lambda c: -c["standing"])
 
     hired = []
     for cand in order:

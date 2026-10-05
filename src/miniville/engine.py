@@ -10,6 +10,7 @@ from . import (
     growth,
     jobs,
     memory,
+    reputation,
     mortality,
     newspaper,
     seasons,
@@ -100,6 +101,8 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     # couple cannot also welcome a child on the same day
     stats["deaths"] = mortality.daily_mortality(conn, tick, seed)
     stats["births"] = growth.births(conn, tick, seed)
+    # what the town made of yesterday, after everyone who acted on it is gone
+    stats["standing"] = reputation.accrue(conn, tick, seed)
     return stats
 
 

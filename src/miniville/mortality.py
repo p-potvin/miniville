@@ -150,6 +150,9 @@ def _die(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) -> int | No
     emit(conn, tick, "life_event", a=aid, b=survivor, importance=HISTORIC,
          text=text, tag="death")
     _mourn(conn, aid, agent["name"], tick)
+    # and how the town regarded them, in the same ledger that recorded it
+    from .reputation import obituary
+    obituary(conn, agent, tick, "")
     return survivor
 
 
