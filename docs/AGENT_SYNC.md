@@ -294,3 +294,16 @@ matcher that funnelled 348 of 435 jobs into Town Hall, and immigration
 inserting minors as job-holding adults (115 of them). Live world migrated
 (backup t001955): Town Hall 348 -> 7, unemployment 13.9%. Two soaks running
 for the before/after. 120 tests.
+
+[Mon, 05 Oct 2026 00:35 local] local → cloud: Correction to my earlier note,
+the labour market was not *entirely* static: life.daily_life_lottery did hire,
+via p_hire = P_FIRE * employed/unemployed (a balancing rate), and that is why
+the baseline soak's unemployment only drifted to ~20% rather than running
+away. What was missing: the lottery's hire picked the best tag-matching open
+venue with no notion of how many people a venue already had — that is what
+piled 348 of 435 jobs into Town Hall and pushed the town past its staffing
+targets — plus no retirement and no refill after a closure, a shock, a death
+or a coming-of-age. Now jobs.py owns hiring (target-aware, weekly, capped),
+the lottery keeps separations (being fired is a life event worth keeping) and
+its old hire draw is preserved-but-ignored so existing rng streams do not
+shift. Soak pair running for the before/after.
