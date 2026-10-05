@@ -50,6 +50,17 @@ def write_day(conn: sqlite3.Connection, day: int, seed: str) -> str:
     lines.append("## Economy")
     from .economy import economy_line
     lines.append(f"- {economy_line(conn)}")
+    from .politics import POLICIES, council, policy
+    seats = council(conn)
+    if seats:
+        lines.append("")
+        lines.append("## The council")
+        for s in seats:
+            lines.append(f"- {s['name']} ({s['district']})")
+        moved = [f"{n} {policy(conn, n):.2f}" for n in sorted(POLICIES)
+                 if abs(policy(conn, n) - POLICIES[n][0]) > 1e-9]
+        if moved:
+            lines.append(f"- policy moved from the default: {', '.join(moved)}")
     from .reputation import notable_residents
     admired = notable_residents(conn, 3)
     if admired:

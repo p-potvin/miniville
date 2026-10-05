@@ -378,6 +378,23 @@ def create_app(db_path: str | None = None) -> FastAPI:
         finally:
             c.close()
 
+    @app.get("/api/council")
+    def council_view():
+        """Who governs, what they last decided, and what they have changed."""
+        from ..politics import POLICIES, council, next_election_day, policy
+        c = conn()
+        try:
+            return {
+                "seats": council(c),
+                "policies": {name: {"now": policy(c, name), "default": POLICIES[name][0],
+                                    "low": POLICIES[name][1], "high": POLICIES[name][2]}
+                             for name in sorted(POLICIES)},
+                "next_election_day": next_election_day(c),
+                "motions": _rows(c, "SELECT * FROM motions ORDER BY id DESC LIMIT 20"),
+            }
+        finally:
+            c.close()
+
     @app.get("/api/shocks")
     def shocks_view():
         c = conn()
