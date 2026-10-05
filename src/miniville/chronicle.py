@@ -50,6 +50,13 @@ def write_day(conn: sqlite3.Connection, day: int, seed: str) -> str:
     lines.append("## Economy")
     from .economy import economy_line
     lines.append(f"- {economy_line(conn)}")
+    from .reputation import notable_residents
+    admired = notable_residents(conn, 3)
+    if admired:
+        lines.append("")
+        lines.append("## Standing")
+        for r in admired:
+            lines.append(f"- {r['name']} ({r['standing']:+d})")
     text = "\n".join(lines)
 
     conn.execute(
