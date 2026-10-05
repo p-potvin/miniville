@@ -10,8 +10,12 @@ import sqlite3
 from .events import HISTORIC, MAJOR, MINOR, emit
 from .rng import rng_for
 
-P_FIRE, P_ILL, P_MOVE = 0.005, 0.01, 0.004
-P_HIRE_MAX = 0.15        # cap on the derived hiring rate
+# ~25% involuntary separations a year, the shape of a real labour market. The
+# old 0.005/day fired every worker 1.8 times a year, which the town could
+# absorb only because nothing rehired anybody; with a working market it
+# churned the whole town (104 firings in 60 days for ~250 posts).
+P_FIRE, P_ILL, P_MOVE = 0.0007, 0.01, 0.004
+P_HIRE_MAX = 0.15        # legacy: the lottery's hire draw (kept for rng order)
 
 
 def _fire(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int) -> None:

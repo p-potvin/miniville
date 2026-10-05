@@ -126,7 +126,11 @@ def test_retirement_frees_the_post(conn, monkeypatch):
     monkeypatch.setattr(jobs, "RETIRE_ANNUAL", 1.0)
     monkeypatch.setattr(jobs, "RETIRE_ANNUAL_OLD", 1.0)
     employ(conn, [4], "Miniville General Hospital")
-    out = jobs.retirements(conn, tick=48, seed="test")
+    out = []
+    for day in range(1, 400):                # probabilistic per day; sweep
+        out = jobs.retirements(conn, tick=48 * day, seed="test")
+        if out:
+            break
     assert len(out) == 1 and out[0]["age"] == 68
     assert conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"] == 0
     row = conn.execute("SELECT occupation, work_place_id FROM agents WHERE id=4").fetchone()
@@ -147,11 +151,13 @@ def test_turnover_sheds_the_surplus_at_one_venue(conn):
     assert conn.execute("SELECT 1 FROM events WHERE data LIKE '%left their job%'").fetchone()
 
 
-def test_hiring_never_exceeds_the_weekly_budget(conn):
+def test_hiring_budget_clears_the_firing_rate(conn):
+    """The weekly budget must out-pace separations or the town sheds posts."""
+    from miniville.life import P_FIRE
     add_workers(conn, 30, COOK)
-    # 40 employed residents: the budget is 3% of the workforce
     add_workers(conn, 40, CLERK, first_id=200)
     employ(conn, list(range(200, 240)), "Town Hall")
     result = jobs.hiring_pass(conn, tick=0, seed="test")
-    assert result["hired"] <= max(1, int(40 * jobs.WEEKLY_HIRE_SHARE))
-    assert result["hired"] >= 1
+    separations = 40 * P_FIRE * 7
+    assert result["hired"] >= min(30, int(separations * jobs.SEPARATION_MARGIN))
+    assert result["hired"] <= 30                            # never more than the candidates

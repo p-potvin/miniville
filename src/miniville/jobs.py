@@ -35,7 +35,9 @@ STAFF_MAX = 60
 EMPLOYMENT_RATE = 0.92       # share of working-age adults the town can employ
 
 # market churn
-WEEKLY_HIRE_SHARE = 0.03     # at most this share of the workforce hired per week
+WEEKLY_HIRE_SHARE = 0.05     # base share of the workforce hired per week
+SEPARATION_MARGIN = 1.5      # hiring must out-pace the town's firing rate, or
+                             # the market sheds jobs faster than it refills them
 EXCESS_SHED_SHARE = 0.03     # share of an overstaffed venue's surplus that leaves
 MIN_WAGE_FLOOR = 0.8         # never pay below this fraction of the baseline band
 
@@ -160,7 +162,14 @@ def hiring_pass(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         return {"hired": 0, "left": 0, "vacancies": total_open}
 
     workforce = conn.execute("SELECT COUNT(*) n FROM jobs").fetchone()["n"]
-    budget = max(1, int(workforce * WEEKLY_HIRE_SHARE))
+    # the budget has to clear the separations the life lottery creates each
+    # week (P_FIRE per employed resident per day), otherwise the town sheds
+    # jobs faster than it fills them: a 3% cap against a 3.4%/week firing
+    # rate drove 260 posts down to 189 in five months
+    from .life import P_FIRE
+    separations = workforce * P_FIRE * 7
+    budget = max(3, int(workforce * WEEKLY_HIRE_SHARE),
+                 int(separations * SEPARATION_MARGIN))
     r = rng_for(seed, "hire", tick)
 
     places = {r2["id"]: (r2["name"], set(json.loads(r2["tags"] or "[]")))
@@ -277,17 +286,25 @@ def rebalance(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
 
 
 def retirements(conn: sqlite3.Connection, tick: int, seed: str) -> list[dict]:
-    """Seniors leave the workforce; their posts become vacancies."""
+    """Seniors leave the workforce; their posts become vacancies.
+
+    When the town has idle working-age hands, the old step aside sooner: a
+    pensioner holding a post while a quarter of the working age is out of
+    work is how the town kept 44 posts in the hands of the over-65s.
+    """
     rows = conn.execute(
         """SELECT j.agent_id, j.place_id, p.name, a.name aname, a.age
            FROM jobs j JOIN places p ON p.id=j.place_id JOIN agents a ON a.id=j.agent_id
            WHERE a.alive=1 AND a.age >= ?""", (RETIRE_AGE,)).fetchall()
     if not rows:
         return []
+    from .economy import unemployment
+    pressure = 1 + unemployment(conn) * 12     # 20% idle -> 3.4x the base rate
     r = rng_for(seed, "retire", tick)
     out = []
     for row in rows:
-        annual = RETIRE_ANNUAL if row["age"] < 70 else RETIRE_ANNUAL_OLD
+        annual = min(0.95, (RETIRE_ANNUAL if row["age"] < 70
+                            else RETIRE_ANNUAL_OLD) * pressure)
         daily = 1 - (1 - annual) ** (1 / 365)
         if r.random() >= daily:
             continue
