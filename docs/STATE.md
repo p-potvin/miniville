@@ -492,10 +492,43 @@ children ran at mean hunger 47 against the adults' 93 and the town carried
 ~140 permanently hungry residents. School now feeds them; hunger fell from
 140 to 3 and the town went from ~475 content to 626 of 634.
 
-**Next (phases 2-3, not started):** a council with seats and elections whose
-decisions move real sim parameters (levy, rent, dividend), an influence
-index over standing/rank/wealth/seat/flock, and organized conflict with
-consequences (boycott, slander, schism, election challenge).
+## v0.11 — the council (Sun, 05 Oct 2026)
+
+Phase 2: `src/miniville/politics.py`, tables `council`, `elections`,
+`motions`. Every policy is a number `economy.py` reads — the business levy,
+the dividend share, rent, a wage floor — so an election is something a
+resident can feel. A council that debates and changes nothing is decoration.
+
+**One seat per district, not a town-wide top five.** The first council seated
+five members whose backers all sat above the town's median wallet, so a
+motion to lower rent lost 2-3 every single time and the lever was dead. With
+districts, each part of town sends its own councillor.
+
+**The axis falls out of the town's books, not out of the code.** Rent and the
+levy *are* the town's income — they pay the public payroll and fund the civic
+dividend — so a district leaning on the town votes for them up and a district
+paying its own way votes for them down; a poorer district wants the wage
+floor raised. (The first version said "whoever is not poor wants rent up",
+which had the comfortable districts voting themselves a rent rise. Rent is
+not a price here, it is a tax base.)
+
+Two-year soak with politics live: 28 motions, every vote 3-2 or 2-3, and a
+**stable 3-2 majority** — the three better-employed districts (Downtown 26%
+out of work, Lakeshore 25%, Greenhill 30%) cut the levy 5% -> 3% and the
+dividend 35% -> 20%, while the two poorer districts (Old Mill Quarter 31%,
+The Flats 38%) lose every motion to redistribute. Min wage never passes. Rent
+round-trips 1.0 -> 1.1 -> 1.0. **Zero municipal deficits** — the closed money
+loop survives a council that starves its own revenue. The balance would flip
+if downsizing pushed more households into The Flats.
+
+A councillor who dies vacates their seat and the town votes again.
+
+CLI: `council`, `election`, `motion`. API: `/api/council`. The chronicle
+names who governs. 150 tests.
+
+**Next (phase 3, not started):** an influence index over
+standing/rank/wealth/seat/flock, and organized conflict with consequences
+(boycott, slander, schism, election challenge).
 
 ## v0.9 — the money loop closes, and careers begin (Sun, 05 Oct 2026)
 
