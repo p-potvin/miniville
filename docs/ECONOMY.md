@@ -9,7 +9,7 @@ gives the town a cost of living and a business sector.
 Money leaves a household in four ways:
 
 | flow | when | amount |
-|---|---|---|
+| --- | --- | --- |
 | rent | weekly, `day % 7 == 0` | by district, $290–$460/wk, split across the adults |
 | groceries | once a day, tick 14 | $7.50, paid to the town grocer |
 | meals out | each `eat_out` tick | $10–$25 depending on the venue's tags |
@@ -48,17 +48,38 @@ rather than by the live world.
 
 ## The town's books
 
-Wages are *minted* and rent is *destroyed*, so the money supply is not closed.
-Two mechanisms keep it from running away:
+The money supply is a **closed loop** as of v0.9. It did not used to be: rent
+was collected and destroyed, the levy's non-rebated share was destroyed (while
+its own comment said it was "spent on the town's public services"), and
+public-service payroll was minted by faking each public venue's revenue to
+equal its payroll. Measured over 60 days on the live world that drained
+**$734,088 — 7.8% of the money supply** — with rent alone destroying $974,470
+and town-wide payroll ($1.67M) outrunning revenue ($1.41M). Left alone the
+town deflated itself broke over a few simulated years.
 
-- **The weekly levy.** Every Monday the town takes `BUSINESS_TAX_RATE` (5%) of
-  each business's reserves. Most of it is what the town runs on and leaves
-  circulation; `LEVY_DIVIDEND_SHARE` (35%) is handed back to every resident as
-  a **civic dividend**. Without the levy, money paid to a shop or tavern is gone
-  for good and the town slowly bleeds dry.
+Now there is a **town purse** (`town_account`, one row):
+
+- **Rent is credited to the purse** instead of vanishing — the town is the
+  landlord and its income is the rent roll.
+- **The weekly levy** takes `BUSINESS_TAX_RATE` (5%) of each business's
+  reserves; `LEVY_DIVIDEND_SHARE` (35%) goes straight back out as the **civic
+  dividend** and the rest is credited to the purse.
+- **Public-service payroll** (hospital, school, town hall, library, church,
+  park — `PUBLIC_TAGS` / `kind='civic'`) is **debited from the purse**. If the
+  purse cannot cover a payroll the shortfall is a **municipal deficit**: it
+  emits a `town_deficit` event and is reported, rather than being minted
+  silently every week.
+- The purse keeps `PURSE_BUFFER_WEEKS` (6) of public payroll in hand; anything
+  above that is residents' money sitting in a drawer, so it is added to the
+  dividend. Without this valve the purse swallowed the rent roll forever and
+  every wallet drained while the town account grew.
 - **Wage dynamics.** `wage_index` (in `meta`) drifts down 0.5%/week when
   unemployment is above 12% and up when it is below 5%, clamped to 0.6–1.6.
   Every wage is `wage_cents * wage_index`, so wages no longer only go up.
+
+After the change, over 90 days on the same world: total money **+$108,944**
+instead of -$734,088, wallets flat ($9,147,529 → $9,168,716), purse bounded
+near its buffer, zero municipal deficit.
 
 ## Reporting
 
