@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -44,11 +45,18 @@ VOTE_MARGIN = 2
 
 
 def identity_crops(conn: sqlite3.Connection, dirname: str) -> list[str]:
+    """The identity's crop images that still exist on disk.
+
+    Rows whose file was quarantined by the gallery cleanup (or consumed into
+    .assets/.head) are dropped here, so --max-crops samples readable images
+    rather than spending the budget on dead paths.
+    """
     rows = conn.execute(
         """SELECT f.image_path FROM face_crops f
            JOIN identities i ON i.id = f.identity_id
-           WHERE i.name = ? AND f.image_path IS NOT NULL""", (dirname,)).fetchall()
-    return [r["image_path"] for r in rows]
+           WHERE i.name = ? AND f.image_path IS NOT NULL
+           ORDER BY f.quality_score DESC""", (dirname,)).fetchall()
+    return [r["image_path"] for r in rows if os.path.isfile(r["image_path"])]
 
 
 def vote_sex(app, paths: list[str], max_crops: int = 0) -> tuple[int, int, int]:
@@ -71,6 +79,27 @@ def vote_sex(app, paths: list[str], max_crops: int = 0) -> tuple[int, int, int]:
             male += 1
         elif raw == "F":
             female += 1
+    if male + female < MIN_VOTES:
+        return 0, male, female
+    if male > VOTE_MARGIN * female:
+        return 2, male, female
+    if female > VOTE_MARGIN * male:
+        return 1, male, female
+    return 0, male, female
+
+
+def vote_sex_db(conn: sqlite3.Connection, dirname: str) -> tuple[int, int, int]:
+    """Same MIN_VOTES/>2:1 contract, but over the stored face_crops.gender
+    column instead of fresh image reads. The column is unreliable per-crop —
+    the identity-level vote over it is the 99.4% mechanism. Fallback for
+    identities whose source images were consolidated into .assets/.head and
+    can no longer be imread from the recorded paths."""
+    rows = conn.execute(
+        """SELECT f.gender FROM face_crops f
+           JOIN identities i ON i.id = f.identity_id
+           WHERE i.name = ? AND f.gender IS NOT NULL""", (dirname,)).fetchall()
+    male = sum(1 for r in rows if r["gender"] == 1)
+    female = len(rows) - male
     if male + female < MIN_VOTES:
         return 0, male, female
     if male > VOTE_MARGIN * female:
@@ -143,7 +172,13 @@ def main(argv=None) -> int:
                         "n_crops": 0, "error": "no face crops"}
             continue
         gender, male, female = vote_sex(app, paths, args.max_crops)
-        cache[d] = {"name": None, "gender": gender, "source": "local",
+        source = "local"
+        if male + female < MIN_VOTES:
+            # too few readable images (moved into .assets/.head) — vote over
+            # the stored crop labels rather than clobbering a good entry
+            gender, male, female = vote_sex_db(conn, d)
+            source = "db-vote"
+        cache[d] = {"name": None, "gender": gender, "source": source,
                     "n_crops": len(paths),
                     "votes": {"male": male, "female": female}}
         if gender:
