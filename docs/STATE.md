@@ -438,6 +438,51 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   untagged folders "done" (so `--resume` skipped them) and
   `verify_celebrity_gender.py` sampling only the first 6 crops.
 
+## v0.8 — the labour market (Sat/Sun, 03-05 Oct 2026)
+
+A 2-year soak on the pre-v0.8 code showed employment only ever falling:
+jobs 435 → 404, unemployment 13.1% → 19.7%, wage index 0.99 → 0.73, while
+business reserves grew 7× ($0.32M → $2.32M) — the venues with all the
+customer traffic (tavern, bean, theater, gym) were `kind='public'`, so
+`economy.open_workplaces` never listed them and they had **no staff to pay**.
+
+What was actually broken, precisely:
+
+- `INSERT INTO jobs` existed only in `ingest.py` and in the life lottery's
+  balancing hire. Nothing refilled a post after a business closed, a venue
+  shock, a death or a coming-of-age.
+- The lottery's hire (`p_hire = P_FIRE * emp/unemp`) chose the best
+  tag-matching venue with no notion of headcount — together with the
+  bootstrap matcher (whose generic fallback tags match Town Hall best) that
+  is how one venue collected **348 of the town's 435 jobs**.
+- No retirement: 65+ worked until they died.
+- Immigration inserted personas without `is_child`, so 115 minors arrived as
+  job-holding heads of household.
+
+`src/miniville/jobs.py` now owns the market: venue targets from capacity and
+customer traffic, scaled so the town's posts are 92% of its working-age
+adults (the rate is a town property; the distribution follows demand), a
+weekly hiring pass capped at 3% of the workforce, light voluntary turnover
+that drains overstaffed venues toward their targets, retirement at 65, and
+`rebalance-jobs` for a one-time correction. The life lottery keeps
+separations; its old hire draw is preserved-but-ignored so rng streams and
+replays do not shift.
+
+Live world migrated (backup `backups/miniville-t001955.db`): Town Hall
+348 → 7, tavern/bean/theater/gym staffed, 115 minors corrected,
+unemployment 13.9%.
+
+`db.snapshot_to()` now backs every db copy (soak, benchmark, backup) with
+SQLite's backup API: the town is WAL-mode and `shutil.copy2` takes the main
+file without the `-wal`, which produced a "database disk image is malformed"
+soak copy right after a migration.
+
+**Open finding, not yet fixed:** the money supply drains in both soaks
+($9.10M → ~$8.5M over 1.5 years) while the wage index falls — the town
+destroys money (rent) faster than it mints it (wages), and v0.8 makes
+businesses *poorer* because they finally pay their staff, so the weekly levy
+recirculates less. Worth a considered pass on rent recycling / levy balance.
+
 ## Resume note for next session
 
 Branch `autodev`, both agents pushing. World is seeded (seed=miniville) — `run`
