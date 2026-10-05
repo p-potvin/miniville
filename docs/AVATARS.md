@@ -34,9 +34,25 @@ Two adult-gallery leaks were found and fixed on the way:
   with an `avatar_path` pointing at nothing. `pool()` now requires the source
   image to exist.
 
-**129 residents are deferred.** The operator asked whether 1,000 identities
-against ~590 residents really cannot cover 150 female casts — the answer is
-that the *identities* exist but the *photos* do not:
+**43 residents are deferred** (all female) after the cleanup + re-vote below.
+The operator asked whether 1,000 identities against ~590 residents really
+cannot cover 150 female casts — the answer is that the *identities* exist but
+the *photos* do not. Final accounting of the 1,013 source folders:
+
+| | count |
+| --- | --- |
+| usable exemplar images (after cleanup) | 21,085 of 75,711 |
+| identities with a determinable sex | 734 (452 male, 282 female) |
+| ...female already worn | 274 |
+| ...female still free | 8 |
+| identities whose folders are empty (`.assets`/`.head`) | ~130 |
+| identities with no solo photo at all | 237 |
+| identities with a genuinely ambiguous vote | 45 |
+
+Relaxing the "facing camera" rule would revive exactly **1** identity, so the
+only real lever is new identities via `Import-IMDbStarMeter.ps1`.
+
+**Before the cleanup** (the state at the first recast):
 
 | | count |
 | --- | --- |
