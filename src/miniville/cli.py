@@ -364,7 +364,7 @@ def cmd_benchmark(args) -> int:
     from . import engine
     src = Path(args.db) if args.db else dbmod.DEFAULT_DB
     tmp = Path(tempfile.mkdtemp()) / "bench.db"
-    shutil.copy2(src, tmp)
+    dbmod.snapshot_to(src, tmp)           # WAL-safe: copy2 can tear a live db
     conn = dbmod.connect(tmp)
     seed = dbmod.get_meta(conn, "seed", "miniville")
     times = []

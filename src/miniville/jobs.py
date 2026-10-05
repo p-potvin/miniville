@@ -223,7 +223,7 @@ def rebalance(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     targets = venue_targets(conn)
     staff: dict[int, list[sqlite3.Row]] = {}
     for row in conn.execute(
-            """SELECT j.agent_id, j.place_id, a.occupation
+            """SELECT j.agent_id, j.place_id, a.occupation, a.age
                FROM jobs j JOIN agents a ON a.id=j.agent_id WHERE a.alive=1"""):
         staff.setdefault(row["place_id"], []).append(row)
     r = rng_for(seed, "rebalance", tick)
@@ -248,8 +248,15 @@ def rebalance(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     pool = {pid: n for pid, n in vacancies(conn)}
     tags_by_place = {r2["id"]: set(json.loads(r2["tags"] or "[]")) for r2 in
                      conn.execute("SELECT id, tags FROM places")}
-    moved = 0
+    moved = retired = 0
     for row in sorted(released, key=lambda x: x["agent_id"]):
+        if row["age"] >= RETIRE_AGE:
+            # the posts belong to the working-age population; a pensioner who
+            # loses theirs retires rather than competing for a vacancy
+            conn.execute("UPDATE agents SET occupation='Retired' WHERE id=?",
+                         (row["agent_id"],))
+            retired += 1
+            continue
         want = set(workplace_tags_for(row["occupation"] or ""))
         scored = [(len(want & tags_by_place.get(pid, set())), pid)
                   for pid, n in pool.items() if n > 0]
@@ -265,8 +272,8 @@ def rebalance(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         emit(conn, tick, "town_event", importance=NOTABLE,
              text=f"the town's employers rebalanced: {moved} residents took a "
                   f"post at a venue that needed them", tag="jobs_rebalanced")
-    return {"released": len(released), "rehired": moved,
-            "still_unemployed": len(released) - moved}
+    return {"released": len(released), "rehired": moved, "retired": retired,
+            "still_unemployed": len(released) - moved - retired}
 
 
 def retirements(conn: sqlite3.Connection, tick: int, seed: str) -> list[dict]:

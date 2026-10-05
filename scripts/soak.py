@@ -87,7 +87,7 @@ def main() -> int:
         print(f"no source db at {src}")
         return 1
     work = OUT_DIR / f"soak-{a.tag}.db"
-    shutil.copy2(src, work)
+    dbmod.snapshot_to(src, work)          # WAL-safe: copy2 can tear a live db
     conn = dbmod.connect(work)
     seed = dbmod.get_meta(conn, "seed", "miniville")
     start_tick = int(dbmod.get_meta(conn, "tick", "0") or 0)

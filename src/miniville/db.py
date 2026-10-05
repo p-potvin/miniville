@@ -237,6 +237,28 @@ CREATE TABLE IF NOT EXISTS shocks (
 """
 
 
+def snapshot_to(src_path: str | Path, dest_path: str | Path) -> Path:
+    """Consistent copy of a live database, WAL and all.
+
+    The town runs in WAL mode, so a plain file copy takes the main file
+    without the -wal that holds the newest commits: the copy can be missing
+    recent writes or, if a checkpoint is mid-flight, corrupt ("never used"
+    pages). SQLite's backup API reads through the WAL and writes a clean
+    database instead. A soak copy taken right after a migration came out
+    malformed this way.
+    """
+    src = sqlite3.connect(str(src_path))
+    try:
+        dest = sqlite3.connect(str(dest_path))
+        try:
+            src.backup(dest)
+        finally:
+            dest.close()
+    finally:
+        src.close()
+    return Path(dest_path)
+
+
 def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
     path = Path(db_path or DEFAULT_DB)
     path.parent.mkdir(parents=True, exist_ok=True)

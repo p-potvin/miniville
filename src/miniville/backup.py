@@ -23,7 +23,8 @@ def backup_db(conn: sqlite3.Connection, keep: int = KEEP_BACKUPS) -> Path:
     dest = out_dir / f"miniville-t{int(tick):06d}.db"
     conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     conn.commit()
-    shutil.copy2(src, dest)
+    from .db import snapshot_to
+    snapshot_to(src, dest)                # reads through the WAL, unlike copy2
     snaps = sorted(out_dir.glob("miniville-t*.db"))
     for old in snaps[:-keep]:
         old.unlink()

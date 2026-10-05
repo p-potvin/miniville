@@ -69,6 +69,9 @@ def _give_job(conn: sqlite3.Connection, agent_id: int, occupation: str, r) -> in
     occ = occupation or ""
     if "student" in occ.lower() or "retire" in occ.lower():
         return None
+    row = conn.execute("SELECT age FROM agents WHERE id=?", (agent_id,)).fetchone()
+    if row and row["age"] is not None and int(row["age"]) >= 65:
+        return None            # newcomers past retirement age do not take posts
     if r.random() < 0.10:      # 10% arrive between jobs
         return None
     tags = workplace_tags_for(occ)
