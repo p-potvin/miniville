@@ -23,4 +23,12 @@
       evacuate the venue, reroute the day; fire injures bystanders + reopen_day
       repair window; festivals ride the holiday machinery (`holiday_for`);
       `/api/shocks` + Gazette sections; cohabitation guard in life.py
-- [ ] Relationship graph viz in UI (cytoscape-lite canvas, optional)
+- [x] Relationship graph viz in UI — bond wheel (`/api/graph/<id>`, Pixi radial)
+- [x] Labour market (v0.8): `jobs.py` — venue staffing targets from capacity +
+      traffic scaled to a 92% employment rate, weekly hiring pass, voluntary
+      turnover, retirement at 65, `rebalance-jobs` migration. Fixed the venues
+      that could never be staffed (`open_workplaces` was kind='workplace' only),
+      the Town-Hall monoculture (348 of 435 jobs), and immigration's
+      job-holding minors
+- [ ] Soak the labour market over 2 years and compare with the pre-fix run
+      (baseline: jobs 435->404, unemployment 13.1%->19.7%)

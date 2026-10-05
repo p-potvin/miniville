@@ -522,12 +522,24 @@ def open_workplaces(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 # --- labour market ----------------------------------------------------------
 
 
+RETIREMENT_AGE = 65
+
+
 def unemployment(conn: sqlite3.Connection) -> float:
+    """Share of the *working-age* population without a job.
+
+    Retirees are not unemployed — counting them made every pensioner look like
+    a jobseeker, and once residents started retiring at 65 the rate read 27%
+    for a town whose labour market was actually tight.
+    """
     adults = conn.execute(
-        "SELECT COUNT(*) c FROM agents WHERE alive=1 AND is_child=0").fetchone()["c"]
+        "SELECT COUNT(*) c FROM agents WHERE alive=1 AND is_child=0 AND age < ?",
+        (RETIREMENT_AGE,)).fetchone()["c"]
     if not adults:
         return 0.0
-    employed = conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
+    employed = conn.execute(
+        """SELECT COUNT(*) c FROM jobs j JOIN agents a ON a.id=j.agent_id
+           WHERE a.alive=1 AND a.age < ?""", (RETIREMENT_AGE,)).fetchone()["c"]
     return max(0.0, (adults - employed) / adults)
 
 

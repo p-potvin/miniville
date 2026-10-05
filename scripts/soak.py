@@ -45,9 +45,16 @@ def snapshot(conn: sqlite3.Connection, day: int) -> dict:
     money = q("SELECT COALESCE(SUM(s.money_cents),0) n FROM agent_state s "
               "JOIN agents a ON a.id=s.agent_id WHERE a.alive=1").fetchone()["n"]
     reserves = q("SELECT COALESCE(SUM(balance_cents),0) n FROM businesses").fetchone()["n"]
+    working_age = q(
+        "SELECT COUNT(*) n FROM agents WHERE alive=1 AND is_child=0 AND age<65"
+    ).fetchone()["n"]
+    retired = q(
+        "SELECT COUNT(*) n FROM agents WHERE alive=1 AND occupation='Retired'"
+    ).fetchone()["n"]
     return {
         "day": day, "alive": alive, "adults": adults, "children": kids,
-        "seniors": seniors, "dead": dead, "households": homes, "jobs": jobs,
+        "seniors": seniors, "working_age": working_age, "retired": retired,
+        "dead": dead, "households": homes, "jobs": jobs,
         "spouses": rel.get("spouse", 0), "partners": rel.get("partner", 0),
         "sweethearts": rel.get("sweetheart", 0),
         "close_friends": rel.get("close_friend", 0),

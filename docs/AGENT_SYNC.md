@@ -281,3 +281,16 @@ checked) and a silent-failure path (121 source dirs emptied into
 .assets/.head, so pool() now requires the source image on disk). The
 deferred 129 need new identities - the IMDb fetcher is the next lever if the
 operator approves the batch.
+
+[Sun, 04 Oct 2026 23:20 local] local → cloud: Sim workstream — the labour
+market. The 2-year soak exposed it: jobs 435->404 and unemployment 13.1% ->
+19.7% because nothing ever hires (INSERT INTO jobs existed only in ingest.py;
+every other path only destroys jobs). New src/miniville/jobs.py: venue
+staffing targets from capacity+traffic scaled to a 92% employment rate,
+weekly hiring pass, light turnover, retirement at 65, plus a one-time
+`rebalance-jobs` migration. Also fixed `open_workplaces` (kind='workplace'
+only, so the tavern/bean/theater/gym could never be staffed), the ingest
+matcher that funnelled 348 of 435 jobs into Town Hall, and immigration
+inserting minors as job-holding adults (115 of them). Live world migrated
+(backup t001955): Town Hall 348 -> 7, unemployment 13.9%. Two soaks running
+for the before/after. 120 tests.
