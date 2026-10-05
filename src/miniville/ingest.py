@@ -247,9 +247,10 @@ def populate(conn: sqlite3.Connection, dataset_dir: str, n_agents: int,
         shift_len = shift_r.randint(14, 18)
         wage = shift_r.randint(economy.WAGE_MIN_CENTS, economy.WAGE_MAX_CENTS)
         conn.execute(
-            "INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,work_days)"
-            " VALUES(?,?,?,?,?,?,?)",
-            (row["id"], wid, occ, wage, shift_start, min(shift_start + shift_len, 44), 62))
+            "INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,"
+            "work_days,started_tick,rank) VALUES(?,?,?,?,?,?,?,?,0)",
+            (row["id"], wid, occ, wage, shift_start, min(shift_start + shift_len, 44),
+             62, 0))
         conn.execute("UPDATE agents SET work_place_id=? WHERE id=?", (wid, row["id"]))
         n_employed += 1
 

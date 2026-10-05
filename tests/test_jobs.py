@@ -138,6 +138,58 @@ def test_retirement_frees_the_post(conn, monkeypatch):
     assert conn.execute("SELECT 1 FROM events WHERE data LIKE '%retired%'").fetchone()
 
 
+def _employ_with_tenure(conn, aid, place_name, started_day, rank=0, degree=None):
+    conn.execute(
+        """INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,
+           work_days,started_tick,rank) VALUES(?,?,'clerk',10000,16,30,62,?,?)""",
+        (aid, place_id(conn, place_name), started_day * 48, rank))
+    if degree:
+        conn.execute("UPDATE agents SET education_level=? WHERE id=?", (degree, aid))
+    conn.commit()
+
+
+def test_careers_do_nothing_in_the_first_year(conn):
+    _employ_with_tenure(conn, 1, "Miniville Grocer", started_day=200)
+    out = jobs.careers(conn, tick=200 * 48, seed="test")
+    assert out == {"raised": 0, "promoted": 0}
+    row = conn.execute("SELECT rank, wage_cents FROM jobs WHERE agent_id=1").fetchone()
+    assert row["rank"] == 0 and row["wage_cents"] == 10000
+
+
+def test_careers_promote_after_a_year(conn, monkeypatch):
+    monkeypatch.setattr(jobs, "PROMOTE_ANNUAL", 1.0)
+    monkeypatch.setattr(jobs, "SENIORITY_ANNUAL", 0.0)
+    _employ_with_tenure(conn, 1, "Miniville Grocer", started_day=0)
+    out = jobs.careers(conn, tick=400 * 48, seed="test")
+    assert out["promoted"] == 1
+    row = conn.execute("SELECT rank, wage_cents FROM jobs WHERE agent_id=1").fetchone()
+    assert row["rank"] == 1
+    assert row["wage_cents"] == int(10000 * (1 + jobs.PROMOTE_RAISE))
+    assert conn.execute(
+        "SELECT 1 FROM events WHERE data LIKE '%was made senior%'").fetchone()
+
+
+def test_a_degree_promotes_faster_than_none(conn, monkeypatch):
+    monkeypatch.setattr(jobs, "PROMOTE_ANNUAL", 0.0)
+    monkeypatch.setattr(jobs, "PROMOTE_ANNUAL_DEGREE", 1.0)
+    monkeypatch.setattr(jobs, "SENIORITY_ANNUAL", 0.0)
+    _employ_with_tenure(conn, 1, "Miniville Grocer", started_day=0)                 # no degree
+    _employ_with_tenure(conn, 2, "Old Mill Shops", started_day=0, degree="bachelors")
+    out = jobs.careers(conn, tick=400 * 48, seed="test")
+    assert out["promoted"] == 1
+    assert conn.execute("SELECT rank FROM jobs WHERE agent_id=1").fetchone()["rank"] == 0
+    assert conn.execute("SELECT rank FROM jobs WHERE agent_id=2").fetchone()["rank"] == 1
+
+
+def test_a_career_tops_out_at_head_of_venue(conn, monkeypatch):
+    monkeypatch.setattr(jobs, "PROMOTE_ANNUAL", 1.0)
+    monkeypatch.setattr(jobs, "SENIORITY_ANNUAL", 0.0)
+    _employ_with_tenure(conn, 1, "Miniville Grocer", started_day=0, rank=2)
+    out = jobs.careers(conn, tick=2000 * 48, seed="test")
+    assert out["promoted"] == 0
+    assert conn.execute("SELECT rank FROM jobs WHERE agent_id=1").fetchone()["rank"] == 2
+
+
 def test_turnover_sheds_the_surplus_at_one_venue(conn):
     add_workers(conn, 12, CLERK)
     pid = place_id(conn, "Town Hall")

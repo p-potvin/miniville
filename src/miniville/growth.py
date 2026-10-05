@@ -18,6 +18,7 @@ import json
 import sqlite3
 
 from . import economy
+from .db import get_meta
 from .events import HISTORIC, NOTABLE, emit
 from .ingest import _list_field, _name_of, load_persona_rows
 from .rng import rng_for
@@ -95,10 +96,11 @@ def _give_job(conn: sqlite3.Connection, agent_id: int, occupation: str, r,
     shift_start = r.choice([12, 14, 16, 18])
     conn.execute(
         "INSERT OR REPLACE INTO jobs(agent_id,place_id,role,wage_cents,"
-        "shift_start,shift_end,work_days) VALUES(?,?,?,?,?,?,62)",
+        "shift_start,shift_end,work_days,started_tick,rank) VALUES(?,?,?,?,?,?,62,?,0)",
         (agent_id, place_id, occ,
          r.randint(economy.WAGE_MIN_CENTS, economy.WAGE_MAX_CENTS), shift_start,
-         min(shift_start + r.randint(14, 18), 44)))
+         min(shift_start + r.randint(14, 18), 44),
+         int(get_meta(conn, "tick", "0") or 0)))
     conn.execute("UPDATE agents SET work_place_id=? WHERE id=?",
                  (place_id, agent_id))
     return place_id

@@ -79,7 +79,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     wage_cents INTEGER NOT NULL,
     shift_start INTEGER NOT NULL,   -- tick-of-day
     shift_end INTEGER NOT NULL,
-    work_days INTEGER NOT NULL DEFAULT 62   -- bitmask Mon..Sun, 62 = Mon-Fri
+    work_days INTEGER NOT NULL DEFAULT 62,  -- bitmask Mon..Sun, 62 = Mon-Fri
+    -- a career, not just a post: tenure earns rank and a little more money
+    started_tick INTEGER,
+    rank INTEGER NOT NULL DEFAULT 0         -- 0 worker, 1 senior, 2 manager
 );
 
 -- Current-day plan (rebuilt each day): agent_id -> tick -> place_id
@@ -299,6 +302,17 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE agents ADD COLUMN avatar_path TEXT")
     if "birth_day" not in cols:
         conn.execute("ALTER TABLE agents ADD COLUMN birth_day INTEGER")
+
+    # careers: tenure and rank on the post. Existing worlds start accruing
+    # tenure from now rather than instantly promoting everyone.
+    if _has_table(conn, "jobs"):
+        jcols = {r["name"] for r in conn.execute("PRAGMA table_info(jobs)")}
+        if "started_tick" not in jcols:
+            conn.execute("ALTER TABLE jobs ADD COLUMN started_tick INTEGER")
+            conn.execute("UPDATE jobs SET started_tick=?",
+                         (int(get_meta(conn, "tick", "0") or 0),))
+        if "rank" not in jcols:
+            conn.execute("ALTER TABLE jobs ADD COLUMN rank INTEGER NOT NULL DEFAULT 0")
 
     # shocks can schedule a venue's reopening day (fire repairs take as long as
     # they take, not the market's 21 days)

@@ -90,6 +90,7 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     if day_of(tick) % 7 == 0:
         stats["turnover"] = jobs.turnover(conn, tick, seed)
         stats["hiring"] = jobs.hiring_pass(conn, tick, seed)["hired"]
+        stats["careers"] = jobs.careers(conn, tick, seed)
 
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)

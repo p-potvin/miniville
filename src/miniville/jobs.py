@@ -27,6 +27,7 @@ import sqlite3
 from .economy import WAGE_INDEX_MIN, WAGE_MAX_CENTS, WAGE_MIN_CENTS, wage_index
 from .events import MINOR, NOTABLE, emit
 from .rng import rng_for
+from .timekeeper import day_of
 from .world import workplace_tags_for
 
 # a venue's crew, scaled by what it has to do
@@ -112,9 +113,9 @@ def _hire(conn: sqlite3.Connection, agent_id: int, place_id: int, occupation: st
     shift_start = r.choice([12, 14, 16, 18])
     conn.execute(
         "INSERT OR REPLACE INTO jobs(agent_id,place_id,role,wage_cents,"
-        "shift_start,shift_end,work_days) VALUES(?,?,?,?,?,?,62)",
+        "shift_start,shift_end,work_days,started_tick,rank) VALUES(?,?,?,?,?,?,62,?,0)",
         (agent_id, place_id, occupation or "worker", _wage_for(conn, r),
-         shift_start, min(shift_start + r.randint(14, 18), 44)))
+         shift_start, min(shift_start + r.randint(14, 18), 44), tick))
     conn.execute("UPDATE agents SET work_place_id=? WHERE id=?", (place_id, agent_id))
 
 
@@ -200,6 +201,69 @@ def hiring_pass(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         hired.append((cand["id"], pid))
 
     return {"hired": len(hired), "left": 0, "vacancies": total_open - len(hired)}
+
+
+# careers
+RANK_NAMES = {0: "", 1: "senior ", 2: "head "}
+PROMOTE_ANNUAL = 0.55        # chance a year's tenure turns into a promotion
+PROMOTE_ANNUAL_DEGREE = 0.75  # ...if they have a degree
+PROMOTE_RAISE = 0.12         # pay bump on promotion
+SENIORITY_ANNUAL = 0.02      # everyone's pay drifts up with tenure
+SENIORITY_MAX = 0.40         # ...up to this much above the post's start
+
+
+def careers(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
+    """Tenure earns rank and money; runs weekly.
+
+    A town where a post is just a post has no careers in it — the same person
+    holds the same job at the same wage until they die or are fired. Tenure now
+    buys a yearly raise and, at most one step a year, a promotion: worker ->
+    senior -> head of the venue. Education decides who moves faster, which is
+    the first thing in the sim that a persona's `education_level` actually
+    does.
+    """
+    day = day_of(tick)
+    rows = conn.execute(
+        """SELECT j.agent_id, j.place_id, j.role, j.wage_cents, j.rank,
+                  j.started_tick, a.name aname, a.education_level, p.name pname
+           FROM jobs j JOIN agents a ON a.id=j.agent_id
+           JOIN places p ON p.id=j.place_id
+           WHERE a.alive=1""").fetchall()
+    if not rows:
+        return {"raised": 0, "promoted": 0}
+    r = rng_for(seed, "career", tick)
+    raised = promoted = 0
+    for row in rows:
+        started = row["started_tick"]
+        if started is None:
+            continue
+        years = (day - day_of(int(started))) // 365
+        if years < 1:
+            continue
+        # one raise a year, tracked by rank thresholds so a re-run is a no-op
+        rank = int(row["rank"] or 0)
+        if rank >= 2 and rank >= years + 1:
+            continue
+        degree = bool((row["education_level"] or "").lower() in
+                      ("bachelors", "masters", "doctorate", "phd", "professional"))
+        p = PROMOTE_ANNUAL_DEGREE if degree else PROMOTE_ANNUAL
+        if rank < min(2, years) and r.random() < p:
+            rank += 1
+            wage = int(row["wage_cents"] * (1 + PROMOTE_RAISE))
+            conn.execute("UPDATE jobs SET rank=?, wage_cents=? WHERE agent_id=?",
+                         (rank, wage, row["agent_id"]))
+            emit(conn, tick, "life_event", a=row["agent_id"], place_id=row["place_id"],
+                 importance=NOTABLE,
+                 text=f"was made {RANK_NAMES[rank]}{row['role']} at {row['pname']} "
+                      f"after {years} year{'s' if years > 1 else ''}",
+                 tag="promoted")
+            promoted += 1
+        elif r.random() < SENIORITY_ANNUAL:
+            wage = int(row["wage_cents"] * (1 + SENIORITY_ANNUAL))
+            conn.execute("UPDATE jobs SET wage_cents=? WHERE agent_id=?",
+                         (wage, row["agent_id"]))
+            raised += 1
+    return {"raised": raised, "promoted": promoted}
 
 
 def fix_minor_flags(conn: sqlite3.Connection) -> int:
