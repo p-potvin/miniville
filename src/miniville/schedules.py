@@ -184,13 +184,36 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
                 continue
         plan[t] = (home, "home")
 
+    # a gathering outranks whatever else was planned for that hour: the club
+    # meets, the congregation worships, and the room fills with your people
+    meeting = ctx.get("meetings", {}).get(agent["id"])
+    if meeting:
+        venue_id, meet_tick, _name = meeting
+        if in_work_shift_for(works_today, job, meet_tick) is False:
+            plan[meet_tick] = (venue_id, "gathering")
+
     return [(t, p, a) for t, (p, a) in sorted(plan.items())]
+
+
+def in_work_shift_for(works_today: bool, job, tick: int) -> bool:
+    """True when the tick falls inside a shift — a gathering never pulls
+    someone off their post."""
+    if not works_today or job is None:
+        return False
+    start, end = job["shift_start"], job["shift_end"]
+    if start < end:
+        return start <= tick < end
+    return tick >= start or tick < end
 
 
 def rebuild_day_plans(conn: sqlite3.Connection, day: int, seed: str) -> int:
     conn.execute("DELETE FROM plans")
     agents = conn.execute("SELECT * FROM agents WHERE alive=1").fetchall()
     ctx = _plan_ctx(conn)
+    # today's gatherings, one query for the whole town: a group is just an
+    # arrangement of who is in the room, and encounters do the rest
+    from .groups import meetings_today
+    ctx["meetings"] = meetings_today(conn, day)
     rows = []
     for a in agents:
         rows.extend(

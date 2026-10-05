@@ -220,6 +220,44 @@ def cmd_immigrate(args) -> int:
     return 0
 
 
+def cmd_form_groups(args) -> int:
+    from .db import get_meta
+    from .groups import assign_faith, form_groups, refresh_standing, roster
+    conn = _conn(args)
+    seed = get_meta(conn, "seed", "miniville")
+    tick = int(get_meta(conn, "tick", "0") or 0)
+    faith = assign_faith(conn)
+    print(f"faith parsed from personas: {faith['named']} residents "
+          f"({faith['inherited']} children inherited)")
+    out = form_groups(conn, tick, seed)
+    refresh_standing(conn)
+    conn.commit()
+    for g in out["founded"]:
+        print(f"  founded {g['name']} ({g['kind']}, {g['members']} members)")
+    if not out["founded"]:
+        print("  nothing new to found")
+    return cmd_groups(args)
+
+
+def cmd_groups(args) -> int:
+    from .groups import roster
+    conn = _conn(args)
+    rows = roster(conn)
+    if not rows:
+        print("no groups yet — run `form-groups`")
+        return 0
+    print(f"\n{'group':32s} {'kind':13s} {'members':>7s} {'standing':>8s}  meets")
+    for r in rows:
+        when = ""
+        if r["meets_day"] is not None and r["meets_tick"] is not None:
+            day = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][r["meets_day"]]
+            when = f"{day} {r['meets_tick'] // 2:02d}:{(r['meets_tick'] % 2) * 30:02d} " \
+                   f"at {r['venue']}"
+        print(f"  {r['name'][:30]:30s} {r['kind']:13s} {r['members']:7d} "
+              f"{r['standing']:+8d}  {when}")
+    return 0
+
+
 def cmd_rebalance_jobs(args) -> int:
     from .db import get_meta
     from .jobs import fix_minor_flags, rebalance, venue_targets
@@ -471,6 +509,11 @@ def main(argv=None) -> int:
     pjb = sub.add_parser("rebalance-jobs",
                          help="move surplus jobs onto the venues that need them")
     pjb.set_defaults(fn=cmd_rebalance_jobs)
+    pgf = sub.add_parser("form-groups",
+                         help="found the town's congregations and clubs")
+    pgf.set_defaults(fn=cmd_form_groups)
+    pgl = sub.add_parser("groups", help="list the town's affiliations")
+    pgl.set_defaults(fn=cmd_groups)
 
     args = p.parse_args(argv)
     return args.fn(args)

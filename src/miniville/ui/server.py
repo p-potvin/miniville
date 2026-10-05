@@ -195,10 +195,12 @@ def create_app(db_path: str | None = None) -> FastAPI:
             mems = [{"day": m["day"] + 1, "kind": m["kind"], "text": m["text"],
                      "importance": m["importance"]}
                     for m in retrieve(c, agent_id, k=8)]
+            from ..groups import memberships_of
             return {"agent": dict(a), "state": dict(st) if st else {},
                     "job": dict(job) if job else None,
                     "debts": {"owes": owed_by, "owed": owed_to},
-                    "relationships": rels, "recent": recent, "memories": mems}
+                    "relationships": rels, "recent": recent, "memories": mems,
+                    "groups": memberships_of(c, agent_id)}
         finally:
             c.close()
 
@@ -363,6 +365,16 @@ def create_app(db_path: str | None = None) -> FastAPI:
                          "sex": names[i]["sex"], "ring": 2}
                         for i in ring2 if i in names])
             return {"ego": dict(ego), "nodes": nodes, "edges": edges}
+        finally:
+            c.close()
+
+    @app.get("/api/groups")
+    def groups_view():
+        """The town's affiliations, with their rosters."""
+        from ..groups import roster
+        c = conn()
+        try:
+            return {"groups": roster(c)}
         finally:
             c.close()
 

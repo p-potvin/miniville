@@ -40,7 +40,9 @@ CREATE TABLE IF NOT EXISTS agents (
     alive INTEGER NOT NULL DEFAULT 1,
     is_child INTEGER NOT NULL DEFAULT 0,
     -- what the town thinks of them, accrued from the ledger (reputation.py)
-    standing INTEGER NOT NULL DEFAULT 0
+    standing INTEGER NOT NULL DEFAULT 0,
+    -- tradition parsed from the persona's cultural background (groups.py)
+    faith TEXT
 );
 
 -- Mutable per-agent state, updated every tick
@@ -206,6 +208,29 @@ CREATE TABLE IF NOT EXISTS businesses (
     last_settled_day INTEGER NOT NULL DEFAULT -1
 );
 
+-- The town's affiliations: congregations, clubs, unions, societies. The
+-- relationships table is pairwise and households are private; a group is the
+-- missing layer that turns a set of residents into a *society* — who you
+-- gather with, who your people are.
+CREATE TABLE IF NOT EXISTS groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    kind TEXT NOT NULL,                 -- congregation | club | union
+    venue_id INTEGER REFERENCES places(id),
+    meets_day INTEGER,                  -- 0=Mon .. 6=Sun, NULL = no fixed day
+    meets_tick INTEGER,                 -- tick-of-day it gathers
+    founded_tick INTEGER NOT NULL DEFAULT 0,
+    standing INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS memberships (
+    group_id INTEGER NOT NULL REFERENCES groups(id),
+    agent_id INTEGER NOT NULL REFERENCES agents(id),
+    role TEXT NOT NULL DEFAULT 'member', -- founder | officer | member
+    joined_tick INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (group_id, agent_id)
+);
+CREATE INDEX IF NOT EXISTS idx_memberships_agent ON memberships(agent_id);
+
 -- The town's own purse. Weekly rent and the non-rebated part of the business
 -- levy flow in; public-service payroll (hospital, school, town hall, library,
 -- church, park) flows out. Before this existed, rent was destroyed outright
@@ -307,6 +332,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "standing" not in cols:
         # what the town thinks of them, accrued from the ledger by reputation.py
         conn.execute("ALTER TABLE agents ADD COLUMN standing INTEGER NOT NULL DEFAULT 0")
+    if "faith" not in cols:
+        # derived from the persona's own cultural background (groups.py)
+        conn.execute("ALTER TABLE agents ADD COLUMN faith TEXT")
 
     # careers: tenure and rank on the post. Existing worlds start accruing
     # tenure from now rather than instantly promoting everyone.

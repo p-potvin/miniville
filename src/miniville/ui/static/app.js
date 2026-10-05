@@ -59,6 +59,11 @@ async function residentCard(id) {
     <h4>IOUs</h4>
     <ul>${r.debts.owes.map(d => `<li>owes ${esc(d.creditor)} — ${esc(d.kind)}</li>`).join("")}
         ${r.debts.owed.map(d => `<li>${esc(d.debtor)} owes them — ${esc(d.kind)}</li>`).join("")}</ul>` : ""}
+    ${r.groups && r.groups.length ? `
+    <h4>Belongs to</h4>
+    <ul>${r.groups.map(g =>
+      `<li><b>${esc(g.name)}</b> <span class="t">${esc(g.kind)} · ${esc(g.role)}`
+      + `${g.venue ? ` · meets at ${esc(g.venue)}` : ""}</span></li>`).join("")}</ul>` : ""}
     <h4>Relationships</h4>
     <ul>${r.relationships.map(x =>
       `<li>${esc(x.name)} — ${x.label} (fam ${Math.round(x.familiarity)},
