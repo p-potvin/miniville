@@ -89,6 +89,16 @@ def test_immigrate_adds_residents(conn, monkeypatch):
         "SELECT COUNT(*) c FROM events WHERE kind='arrival'").fetchone()["c"] == 3
 
 
+def test_give_job_respects_staffing_room(conn):
+    """Immigration hires through the venue targets, not around them."""
+    from miniville.growth import _give_job
+    from miniville.rng import rng_for
+    assert _give_job(conn, 1, "nurse", rng_for("test", "job"), room={}) is None
+    room = {conn.execute("SELECT id FROM places WHERE name LIKE '%Hospital%'").fetchone()["id"]: 1}
+    hired = _give_job(conn, 1, "nurse", rng_for("test", "job"), room=room)
+    assert hired is not None and not room[hired]
+
+
 def test_immigrate_flags_minors_as_children(conn, monkeypatch):
     """The dataset includes minors; they used to arrive as job-holding adults."""
     rows = [{

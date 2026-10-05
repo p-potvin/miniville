@@ -64,8 +64,14 @@ def _new_household(conn: sqlite3.Connection, members: list[int],
     return hid
 
 
-def _give_job(conn: sqlite3.Connection, agent_id: int, occupation: str, r) -> int | None:
-    """Hire a newcomer at the workplace best matching their occupation."""
+def _give_job(conn: sqlite3.Connection, agent_id: int, occupation: str, r,
+              room: dict[int, int] | None = None) -> int | None:
+    """Hire a newcomer at the workplace best matching their occupation.
+
+    `room` is the venue vacancy map (place_id -> open posts). Hiring through
+    the same targets the rest of the labour market uses stops immigration
+    from overfilling venues and pushing the town past full employment.
+    """
     occ = occupation or ""
     if "student" in occ.lower() or "retire" in occ.lower():
         return None
@@ -77,12 +83,15 @@ def _give_job(conn: sqlite3.Connection, agent_id: int, occupation: str, r) -> in
     tags = workplace_tags_for(occ)
     rows = economy.open_workplaces(conn)
     scored = sorted(
-        ((len(set(json.loads(x["tags"])) & set(tags)), x["id"]) for x in rows),
+        ((len(set(json.loads(x["tags"])) & set(tags)), x["id"]) for x in rows
+         if room is None or room.get(x["id"], 0) > 0),
         key=lambda t: -t[0])
     if not scored:
         return None
     best = scored[0][0]
     place_id = r.choice([pid for s, pid in scored if s == best])
+    if room is not None:
+        room[place_id] -= 1
     shift_start = r.choice([12, 14, 16, 18])
     conn.execute(
         "INSERT OR REPLACE INTO jobs(agent_id,place_id,role,wage_cents,"
@@ -108,6 +117,8 @@ def immigrate(conn: sqlite3.Connection, n: int, tick: int, seed: str,
     if not fresh:
         return 0
 
+    from .jobs import vacancies
+    room = dict(vacancies(conn))       # newcomers only take posts that exist
     arrived = 0
     for i, row in enumerate(fresh):
         r = rng_for(seed, "immigrate", tick, i)
@@ -146,7 +157,7 @@ def immigrate(conn: sqlite3.Connection, n: int, tick: int, seed: str,
                 _new_household(conn, [aid], home, surname)
         else:
             _new_household(conn, [aid], home, surname)
-            _give_job(conn, aid, row.get("occupation") or "", r)
+            _give_job(conn, aid, row.get("occupation") or "", r, room)
         conn.execute(
             "INSERT INTO agent_state(agent_id, place_id, money_cents) VALUES(?,?,?)",
             (aid, home, r.randint(economy.STARTING_MONEY_MIN,
