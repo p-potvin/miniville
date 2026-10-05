@@ -231,6 +231,37 @@ CREATE TABLE IF NOT EXISTS memberships (
 );
 CREATE INDEX IF NOT EXISTS idx_memberships_agent ON memberships(agent_id);
 
+-- The town council. Politics that does not move the world is decoration, so
+-- every motion a council passes here changes a number the economy actually
+-- reads (the levy, the dividend, rent, the wage floor).
+CREATE TABLE IF NOT EXISTS council (
+    seat INTEGER PRIMARY KEY,               -- 1..SEATS
+    agent_id INTEGER REFERENCES agents(id),
+    elected_tick INTEGER NOT NULL,
+    district TEXT,
+    backers INTEGER NOT NULL DEFAULT 0,
+    backers_wallet INTEGER NOT NULL DEFAULT 0,   -- median wallet of their voters
+    backers_unemployed REAL NOT NULL DEFAULT 0   -- share of their voters out of work
+);
+CREATE TABLE IF NOT EXISTS elections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tick INTEGER NOT NULL,
+    day INTEGER NOT NULL,
+    turnout INTEGER NOT NULL,
+    summary TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS motions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tick INTEGER NOT NULL,
+    day INTEGER NOT NULL,
+    policy TEXT NOT NULL,
+    direction INTEGER NOT NULL,             -- +1 raise, -1 lower
+    value REAL NOT NULL,                    -- the value it would set
+    passed INTEGER NOT NULL,
+    votes_for INTEGER NOT NULL,
+    votes_against INTEGER NOT NULL
+);
+
 -- The town's own purse. Weekly rent and the non-rebated part of the business
 -- levy flow in; public-service payroll (hospital, school, town hall, library,
 -- church, park) flows out. Before this existed, rent was destroyed outright

@@ -173,13 +173,15 @@ def venue_price(tags: set[str], activity: str, price_index: float = 1.0) -> int:
 
 
 def rent_for(conn: sqlite3.Connection, home_place_id: int | None) -> int:
+    """Weekly rent, scaled by whatever rent policy the council has passed."""
     if home_place_id is None:
-        return DEFAULT_RENT
-    row = conn.execute("SELECT district FROM places WHERE id=?",
-                       (home_place_id,)).fetchone()
-    if not row:
-        return DEFAULT_RENT
-    return RENT_BY_DISTRICT.get(row["district"], DEFAULT_RENT)
+        base = DEFAULT_RENT
+    else:
+        row = conn.execute("SELECT district FROM places WHERE id=?",
+                           (home_place_id,)).fetchone()
+        base = RENT_BY_DISTRICT.get(row["district"], DEFAULT_RENT) if row else DEFAULT_RENT
+    from .politics import policy
+    return int(base * policy(conn, "rent_multiplier"))
 
 
 # --- business bookkeeping ---------------------------------------------------
@@ -229,9 +231,13 @@ def pay_wages(conn: sqlite3.Connection, tick: int) -> int:
                          WHERE p.agent_id=j.agent_id
                            AND p.activity IN ('work','break'))""",
         (tod,)).fetchall()
+    # a council-set wage floor, as a share of the top of the band: 0 means no
+    # floor at all, so an untouched town pays exactly what it always did
+    from .politics import policy
+    floor = int(policy(conn, "min_wage") * WAGE_MAX_CENTS)
     total = 0
     for row in rows:
-        paid = int(round(row["wage_cents"] * idx))
+        paid = max(floor, int(round(row["wage_cents"] * idx)))
         conn.execute(
             "UPDATE agent_state SET money_cents=money_cents+? WHERE agent_id=?",
             (paid, row["agent_id"]))
@@ -376,11 +382,14 @@ def weekly_levy(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     if day % 7 != 0 or day == 0:
         return {"levied": 0, "dividend": 0, "residents": 0}
 
+    from .politics import policy
+    levy_rate = policy(conn, "levy_rate")          # the council sets this
+    dividend_share = policy(conn, "dividend_share")
     levied = 0
     for b in conn.execute(
             "SELECT place_id, balance_cents FROM businesses WHERE balance_cents > 0"
     ).fetchall():
-        take = int(b["balance_cents"] * BUSINESS_TAX_RATE)
+        take = int(b["balance_cents"] * levy_rate)
         if take <= 0:
             continue
         conn.execute("UPDATE businesses SET balance_cents=balance_cents-? WHERE place_id=?",
@@ -391,8 +400,8 @@ def weekly_levy(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
 
     # the rest of the levy is what the town runs on — the hospital, the school,
     # the town hall — so it goes into the purse that pays their payroll
-    town_credit(conn, levied - int(levied * LEVY_DIVIDEND_SHARE))
-    pot = int(levied * LEVY_DIVIDEND_SHARE)
+    town_credit(conn, levied - int(levied * dividend_share))
+    pot = int(levied * dividend_share)
     # the purse keeps a few weeks of payroll in hand; anything above that is
     # the residents' money sitting in a drawer, so it goes back out with the
     # dividend. Without this valve the purse swallowed rent forever and every

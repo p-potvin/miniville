@@ -11,6 +11,7 @@ from . import (
     growth,
     jobs,
     memory,
+    politics,
     reputation,
     mortality,
     newspaper,
@@ -105,6 +106,10 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     stats["births"] = growth.births(conn, tick, seed)
     # what the town made of yesterday, after everyone who acted on it is gone
     stats["standing"] = reputation.accrue(conn, tick, seed)
+    # and the town's own decisions: an election every two years, a motion a month
+    decided = politics.due(conn, tick)
+    if decided:
+        stats["politics"] = decided
     return stats
 
 

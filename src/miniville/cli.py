@@ -229,6 +229,71 @@ def cmd_immigrate(args) -> int:
     return 0
 
 
+def cmd_council(args) -> int:
+    from .db import get_meta
+    from .politics import POLICIES, council, next_election_day, policy
+    conn = _conn(args)
+    day = int(get_meta(conn, "tick", "0") or 0) // 48
+    seats = council(conn)
+    if not seats:
+        print("no council seated yet — run `election`")
+    else:
+        print(f"{'seat':4s} {'councillor':22s} {'district':18s} {'votes':>6s} "
+              f"{'wallet':>10s} {'out of work':>11s}")
+        for s in seats:
+            print(f"  {s['seat']:<2d} {s['name'] or '?':22s} {s['district'] or '?':18s} "
+                  f"{s['backers']:6d} {s['backers_wallet'] / 100:10,.0f} "
+                  f"{s['backers_unemployed'] * 100:10.0f}%")
+    med = conn.execute(
+        """SELECT s.money_cents m FROM agent_state s JOIN agents a ON a.id=s.agent_id
+           WHERE a.alive=1 AND a.is_child=0 ORDER BY s.money_cents""").fetchall()
+    if med:
+        print(f"\nadult median wallet ${med[len(med) // 2]['m'] / 100:,.0f} "
+              f"— a district below it wants the wage floor raised, a district "
+              f"more out of work than average wants rent and the levy raised")
+    print(f"next election: day {next_election_day(conn)} (now day {day})")
+    print(f"{'policy':18s} {'now':>8s} {'default':>8s}   range")
+    for name, (default, low, high, _step) in sorted(POLICIES.items()):
+        print(f"  {name:16s} {policy(conn, name):8.3f} {default:8.3f}   "
+              f"{low} - {high}")
+    return 0
+
+
+def cmd_election(args) -> int:
+    from .db import get_meta
+    from .politics import hold_election
+    conn = _conn(args)
+    seed = get_meta(conn, "seed", "miniville")
+    tick = int(get_meta(conn, "tick", "0") or 0)
+    out = hold_election(conn, tick, seed)
+    conn.commit()
+    if not out["seated"]:
+        print("nobody stood for office")
+        return 0
+    print(f"turnout {out['turnout']}")
+    for s in out["seated"]:
+        print(f"  seat {s['seat']}: {s['name']} — {s['votes']} votes "
+              f"({s['district'] or 'no fixed address'})")
+    return 0
+
+
+def cmd_motion(args) -> int:
+    from .db import get_meta
+    from .politics import consider_motion
+    conn = _conn(args)
+    seed = get_meta(conn, "seed", "miniville")
+    tick = int(get_meta(conn, "tick", "0") or 0)
+    out = consider_motion(conn, tick, seed)
+    conn.commit()
+    if not out:
+        print("no council seated, or the policy is already at its rail")
+        return 0
+    verdict = "passed" if out["passed"] else "rejected"
+    print(f"{out['policy']} {'+' if out['direction'] > 0 else '-'}"
+          f"{out['value']:.3f} — {verdict} ({out['for']} for, {out['against']} against)")
+    return 0
+
+
 def cmd_form_groups(args) -> int:
     from .db import get_meta
     from .groups import assign_faith, form_groups, refresh_standing, roster
@@ -523,6 +588,12 @@ def main(argv=None) -> int:
     pgf.set_defaults(fn=cmd_form_groups)
     pgl = sub.add_parser("groups", help="list the town's affiliations")
     pgl.set_defaults(fn=cmd_groups)
+    pco = sub.add_parser("council", help="seats, policies and the next election")
+    pco.set_defaults(fn=cmd_council)
+    pel = sub.add_parser("election", help="hold a town election now")
+    pel.set_defaults(fn=cmd_election)
+    pmo = sub.add_parser("motion", help="put a motion to the council now")
+    pmo.set_defaults(fn=cmd_motion)
 
     args = p.parse_args(argv)
     return args.fn(args)
