@@ -13,20 +13,25 @@ def conn():
     c.execute("PRAGMA foreign_keys=ON")
     db.init_db(c)
     world.create_world(c)
-    # one resident per district, so every seat has somebody to fill it
+    # a few residents per district, so a seat has candidates and the vote
+    # actually spreads (a four-voter town concentrates on one name)
+    aid = 0
     for i, district in enumerate(world.DISTRICTS, start=1):
         c.execute("INSERT INTO places(name,kind,district,capacity) VALUES(?,?,?,6)",
                   (f"H{i}", "home", district))
         home = c.execute("SELECT id FROM places WHERE name=?", (f"H{i}",)).fetchone()["id"]
-        c.execute("INSERT INTO households(name,home_place_id) VALUES(?,?)",
-                  (f"household {i}", home))
-        c.execute(
-            """INSERT INTO agents(uuid,name,sex,age,is_child,marital_status,occupation,
-               hobbies_json,household_id,home_place_id,standing)
-               VALUES(?,?,'Female',40,0,'married_present','clerk','[]',?,?,?)""",
-            (f"t{i}", f"Resident {i}", i, home, 20 + i))
-        c.execute("INSERT INTO agent_state(agent_id,place_id,money_cents) VALUES(?,?,?)",
-                  (i, home, 500_000))
+        for k in range(4):
+            aid += 1
+            c.execute("INSERT INTO households(name,home_place_id) VALUES(?,?)",
+                      (f"household {aid}", home))
+            c.execute(
+                """INSERT INTO agents(uuid,name,sex,age,is_child,marital_status,occupation,
+                   hobbies_json,household_id,home_place_id,standing)
+                   VALUES(?,?,'Female',40,0,'married_present','clerk','[]',?,?,?)""",
+                (f"t{aid}", f"Resident {aid}", aid, home, 12 + aid))
+            c.execute(
+                "INSERT INTO agent_state(agent_id,place_id,money_cents) VALUES(?,?,?)",
+                (aid, home, 500_000))
     db.set_meta(c, "seed", "test")
     db.set_meta(c, "tick", "0")
     c.commit()
@@ -83,7 +88,7 @@ def _give_jobs(conn, n):
 
 def test_a_motion_that_carries_moves_the_policy(conn):
     # three districts leaning on the town, two paying their own way
-    _give_jobs(conn, 4)                     # a town with work in it
+    _give_jobs(conn, 16)                    # a town with work in it
     for seat in (1, 2, 3):
         _seat(conn, seat, 5_000, 0.60)
     for seat in (4, 5):
@@ -117,6 +122,23 @@ def test_a_motion_at_the_rail_is_not_proposed(conn):
             found = True
             break
     assert found, "no rent-rise motion was drawn in 400 days"
+
+
+def test_a_dead_councillor_is_replaced(conn):
+    out = politics.hold_election(conn, tick=0, seed="test")
+    assert out["seated"]
+    seat = conn.execute("SELECT seat, agent_id FROM council ORDER BY seat LIMIT 1").fetchone()
+    conn.execute("UPDATE agents SET alive=0 WHERE id=?", (seat["agent_id"],))
+    conn.commit()
+    politics.due(conn, tick=10 * 48)
+    conn.commit()
+    assert conn.execute("SELECT COUNT(*) n FROM council").fetchone()["n"] == politics.SEATS
+    living = conn.execute(
+        """SELECT COUNT(*) n FROM council c JOIN agents a ON a.id=c.agent_id
+           WHERE a.alive=1""").fetchone()["n"]
+    assert living == politics.SEATS
+    assert conn.execute(
+        "SELECT 1 FROM events WHERE data LIKE '%left the council%'").fetchone()
 
 
 def test_rent_follows_the_councils_policy(conn):

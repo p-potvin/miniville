@@ -305,7 +305,23 @@ def due(conn: sqlite3.Connection, tick: int) -> dict:
     day = day_of(tick)
     if day >= next_election_day(conn):
         out["election"] = hold_election(conn, tick, seed_for(conn))
-    elif day % 30 == 0:
+        return out
+    # a councillor who dies leaves a seat; the town fills it rather than
+    # keeping a seat warm for a corpse until the next scheduled election
+    vacant = conn.execute(
+        """SELECT c.seat, a.name FROM council c
+           LEFT JOIN agents a ON a.id=c.agent_id
+           WHERE a.id IS NULL OR a.alive=0""").fetchall()
+    if vacant:
+        names = ", ".join(r["name"] or "the late member" for r in vacant)
+        conn.execute("DELETE FROM council WHERE seat IN "
+                     f"({','.join('?' * len(vacant))})", [r["seat"] for r in vacant])
+        emit(conn, tick, "town_event", importance=NOTABLE,
+             text=f"{names} left the council; the town will vote again",
+             tag="seat_vacated", seats=len(vacant))
+        out["election"] = hold_election(conn, tick, seed_for(conn))
+        return out
+    if day % 30 == 0:
         m = consider_motion(conn, tick, seed_for(conn))
         if m:
             out["motion"] = m
