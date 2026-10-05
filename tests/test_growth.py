@@ -89,6 +89,26 @@ def test_immigrate_adds_residents(conn, monkeypatch):
         "SELECT COUNT(*) c FROM events WHERE kind='arrival'").fetchone()["c"] == 3
 
 
+def test_immigrate_flags_minors_as_children(conn, monkeypatch):
+    """The dataset includes minors; they used to arrive as job-holding adults."""
+    rows = [{
+        "uuid": "kid-1", "persona": "Robin Newcomer is nine.",
+        "professional_persona": "", "sex": "Female", "age": 9,
+        "marital_status": "never_married", "education_level": None,
+        "occupation": "student", "city": "Springfield", "state": "IL",
+        "hobbies_and_interests_list": [], "skills_and_expertise_list": [],
+        "cultural_background": "",
+    }]
+    monkeypatch.setattr(growth, "load_persona_rows", lambda *a, **k: rows)
+    assert growth.immigrate(conn, 1, tick=48, seed="test") == 1
+    kid = conn.execute("SELECT * FROM agents WHERE uuid='kid-1'").fetchone()
+    assert kid["is_child"] == 1
+    assert kid["age"] == 9
+    assert not conn.execute("SELECT 1 FROM jobs WHERE agent_id=?", (kid["id"],)).fetchone()
+    # they join a household rather than heading one
+    assert kid["household_id"] == 1
+
+
 def test_immigrate_skips_known_uuids(conn, monkeypatch):
     rows = [{"uuid": "t0", "persona": "Ada Ashbrook again.", "sex": "Female",
              "age": 30, "occupation": "teacher",

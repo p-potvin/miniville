@@ -111,13 +111,21 @@ def immigrate(conn: sqlite3.Connection, n: int, tick: int, seed: str,
         name = _name_of(row, tick + i)
         surname = name.split()[-1]
         home = _free_home(conn, r)
+        # the persona dataset includes minors. They used to be inserted with
+        # the is_child default of 0, so a child arrived as a job-holding head
+        # of household — 115 of them in the live world
+        try:
+            age = int(row.get("age"))
+        except (TypeError, ValueError):
+            age = 30
+        is_child = 1 if age < 18 else 0
         cur = conn.execute(
-            """INSERT INTO agents(uuid,name,sex,age,marital_status,education_level,
-               occupation,origin_city,origin_state,persona,professional_persona,
-               hobbies_json,skills_json,traits_json)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (row.get("uuid"), name, row.get("sex"), row.get("age"),
-             row.get("marital_status") or "never_married",
+            """INSERT INTO agents(uuid,name,sex,age,is_child,marital_status,
+               education_level,occupation,origin_city,origin_state,persona,
+               professional_persona,hobbies_json,skills_json,traits_json)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (row.get("uuid"), name, row.get("sex"), age, is_child,
+             "never_married" if is_child else (row.get("marital_status") or "never_married"),
              row.get("education_level"), row.get("occupation"),
              row.get("city"), row.get("state"), row.get("persona"),
              row.get("professional_persona"),
@@ -125,8 +133,17 @@ def immigrate(conn: sqlite3.Connection, n: int, tick: int, seed: str,
              json.dumps(_list_field(row.get("skills_and_expertise_list"))),
              json.dumps({"background": (row.get("cultural_background") or "")[:300]})))
         aid = int(cur.lastrowid or 0)
-        _new_household(conn, [aid], home, surname)
-        _give_job(conn, aid, row.get("occupation") or "", r)
+        if is_child:
+            # a child arrives into a household that has room, not their own
+            guardian = _household_with_room(conn, home)
+            if guardian:
+                conn.execute("UPDATE agents SET household_id=? WHERE id=?",
+                             (guardian, aid))
+            else:
+                _new_household(conn, [aid], home, surname)
+        else:
+            _new_household(conn, [aid], home, surname)
+            _give_job(conn, aid, row.get("occupation") or "", r)
         conn.execute(
             "INSERT INTO agent_state(agent_id, place_id, money_cents) VALUES(?,?,?)",
             (aid, home, r.randint(economy.STARTING_MONEY_MIN,
@@ -137,6 +154,17 @@ def immigrate(conn: sqlite3.Connection, n: int, tick: int, seed: str,
         arrived += 1
     conn.commit()
     return arrived
+
+
+def _household_with_room(conn: sqlite3.Connection, home_place_id: int) -> int | None:
+    """An existing household in the same home that is under its capacity."""
+    row = conn.execute(
+        """SELECT h.id, COUNT(a.id) n FROM households h
+           LEFT JOIN agents a ON a.household_id = h.id AND a.alive = 1
+           WHERE h.home_place_id = ?
+           GROUP BY h.id HAVING n < 6 ORDER BY n DESC, h.id LIMIT 1""",
+        (home_place_id,)).fetchone()
+    return row["id"] if row else None
 
 
 def births(conn: sqlite3.Connection, tick: int, seed: str) -> int:

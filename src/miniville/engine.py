@@ -8,6 +8,7 @@ from . import (
     economy,
     events,
     growth,
+    jobs,
     memory,
     mortality,
     newspaper,
@@ -83,6 +84,12 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     # operator shocks land after the books settle but before the town plans
     # its day, so a venue that burnt overnight is nobody's destination
     stats["shocks"] = shocks.apply_due(conn, tick, seed)
+    # the labour market turns over before plans are built: a retiree is no
+    # longer planned at work, and a new hire is planned at their new venue
+    stats["retirements"] = len(jobs.retirements(conn, tick, seed))
+    if day_of(tick) % 7 == 0:
+        stats["turnover"] = jobs.turnover(conn, tick, seed)
+        stats["hiring"] = jobs.hiring_pass(conn, tick, seed)["hired"]
 
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)

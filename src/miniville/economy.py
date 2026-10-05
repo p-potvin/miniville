@@ -506,11 +506,17 @@ def _reopen_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int) -> int
 
 
 def open_workplaces(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Workplaces a resident could actually be hired at."""
+    """Venues a resident could actually be hired at.
+
+    Every non-home venue is staffable — the tavern, the bean, the theater and
+    the gym are `kind='public'` but they are the town's employers just as much
+    as the grocer is. Restricting this to `kind='workplace'` left the venues
+    with all the customer traffic permanently unstaffed.
+    """
     return conn.execute(
         """SELECT p.id, p.name, p.tags FROM places p
            LEFT JOIN businesses b ON b.place_id=p.id
-           WHERE p.kind='workplace' AND COALESCE(b.status,'open')='open'""").fetchall()
+           WHERE p.kind != 'home' AND COALESCE(b.status,'open')='open'""").fetchall()
 
 
 # --- labour market ----------------------------------------------------------

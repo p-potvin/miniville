@@ -218,6 +218,32 @@ def cmd_immigrate(args) -> int:
     return 0
 
 
+def cmd_rebalance_jobs(args) -> int:
+    from .db import get_meta
+    from .jobs import fix_minor_flags, rebalance, venue_targets
+    conn = _conn(args)
+    seed = get_meta(conn, "seed", "miniville")
+    tick = int(get_meta(conn, "tick", "0") or 0)
+    minors = fix_minor_flags(conn)
+    if minors:
+        print(f"corrected {minors} under-18 resident(s) flagged as adults")
+    before = conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
+    out = rebalance(conn, tick, seed)
+    conn.commit()
+    after = conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
+    print(f"jobs {before} -> {after}   released {out['released']}, "
+          f"rehired {out['rehired']}, still unemployed {out['still_unemployed']}")
+    print("\nvenue                     target  staff")
+    targets = venue_targets(conn)
+    staff = {r["place_id"]: r["n"] for r in conn.execute(
+        "SELECT place_id, COUNT(*) n FROM jobs GROUP BY place_id")}
+    for row in conn.execute(
+            "SELECT id, name FROM places WHERE kind != 'home' ORDER BY id"):
+        print(f"  {row['name'][:24]:24s} {targets.get(row['id'], 0):6d} "
+              f"{staff.get(row['id'], 0):6d}")
+    return 0
+
+
 def cmd_newspaper(args) -> int:
     from .db import get_meta
     from .newspaper import latest, publish_week, week_of
@@ -440,6 +466,9 @@ def main(argv=None) -> int:
     psk.set_defaults(fn=cmd_shock)
     plk = sub.add_parser("shocks", help="list injected shocks")
     plk.set_defaults(fn=cmd_shocks)
+    pjb = sub.add_parser("rebalance-jobs",
+                         help="move surplus jobs onto the venues that need them")
+    pjb.set_defaults(fn=cmd_rebalance_jobs)
 
     args = p.parse_args(argv)
     return args.fn(args)

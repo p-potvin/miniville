@@ -9,7 +9,7 @@ import sqlite3
 
 import pyarrow.parquet as pq
 
-from . import economy
+from . import economy, jobs
 from .rng import rng_for, seed_int
 from .world import DISTRICTS, create_world, workplace_tags_for
 
@@ -78,15 +78,35 @@ def load_persona_rows(dataset_dir: str, n_target: int, seed: str) -> list[dict]:
 
 
 def _pick_workplace(conn, tags: list[str], r) -> int:
-    rows = conn.execute("SELECT id, tags, kind FROM places WHERE kind='workplace'").fetchall()
+    """Best-matching venue that still has room for another pair of hands.
+
+    Every non-home venue is eligible (the tavern and the theater are employers
+    too) and the staffing target keeps the town's workforce spread across them.
+    Without the target every unmatched occupation — and the generic fallback
+    tags match the town hall best — piled into one venue: the live world ended
+    up with 348 of its 435 jobs at Town Hall and none at all at the venues the
+    customers actually visit.
+    """
+    rows = conn.execute(
+        """SELECT p.id, p.tags, COUNT(j.agent_id) staff
+           FROM places p LEFT JOIN jobs j ON j.place_id = p.id
+           WHERE p.kind != 'home' GROUP BY p.id""").fetchall()
+    targets = jobs.venue_targets(conn)
     scored = []
     for row in rows:
         ptags = set(json.loads(row["tags"]))
-        scored.append((len(ptags & set(tags)), row["id"]))
-    scored.sort(key=lambda x: -x[0])
-    best = scored[0][0]
-    top = [pid for s, pid in scored if s == best]
-    return r.choice(top)
+        room = targets.get(row["id"], 0) - row["staff"]
+        if room <= 0:
+            continue
+        scored.append((len(ptags & set(tags)), room, row["id"]))
+    if not scored:
+        return conn.execute(
+            "SELECT id FROM places WHERE kind='workplace' ORDER BY id LIMIT 1"
+        ).fetchone()["id"]
+    best = max(s for s, _, _ in scored)
+    top = [(room, pid) for s, room, pid in scored if s == best]
+    most_room = max(room for room, _ in top)
+    return r.choice([pid for room, pid in top if room == most_room])
 
 
 def _pick_leisure_home(district: str, homes: dict[str, list[int]], r) -> int:
