@@ -526,9 +526,46 @@ A councillor who dies vacates their seat and the town votes again.
 CLI: `council`, `election`, `motion`. API: `/api/council`. The chronicle
 names who governs. 150 tests.
 
-**Next (phase 3, not started):** an influence index over
-standing/rank/wealth/seat/flock, and organized conflict with consequences
-(boycott, slander, schism, election challenge).
+## v0.12 — influence and conflict (Sun, 05 Oct 2026)
+
+Phase 3: `src/miniville/conflict.py`, table `boycotts`. Influence is a
+*reading* — standing, rank, money, a council seat, the size of the flock you
+lead — and it decides who can start something. Then three acts with
+consequences in the world rather than in a relationship label:
+
+- **slander** — a rival talks, the target loses standing, and it carries
+  further the better connected the gossip is
+- **boycott** — a group withdraws its custom, its members stop spending
+  there, the venue's traffic decays, and a business can fail. A grudge can
+  close a shop.
+- **schism** — a congregation that has stopped getting along splits and the
+  leavers found their own
+
+**Measured, and nothing happened.** The town had exactly zero rivalries: the
+worst relationship in 53,000 sat at affinity -2.7. The tone table only turns
+hostile below -20, which nothing could reach, so slights never compounded and
+the whole town liked everybody. Fixed by letting a slight between people who
+already dislike each other deepen (scaled by how negative it is), a small
+chance of friction between the merely familiar, and two sources of
+first-class grievance: a lost election (runners-up do not forget) and being
+passed over for a promotion. Minimum affinity -2.7 -> -38.4, five real
+rivalries, and the town began acting: a slander and two boycotts in the first
+month, including The Flats crafts society boycotting The Bijou Theater.
+
+**And a bug I had introduced:** `SENIORITY_MAX` was defined and never
+applied, so the 2%/year seniority rise compounded forever. Over 870 days the
+town's wages outgrew anything its businesses could charge — **27 businesses
+failed**, each closure deleting its whole staff in one go (the Library, the
+Gym and the Theater sat at 0-4 staff against targets of 6-42), and the town's
+posts fell 270 -> 227 with unemployment back to 26%. A post now records
+`base_wage_cents` at hire and the rise stops at about 1.8x what the post
+started at.
+
+CLI `influence`. 158 tests.
+
+**Still open:** the soak on the seniority fix; and no conflict has yet
+produced a business failure end-to-end (the boycott's economics are tested
+but not yet observed closing a venue in a long run).
 
 ## v0.9 — the money loop closes, and careers begin (Sun, 05 Oct 2026)
 
