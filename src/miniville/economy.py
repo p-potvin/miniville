@@ -62,9 +62,16 @@ RENT_BY_DISTRICT = {
 }
 DEFAULT_RENT = 35000
 
-GROCERY_CENTS = 750          # one grocery run per resident per day
-DINING_BASE_CENTS = 1800
-SHOPPING_BASE_CENTS = 3500
+# Prices are set so a commercial venue's takings cover its payroll with a
+# margin. Measured on a 3-year soak they did not: the customer-facing venues
+# paid 1.07x what they took (the diner 1.20, Old Mill 1.23, the tavern 1.20,
+# the grocer 1.14), so each one lived on its opening balance and its price
+# index, bled to the -$60,000 failure line and closed — 30 closures in three
+# years, each deleting its whole staff. A 25% correction closes the gap
+# without making a household's week unaffordable.
+GROCERY_CENTS = 940          # one grocery run per resident per day
+DINING_BASE_CENTS = 2250
+SHOPPING_BASE_CENTS = 4400
 GROCERY_TICK = 14            # 07:00 — the daily shop
 
 # --- business tuning --------------------------------------------------------
@@ -156,13 +163,13 @@ def venue_price(tags: set[str], activity: str, price_index: float = 1.0) -> int:
             c -= 500
     elif activity == "leisure":
         if "coffee" in tags:
-            c = 700
+            c = 880
         elif "drink" in tags:
-            c = 1400
+            c = 1750
         elif "arts" in tags or "nightlife" in tags:
-            c = 1600
+            c = 2000
         elif "fitness" in tags:
-            c = 1200
+            c = 1500
         else:
             c = 0
     elif activity == "eat":
