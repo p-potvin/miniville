@@ -225,9 +225,12 @@ def hold_election(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     conn.execute(
         "INSERT INTO elections(tick,day,turnout,summary) VALUES(?,?,?,?)",
         (tick, day, turnout, summary))
+    # short enough to read in a narrative; the tally lives in the data
     emit(conn, tick, "town_event", importance=HISTORIC,
-         text=f"the town voted: {summary}", tag="election",
-         turnout=turnout, seats=seated)
+         text=(f"the town went to the polls and returned {len(seated)} "
+               f"councillors, {seated[0]['name']} leading with "
+               f"{seated[0]['votes']} votes"),
+         tag="election", turnout=turnout, seats=seated, summary=summary)
     return {"turnout": turnout, "seated": seated}
 
 

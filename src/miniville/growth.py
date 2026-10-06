@@ -19,7 +19,7 @@ import sqlite3
 
 from . import economy
 from .db import get_meta
-from .events import HISTORIC, NOTABLE, emit
+from .events import HISTORIC, MAJOR, NOTABLE, emit
 from .ingest import _list_field, _name_of, load_persona_rows
 from .rng import rng_for
 from .timekeeper import day_of
@@ -238,8 +238,11 @@ def births(conn: sqlite3.Connection, tick: int, seed: str) -> int:
         conn.execute(
             "INSERT INTO agent_state(agent_id, place_id, money_cents) VALUES(?,?,0)",
             (aid, parent["home_place_id"]))
+        # MAJOR, not HISTORIC: a birth matters enormously to a family and very
+        # little to the town. At importance 5 every quiet week headlined a
+        # baby and the year in review was a list of them.
         emit(conn, tick, "life_event", a=c["a_id"], b=c["b_id"],
-             importance=HISTORIC, text=f"welcomed a baby, {cname}",
+             importance=MAJOR, text=f"welcomed a baby, {cname}",
              tag="birth")
         n += 1
     conn.commit()

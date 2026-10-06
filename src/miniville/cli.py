@@ -229,6 +229,16 @@ def cmd_immigrate(args) -> int:
     return 0
 
 
+def cmd_year_in_review(args) -> int:
+    from .db import get_meta
+    from .newspaper import year_in_review
+    conn = _conn(args)
+    day = int(get_meta(conn, "tick", "0") or 0) // 48
+    year = args.year or max(1, day // 365 + (1 if day % 365 else 0))
+    print(year_in_review(conn, year))
+    return 0
+
+
 def cmd_influence(args) -> int:
     from .conflict import influence_of, most_influential
     conn = _conn(args)
@@ -619,6 +629,11 @@ def main(argv=None) -> int:
     pel.set_defaults(fn=cmd_election)
     pmo = sub.add_parser("motion", help="put a motion to the council now")
     pmo.set_defaults(fn=cmd_motion)
+    pyr = sub.add_parser("year-in-review",
+                         help="a year of the town, read back from its ledger")
+    pyr.add_argument("--year", type=int, default=None,
+                     help="calendar year (default: the one just ended)")
+    pyr.set_defaults(fn=cmd_year_in_review)
     pin = sub.add_parser("influence", help="who actually runs this town")
     pin.add_argument("--top", type=int, default=12)
     pin.set_defaults(fn=cmd_influence)
