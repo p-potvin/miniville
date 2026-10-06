@@ -76,8 +76,13 @@ GROCERY_TICK = 14            # 07:00 — the daily shop
 
 # --- business tuning --------------------------------------------------------
 
-# venues whose payroll is covered by the town rather than by customers
-PUBLIC_TAGS = {"health", "education", "civic", "office", "media", "worship"}
+# Venues whose payroll the town covers rather than their customers. The
+# amenities belong here too: the park, the marina and the library employ
+# groundskeepers and librarians and charge nobody at the door, so charging
+# their payroll to their own balance bled them to the failure line (the park
+# was -$57,000 and heading for closure) — the same mistake as the hospital.
+PUBLIC_TAGS = {"health", "education", "civic", "office", "media", "worship",
+               "outdoors", "water", "quiet", "study", "community"}
 
 FAIL_THRESHOLD_CENTS = -6_000_000     # -$60,000 of accumulated losses
 REOPEN_AFTER_DAYS = 21

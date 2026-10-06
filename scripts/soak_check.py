@@ -112,22 +112,23 @@ def run_checks(conn: sqlite3.Connection, r: Report) -> None:
             + (f": {names}" if names else ""))
 
     # --- venues can pay their way
-    days = max(1, conn.execute("SELECT MAX(day) FROM events").fetchone()[0])
+    # Compare the two running totals rather than dividing by a day count: a
+    # soak inherits its source's cumulative revenue but only accrues its own
+    # days, so revenue/days understates the takings several-fold. (That
+    # mistake had me briefly convinced the price fix had failed when every
+    # venue was in fact profitable.)
     agg = conn.execute(
         """SELECT COALESCE(SUM(b.revenue_total),0) rev,
-                  COALESCE(SUM((SELECT SUM(j.wage_cents) FROM jobs j
-                                WHERE j.place_id = b.place_id)),0) wagebill
+                  COALESCE(SUM(b.payroll_total),0) pay
            FROM businesses b JOIN places p ON p.id = b.place_id
            WHERE p.tags NOT LIKE '%health%' AND p.tags NOT LIKE '%education%'
              AND p.tags NOT LIKE '%civic%' AND p.tags NOT LIKE '%office%'
              AND p.tags NOT LIKE '%media%' AND p.tags NOT LIKE '%worship%'
              AND p.tags NOT LIKE '%community%'""").fetchone()
-    rev_day = agg["rev"] / days
-    wage_day = agg["wagebill"] * 5 / 7
-    ratio = wage_day / max(1, rev_day)
+    ratio = agg["pay"] / max(1, agg["rev"])
     r.check(ratio < 1.0, "venues can pay their way",
-            f"commercial payroll is {ratio:.2f}x its takings "
-            f"(${wage_day/100:,.0f} vs ${rev_day/100:,.0f} a day)")
+            f"commercial venues have paid out {ratio:.2f}x what they took in "
+            f"(${agg['pay']/100:,.0f} vs ${agg['rev']/100:,.0f} all-time)")
 
     # --- wages do not compound
     wages = [row["wage_cents"] for row in conn.execute("SELECT wage_cents FROM jobs")]
