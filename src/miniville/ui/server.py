@@ -196,7 +196,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
                      "importance": m["importance"]}
                     for m in retrieve(c, agent_id, k=8)]
             from ..groups import memberships_of
-            return {"agent": dict(a), "state": dict(st) if st else {},
+            from ..conflict import influence_of
+            a = dict(a)
+            a["influence"] = influence_of(c, agent_id)
+            return {"agent": a, "state": dict(st) if st else {},
                     "job": dict(job) if job else None,
                     "debts": {"owes": owed_by, "owed": owed_to},
                     "relationships": rels, "recent": recent, "memories": mems,

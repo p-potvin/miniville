@@ -5,6 +5,7 @@ import sqlite3
 
 from . import (
     chronicle,
+    conflict,
     economy,
     events,
     groups,
@@ -110,6 +111,10 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     decided = politics.due(conn, tick)
     if decided:
         stats["politics"] = decided
+    # grudges act: a rival talks, a group boycotts, a congregation splits
+    acted = conflict.due(conn, tick, seed)
+    if acted:
+        stats["conflict"] = acted
     return stats
 
 

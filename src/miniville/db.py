@@ -262,6 +262,18 @@ CREATE TABLE IF NOT EXISTS motions (
     votes_against INTEGER NOT NULL
 );
 
+-- Organized conflict: a group withdrawing its custom from a venue. The
+-- consequence is economic — the boycott's members stop spending there, its
+-- traffic decays and it can fail — so a grudge can close a business.
+CREATE TABLE IF NOT EXISTS boycotts (
+    group_id INTEGER NOT NULL REFERENCES groups(id),
+    place_id INTEGER NOT NULL REFERENCES places(id),
+    started_day INTEGER NOT NULL,
+    until_day INTEGER NOT NULL,
+    reason TEXT,
+    PRIMARY KEY (group_id, place_id)
+);
+
 -- The town's own purse. Weekly rent and the non-rebated part of the business
 -- levy flow in; public-service payroll (hospital, school, town hall, library,
 -- church, park) flows out. Before this existed, rent was destroyed outright

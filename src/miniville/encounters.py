@@ -55,8 +55,11 @@ def _interaction_tone(r, affinity: float, standing: float = 0.0) -> tuple[str, f
         table = [("warm", +2.5, 0.45), ("friendly", +1.5, 0.35),
                  ("delightful", +4, 0.08), ("routine", +0.5, 0.12)]
     else:
+        # familiarity can also breed contempt: the longer two people have been
+        # thrown together, the more room there is for a bad afternoon
         table = [("pleasant", +1.5, 0.40), ("routine", +0.5, 0.30),
-                 ("awkward", -0.8, 0.15), ("engaging", +3, 0.15)]
+                 ("awkward", -0.8, 0.15), ("engaging", +3, 0.15),
+                 ("friction", -1.5, 0.05)]
     acc = 0.0
     for tone, delta, p in table:
         acc += p
@@ -104,6 +107,13 @@ def interact(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row,
 
     tone, d_aff = _interaction_tone(
         r, aff, float((a["standing"] or 0) + (b["standing"] or 0)))
+    # A slight that is never repeated is forgotten; a slight between people who
+    # already dislike each other compounds. Without this the town's worst
+    # relationship sat at affinity -2.7: the negative tones only trigger below
+    # -20, which nothing could ever reach, so the whole town liked everybody
+    # and there was nothing for a rivalry, a boycott or a slander to be about.
+    if aff < 0 and d_aff < 0:
+        d_aff *= 1 + min(3.0, abs(aff) / 10)
     # shared hobbies spark
     ha = set(json.loads(a["hobbies_json"] or "[]"))
     hb = set(json.loads(b["hobbies_json"] or "[]"))

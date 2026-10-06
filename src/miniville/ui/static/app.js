@@ -49,7 +49,8 @@ async function residentCard(id) {
     <h3>${esc(a.name)} <button class="mini" onclick="mvBond(${id})">bond wheel</button></h3>
     <p>${a.age} ${esc(a.sex)} · ${esc(a.occupation)} · ${esc(a.marital_status)}
        ${r.job ? `· works at ${esc(r.job.place)}` : "· unemployed"}
-       · standing <b>${a.standing ?? 0}</b></p>
+       · standing <b>${a.standing ?? 0}</b>
+       · influence <b>${(a.influence ?? 0).toFixed(1)}</b></p>
     <p class="state">energy ${Math.round(s.energy ?? 0)} · hunger ${Math.round(s.hunger ?? 0)}
        · social ${Math.round(s.social ?? 0)} · fun ${Math.round(s.fun ?? 0)}
        · stress ${Math.round(s.stress ?? 0)} · mood <b>${esc(s.mood)}</b>

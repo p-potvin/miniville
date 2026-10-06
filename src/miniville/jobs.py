@@ -260,6 +260,21 @@ def careers(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
                       f"after {years} year{'s' if years > 1 else ''}",
                  tag="promoted")
             promoted += 1
+            # somebody at the same venue was passed over, and they know it
+            passed_over = conn.execute(
+                """SELECT j.agent_id FROM jobs j
+                   WHERE j.place_id = ? AND j.agent_id != ? AND j.rank <= ?
+                   ORDER BY j.rank DESC, j.agent_id LIMIT 1""",
+                (row["place_id"], row["agent_id"], rank)).fetchone()
+            if passed_over and r.random() < 0.5:
+                lo, hi = min(passed_over["agent_id"], row["agent_id"]), \
+                    max(passed_over["agent_id"], row["agent_id"])
+                conn.execute(
+                    """INSERT INTO relationships(a_id,b_id,familiarity,affinity,
+                       romance,label) VALUES(?,?,25,-25,0,'rival')
+                       ON CONFLICT(a_id,b_id) DO UPDATE SET
+                         affinity = MIN(-25.0, relationships.affinity - 12.0),
+                         label = 'rival'""", (lo, hi))
         elif r.random() < SENIORITY_ANNUAL:
             wage = int(row["wage_cents"] * (1 + SENIORITY_ANNUAL))
             conn.execute("UPDATE jobs SET wage_cents=? WHERE agent_id=?",

@@ -229,6 +229,31 @@ def cmd_immigrate(args) -> int:
     return 0
 
 
+def cmd_influence(args) -> int:
+    from .conflict import influence_of, most_influential
+    conn = _conn(args)
+    rows = most_influential(conn, args.top)
+    if not rows:
+        print("nobody has any influence yet")
+        return 0
+    print(f"{'resident':24s} {'influence':>9s}  {'standing':>8s}  {'rank':>4s}  "
+          f"{'seat':>4s}  {'leads':>5s}")
+    for r in rows:
+        aid = r["id"]
+        job = conn.execute(
+            "SELECT rank FROM jobs WHERE agent_id=?", (aid,)).fetchone()
+        seat = conn.execute("SELECT COUNT(*) n FROM council WHERE agent_id=?",
+                            (aid,)).fetchone()["n"]
+        leads = conn.execute(
+            """SELECT COUNT(*) n FROM memberships WHERE agent_id=? AND role='officer'""",
+            (aid,)).fetchone()["n"]
+        standing = conn.execute("SELECT standing FROM agents WHERE id=?",
+                                (aid,)).fetchone()["standing"]
+        print(f"  {r['name'][:22]:22s} {r['influence']:9.2f} {standing or 0:8d}  "
+              f"{job['rank'] if job else 0:4d}  {seat:4d}  {leads:5d}")
+    return 0
+
+
 def cmd_council(args) -> int:
     from .db import get_meta
     from .politics import POLICIES, council, next_election_day, policy
@@ -594,6 +619,9 @@ def main(argv=None) -> int:
     pel.set_defaults(fn=cmd_election)
     pmo = sub.add_parser("motion", help="put a motion to the council now")
     pmo.set_defaults(fn=cmd_motion)
+    pin = sub.add_parser("influence", help="who actually runs this town")
+    pin.add_argument("--top", type=int, default=12)
+    pin.set_defaults(fn=cmd_influence)
 
     args = p.parse_args(argv)
     return args.fn(args)

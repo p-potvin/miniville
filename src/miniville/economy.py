@@ -296,6 +296,13 @@ def charge_spending(conn: sqlite3.Connection, tick: int) -> dict:
 
         if cost <= 0:
             continue
+        # a group's boycott means its members take their custom elsewhere, so
+        # the venue loses the traffic and can fail on the loss — a grudge with
+        # an economic consequence rather than a label
+        from .conflict import boycotting
+        if credit_to is not None and boycotting(conn, row["agent_id"], credit_to,
+                                               day_of(tick)):
+            continue
         affordable = min(cost, max(0, row["money_cents"]))
         if affordable <= 0:
             continue

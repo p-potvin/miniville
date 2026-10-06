@@ -124,6 +124,10 @@ def hold_election(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         """SELECT a.id, p.district FROM agents a
            LEFT JOIN places p ON p.id = a.home_place_id WHERE a.alive=1""")}
 
+    from .conflict import influence_of
+    # influence compounds: a councillor who already has money, a seat and a
+    # flock is harder to unseat than a well-liked newcomer
+    infl = {c["id"]: influence_of(conn, c["id"]) for c in candidates}
     tally: dict[int, list[int]] = {c["id"]: [] for c in candidates}
     turnout = 0
     for v in voters:
@@ -131,7 +135,7 @@ def hold_election(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         for c in candidates:
             if c["id"] == v["id"]:
                 continue
-            score = 0.5 + c["standing"] / 40.0
+            score = 0.5 + c["standing"] / 40.0 + infl[c["id"]] / 20.0
             if groups_of.get(v["id"], set()) & groups_of.get(c["id"], set()):
                 score += 2.0                      # same congregation or club
             if faith.get(v["id"]) and faith.get(v["id"]) == faith.get(c["id"]):
@@ -199,6 +203,22 @@ def hold_election(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
              med, out_of_work / max(1, district_adults)))
         seated.append({"seat": seat, "name": c["name"], "votes": len(backers),
                        "district": district.get(cid)})
+
+    # the runners-up do not forget: a lost election is the town's most
+    # reliable source of a lasting grudge
+    for d in districts[:SEATS]:
+        mine = [(cid, b) for cid, b in tally.items() if by_id[cid].get("district") == d]
+        if len(mine) < 2:
+            continue
+        mine.sort(key=lambda kv: -len(kv[1]))
+        winner, loser = mine[0][0], mine[1][0]
+        lo, hi = min(winner, loser), max(winner, loser)
+        conn.execute(
+            """INSERT INTO relationships(a_id,b_id,familiarity,affinity,romance,label)
+               VALUES(?,?,?,?,0,'rival')
+               ON CONFLICT(a_id,b_id) DO UPDATE SET
+                 affinity = MIN(-25.0, relationships.affinity - 15.0),
+                 label = 'rival'""", (lo, hi, 20.0, -25.0))
 
     set_meta(conn, "next_election_day", str(day + TERM_DAYS))
     summary = "; ".join(f"{s['name']} ({s['votes']} votes)" for s in seated)
