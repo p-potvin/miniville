@@ -51,6 +51,8 @@ def influence_of(conn: sqlite3.Connection, agent_id: int) -> float:
         return 0.0
     seat = conn.execute("SELECT COUNT(*) n FROM council WHERE agent_id=?",
                         (agent_id,)).fetchone()["n"]
+    publisher = conn.execute(
+        "SELECT 1 FROM newspaper_profile WHERE publisher_id=?", (agent_id,)).fetchone()
     officer = conn.execute(
         """SELECT COUNT(*) n, COALESCE(SUM((SELECT COUNT(*) FROM memberships m2
                WHERE m2.group_id = m.group_id)), 0) flock
@@ -65,6 +67,7 @@ def influence_of(conn: sqlite3.Connection, agent_id: int) -> float:
                  + row["rank"] * 2.0
                  + max(-3.0, min(3.0, wealth * 3.0))
                  + seat * 8.0
+                 + (6.0 if publisher else 0.0)  # owns the town's paper
                  + officer["n"] * 2.0
                  + (officer["flock"] or 0) ** 0.5 * 0.5, 2)
 

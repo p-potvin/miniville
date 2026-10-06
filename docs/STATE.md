@@ -526,6 +526,92 @@ A councillor who dies vacates their seat and the town votes again.
 CLI: `council`, `election`, `motion`. API: `/api/council`. The chronicle
 names who governs. 150 tests.
 
+## v0.13 — the Gazette has an owner, and its account can be false (Tue, 06 Oct 2026)
+
+The operator's question: *is someone from the village writing the newspaper?
+It would introduce bias and another source of power/conflicts — or was the
+journal meant to be neutral for observers?*
+
+Both, at different layers:
+
+- `newspaper_profile` has an in-world **publisher** and **editor** selected
+  from the Gazette staff. The publisher's seat, wealth, work and group ties
+  set a visible editorial line (`business`, `working`, `establishment`,
+  `community`). The editor gets the byline; the owner has +6 influence and the
+  line changes which true events make the page / headline.
+- That line can produce a **false claim** about a council vote that went
+  against the publisher's interest. The Gazette prints it as fact;
+  `newspaper_claims` stores the claim against its source event with `truth=0`
+  and credibility falls. This is an in-world act of power, not a changed
+  world fact.
+- The `/api/newspaper` response and the Gazette tab put the resident-written
+  paper beside the **neutral observer record** — every event in the week —
+  and flag any claim that contradicts the ledger. Observers can see both the
+  lie and the receipt.
+
+End-to-end Patchright check on the live Gazette: owner/editor Laverne Miller,
+`business` line, credibility 100%; the neutral record lists 536 events for the
+week. The current live edition contained no false claim; the policy-misreport
+path is covered by deterministic tests. `166 passed`.
+
+## v0.13 — the Gazette has an owner, and its account can be false (Tue, 06 Oct 2026)
+
+The operator asked whether a resident writes the newspaper, and whether it
+should be neutral for us as observers. It is now both, at different layers:
+
+- `newspaper_profile` appoints a **publisher** and **editor** from the Gazette
+  staff. The publisher's council seat, wealth, job and group ties set a visible
+  editorial line (`business`, `working`, `establishment`, `community`). The
+  editor gets the byline; the owner has +6 influence and their line changes
+  which true events rise to the headline and survive the column limit.
+- When a council motion goes against the publisher's line, the paper may print
+  the opposite outcome as fact. `newspaper_claims` stores the claim against
+  the actual event with `truth=0`; the observer ledger is not changed. The
+  observer API shows the claim beside the event that contradicts it, and the
+  paper's ledger-accuracy score falls. Claims are deterministic per edition.
+- The Gazette panel shows owner, editor and editorial basis, plus a collapsed
+  **Neutral observer record** listing the simulation's events for the week.
+  Patchright verified the live issue: owner/editor Laverne Miller, business
+  line, 536 ledger events for the week; UI console clean after one selector
+  fix.
+
+The publisher is an in-world source of power (it adds to influence and sets
+the agenda); the paper can omit, weight or misreport; and we as observers get
+the receipt. Current live issue had no false claim, so the misreport path is
+tested with a deliberately opposed council vote. A 90-day press soak is
+running to see whether routine politics produces claims and how credibility
+moves.
+
+## v0.13 — the Gazette has an owner, and its account can be false (Tue, 06 Oct 2026)
+
+The operator asked whether a resident writes the newspaper, and whether it
+should be neutral for us as observers. It is now both, at different layers:
+
+- `newspaper_profile` appoints an in-world **publisher** and **editor** from
+  the Gazette staff. The publisher's seat, wealth, work and group ties set a
+  visible editorial line (`business`, `working`, `establishment`,
+  `community`). The editor gets the byline; the owner has +6 influence and
+  the line changes which true events rise to the headline and survive the
+  column limit.
+- If a council vote goes against the publisher's line, the paper may print
+  the opposite outcome as fact. `newspaper_claims` stores that claim against
+  its source event with `truth=0`; the world ledger is not edited. Repeated
+  falsehoods lower the paper's accuracy/credibility score.
+- `/api/newspaper` returns the resident-written edition *and* the neutral
+  observer record (every event that week). The Gazette tab shows owner,
+  editor, line and credibility; disputed claims are checked against the
+  source event in the ledger below the paper.
+
+The live Gazette is owned and edited by Laverne Miller (writer_or_author),
+with a business line derived from the publisher's above-median wallet. A
+90-day press soak produced 44 editions, no false claims (the council's votes
+were aligned with its business preference in that window), and passed all
+11 soak invariants. That zero is a result: in this period the council's
+business-leaning votes gave the Gazette no vote to misreport. The false-report branch is covered deterministically in
+tests with an opposed council motion. Patchright checked the Gazette panel
+and `/api/newspaper`: publisher/editor, source ledger (536 events), claims
+pane, no UI console errors.
+
 ## v0.12 — influence and conflict (Sun, 05 Oct 2026)
 
 Phase 3: `src/miniville/conflict.py`, table `boycotts`. Influence is a

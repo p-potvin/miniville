@@ -5,6 +5,7 @@ resolved path so the dashboard follows MINIVILLE_DB / --db like the CLI.
 """
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from pathlib import Path
@@ -220,22 +221,60 @@ def create_app(db_path: str | None = None) -> FastAPI:
 
     @app.get("/api/newspaper")
     def newspaper(week: int | None = Query(None)):
+        """The Gazette's account, plus the neutral event ledger beside it."""
+        from ..events import describe
+        from ..newspaper import observer_record
         c = conn()
+
+        def edition(row):
+            data = dict(row)
+            data["week"] += 1
+            publisher = c.execute("SELECT name FROM agents WHERE id=?",
+                                  (data.get("publisher_id"),)).fetchone()
+            editor = c.execute("SELECT name FROM agents WHERE id=?",
+                               (data.get("editor_id"),)).fetchone()
+            data["publisher"] = publisher["name"] if publisher else "Gazette staff"
+            data["editor"] = editor["name"] if editor else "Gazette staff"
+            data["editorial_basis"] = data.get("editorial_basis") or "independent local paper"
+            data["credibility"] = float(data.get("credibility") or 1.0)
+            try:
+                stored_claims = json.loads(data.get("claims_json") or "[]")
+            except (TypeError, ValueError):
+                stored_claims = []
+            claims = []
+            for claim in stored_claims:
+                event = c.execute("SELECT * FROM events WHERE id=?",
+                                  (claim.get("event_id"),)).fetchone()
+                claims.append({**claim, "observer_record": describe(c, event) if event else None,
+                               "verdict": "conflicts with the event ledger"
+                               if claim.get("truth") is False else "unverified"})
+            data["claims"] = claims
+            data["observer_record"] = observer_record(c, data["week"] - 1)
+            data["source_note"] = (
+                "The Gazette is written by residents and has an editorial line. "
+                "The Observer Record below is the simulation's event ledger.")
+            return data
+
         try:
             if week is not None:
                 row = c.execute("SELECT * FROM newspapers WHERE week=?",
                                 (week - 1,)).fetchone()
                 if not row:
                     raise HTTPException(404, "no edition for that week")
-                return dict(row)
-            rows = _rows(c, "SELECT week, created_tick FROM newspapers "
-                            "ORDER BY week DESC LIMIT 20")
+                return edition(row)
+            rows = _rows(c, "SELECT week, created_tick, publisher_id, editor_id, "
+                            "editorial_line, editorial_basis, credibility "
+                            "FROM newspapers ORDER BY week DESC LIMIT 20")
             for r in rows:
                 r["week"] += 1
+                for field in ("publisher_id", "editor_id"):
+                    if r[field]:
+                        person = c.execute("SELECT name FROM agents WHERE id=?",
+                                            (r[field],)).fetchone()
+                        r[field.replace("_id", "")] = person["name"] if person else None
             latest = c.execute("SELECT * FROM newspapers ORDER BY week DESC "
                                "LIMIT 1").fetchone()
-            return {"editions": rows,
-                    "latest": dict(latest) if latest else None}
+            return {"editions": rows, "latest": edition(latest) if latest else None}
         finally:
             c.close()
 

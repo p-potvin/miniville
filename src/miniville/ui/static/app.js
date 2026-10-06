@@ -112,6 +112,30 @@ window.mvBond = (id) => {
   renderBond($("#bond-host"), id);
 };
 
+function showGazette(edition) {
+  $("#gaz-text").textContent = edition.text;
+  const byline = edition.publisher || "Gazette staff";
+  const editor = edition.editor || byline;
+  const line = edition.editorial_line || "community";
+  const basis = edition.editorial_basis || "independent local paper";
+  const credibility = Math.round((edition.credibility ?? 1) * 100);
+  $("#gaz-meta").textContent =
+    `Owned by ${byline}; edited by ${editor}. ` +
+    `Editorial line: ${line} — ${basis}. Credibility ${credibility}%. ` +
+    `This is a resident's account, not the neutral event record.`;
+  const claims = edition.claims || [];
+  $("#gaz-claims").hidden = claims.length === 0;
+  $("#gaz-claims-list").innerHTML = claims.map(c =>
+    `<li><b>${esc(c.claim)}</b><br><span class="t">${esc(c.verdict)}. ` +
+    `Ledger: ${esc(c.observer_record || "source event unavailable")}</span></li>`).join("");
+  const records = edition.observer_record || [];
+  $("#gaz-record-wrap summary").textContent =
+    `Neutral observer record — ${records.length} ledger events this week`;
+  $("#gaz-record").innerHTML = records.map(e =>
+    `<li><span class="t">day ${e.day} · ${esc(e.kind)} · importance ${e.importance}</span> ` +
+    `${esc(e.text)}</li>`).join("");
+}
+
 async function gazette() {
   const r = await api("/api/newspaper");
   const sel = $("#gaz-week");
@@ -119,6 +143,8 @@ async function gazette() {
     sel.innerHTML = "";
     $("#gaz-text").textContent = "No edition published yet — the first paper " +
       "prints at the end of week 1.";
+    $("#gaz-meta").textContent = "";
+    $("#gaz-record").innerHTML = "";
     return;
   }
   if (sel.options.length !== r.editions.length) {
@@ -127,12 +153,12 @@ async function gazette() {
   }
   sel.value = String(r.editions[0].week);
   sel.onchange = () => gazetteWeek(sel.value);
-  $("#gaz-text").textContent = r.latest.text;
+  showGazette(r.latest);
 }
 
 async function gazetteWeek(week) {
   const r = await api("/api/newspaper?week=" + week);
-  $("#gaz-text").textContent = r.text;
+  showGazette(r);
 }
 
 const money = (c) => "$" + ((c ?? 0) / 100).toLocaleString(undefined,

@@ -72,9 +72,31 @@ def test_resident_detail_includes_memories(client):
     assert isinstance(mems, list)
 
 
-def test_newspaper_endpoint(client):
+def test_newspaper_endpoint(client, tmp_path, monkeypatch):
+    from miniville import newspaper
+    from miniville.events import emit
+    conn = db.connect(tmp_path / "ui.db")
+    conn.execute("""INSERT INTO newspaper_profile(id,publisher_id,editor_id,founded_tick,
+                    editorial_line,editorial_basis,credibility)
+                    VALUES(1,1,1,0,'working','workers first',1.0)""")
+    emit(conn, 48, "town_event", a=1, importance=3,
+         text="the council rejected a motion to raise levy_rate", tag="motion_rejected",
+         policy="levy_rate", direction=1, passed=False, value=0.06)
+    conn.commit()
+    monkeypatch.setattr(newspaper, "FALSE_CLAIM_BASE", 1.0)
+    newspaper.publish_week(conn, 0, "t")
+    conn.close()
     body = client.get("/api/newspaper").json()
     assert "editions" in body and "latest" in body
+    latest = body["latest"]
+    assert latest["publisher"] and latest["editor"]
+    assert latest["editorial_line"] == "working"
+    assert latest["observer_record"]
+    assert "event ledger" in latest["source_note"]
+    assert latest["claims"] and latest["claims"][0]["truth"] is False
+    assert "rejected" in latest["claims"][0]["observer_record"]
+    detail = client.get("/api/newspaper?week=1").json()
+    assert detail["week"] == 1 and detail["observer_record"]
     assert client.get("/api/newspaper?week=99").status_code == 404
 
 

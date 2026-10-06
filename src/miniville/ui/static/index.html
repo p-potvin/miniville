@@ -66,7 +66,17 @@
   <section id="gazette" class="panel">
     <h2>The Miniville Gazette
       <select id="gaz-week"></select></h2>
+    <div id="gaz-meta" class="press-meta"></div>
     <pre id="gaz-text"></pre>
+    <section id="gaz-claims" class="press-claims" hidden>
+      <h3>Claims checked against the event ledger</h3>
+      <ul id="gaz-claims-list"></ul>
+    </section>
+    <details id="gaz-record-wrap">
+      <summary>Neutral observer record — the simulation event ledger</summary>
+      <p class="muted">The Gazette above is a resident's account. This record is what actually happened in the simulation.</p>
+      <ul id="gaz-record" class="observer-record"></ul>
+    </details>
   </section>
   <section id="economy" class="panel">
     <h2>Economy</h2>

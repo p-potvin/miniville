@@ -176,8 +176,38 @@ CREATE INDEX IF NOT EXISTS idx_agents_household ON agents(household_id);
 CREATE TABLE IF NOT EXISTS newspapers (
     week INTEGER PRIMARY KEY,
     text TEXT NOT NULL,
-    created_tick INTEGER NOT NULL DEFAULT 0
+    created_tick INTEGER NOT NULL DEFAULT 0,
+    publisher_id INTEGER REFERENCES agents(id),
+    editor_id INTEGER REFERENCES agents(id),
+    editorial_line TEXT NOT NULL DEFAULT 'community',
+    editorial_basis TEXT NOT NULL DEFAULT 'independent local paper',
+    credibility REAL NOT NULL DEFAULT 1.0,
+    claims_json TEXT NOT NULL DEFAULT '[]'
 );
+
+-- The Gazette is owned and edited by residents, not a neutral oracle. The
+-- paper can have a bias; the event ledger and observer record remain truth.
+CREATE TABLE IF NOT EXISTS newspaper_profile (
+    id INTEGER PRIMARY KEY CHECK (id=1),
+    publisher_id INTEGER REFERENCES agents(id),
+    editor_id INTEGER REFERENCES agents(id),
+    founded_tick INTEGER NOT NULL DEFAULT 0,
+    editorial_line TEXT NOT NULL DEFAULT 'community',
+    editorial_basis TEXT NOT NULL DEFAULT 'independent local paper',
+    credibility REAL NOT NULL DEFAULT 1.0
+);
+CREATE TABLE IF NOT EXISTS newspaper_claims (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    week INTEGER NOT NULL REFERENCES newspapers(week),
+    event_id INTEGER NOT NULL REFERENCES events(id),
+    publisher_id INTEGER REFERENCES agents(id),
+    claim TEXT NOT NULL,
+    truth INTEGER NOT NULL DEFAULT 0,
+    correction TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_newspaper_claims_week ON newspaper_claims(week);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_newspaper_claim_event
+    ON newspaper_claims(week, event_id);
 
 -- Open favors owed between residents (small-town IOUs)
 CREATE TABLE IF NOT EXISTS debts (
@@ -380,6 +410,29 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "faith" not in cols:
         # derived from the persona's own cultural background (groups.py)
         conn.execute("ALTER TABLE agents ADD COLUMN faith TEXT")
+
+    # Gazette authorship is in-world: historical editions get null bylines,
+    # and the first new edition appoints an actual publisher/editor.
+    if _has_table(conn, "newspapers"):
+        ncols = {r["name"] for r in conn.execute("PRAGMA table_info(newspapers)")}
+        if "publisher_id" not in ncols:
+            conn.execute("ALTER TABLE newspapers ADD COLUMN publisher_id INTEGER")
+        if "editor_id" not in ncols:
+            conn.execute("ALTER TABLE newspapers ADD COLUMN editor_id INTEGER")
+        if "editorial_line" not in ncols:
+            conn.execute("ALTER TABLE newspapers ADD COLUMN editorial_line TEXT NOT NULL DEFAULT 'community'")
+        if "editorial_basis" not in ncols:
+            conn.execute("ALTER TABLE newspapers ADD COLUMN editorial_basis TEXT NOT NULL DEFAULT 'independent local paper'")
+        if "credibility" not in ncols:
+            conn.execute("ALTER TABLE newspapers ADD COLUMN credibility REAL NOT NULL DEFAULT 1.0")
+        if "claims_json" not in ncols:
+            conn.execute("ALTER TABLE newspapers ADD COLUMN claims_json TEXT NOT NULL DEFAULT '[]'")
+    if _has_table(conn, "newspaper_profile"):
+        pcols = {r["name"] for r in conn.execute("PRAGMA table_info(newspaper_profile)")}
+        if "editorial_basis" not in pcols:
+            conn.execute("ALTER TABLE newspaper_profile ADD COLUMN editorial_basis TEXT NOT NULL DEFAULT 'independent local paper'")
+        if "credibility" not in pcols:
+            conn.execute("ALTER TABLE newspaper_profile ADD COLUMN credibility REAL NOT NULL DEFAULT 1.0")
 
     # careers: tenure and rank on the post. Existing worlds start accruing
     # tenure from now rather than instantly promoting everyone.

@@ -45,6 +45,10 @@ li.mem { border-left: 3px solid var(--line); }
 li.mem.refl { border-left: 3px solid var(--accent); background: #1a2028;
   font-style: italic; }
 #gaz-text { font-family: Georgia, serif; line-height: 1.6; }
+.press-meta { margin: .5rem 0 1rem; color: var(--muted); font-size: .9rem; }
+.press-claims { border-left: 3px solid #bd5757; padding-left: .75rem; }
+.observer-record { max-height: 24rem; overflow: auto; font-size: .86rem; }
+.observer-record li { margin: .2rem 0; }
 #econ-stats { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1rem; }
 .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
   padding: .5rem .9rem; min-width: 8.5rem; }

@@ -311,7 +311,7 @@ def consider_motion(conn: sqlite3.Connection, tick: int, seed: str) -> dict | No
          text=(f"the council {verb} {text}" if passed
                else f"the council rejected a motion to {verb[:-1]} {text}"),
          tag="motion_passed" if passed else "motion_rejected",
-         policy=name, value=value, votes_for=len(yes),
+         policy=name, direction=direction, passed=passed, value=value, votes_for=len(yes),
          votes_against=len(members) - len(yes))
     conn.execute(
         """INSERT INTO motions(tick,day,policy,direction,value,passed,

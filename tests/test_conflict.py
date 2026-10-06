@@ -52,6 +52,16 @@ def test_influence_counts_a_seat_and_a_flock(conn):
     assert leading > seated                    # and leading people is worth more
 
 
+def test_publishing_owner_has_media_influence(conn):
+    before = conflict.influence_of(conn, 1)
+    conn.execute(
+        """INSERT INTO newspaper_profile(id,publisher_id,editor_id,founded_tick,
+           editorial_line,editorial_basis,credibility) VALUES(1,1,1,0,'community','test',1)""")
+    conn.commit()
+    after = conflict.influence_of(conn, 1)
+    assert after == before + 6.0
+
+
 def test_children_have_no_influence(conn):
     conn.execute("INSERT INTO agents(uuid,name,sex,age,is_child,household_id,"
                  "home_place_id) VALUES('kid','Kid Ashbrook','Female',8,1,1,"
