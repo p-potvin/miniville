@@ -526,7 +526,7 @@ A councillor who dies vacates their seat and the town votes again.
 CLI: `council`, `election`, `motion`. API: `/api/council`. The chronicle
 names who governs. 150 tests.
 
-## v0.13 — the Gazette has an owner, and its account can be false (Tue, 06 Oct 2026)
+### Gazette design note — the operator's question
 
 The operator's question: *is someone from the village writing the newspaper?
 It would introduce bias and another source of power/conflicts — or was the
@@ -554,7 +554,7 @@ End-to-end Patchright check on the live Gazette: owner/editor Laverne Miller,
 week. The current live edition contained no false claim; the policy-misreport
 path is covered by deterministic tests. `166 passed`.
 
-## v0.13 — the Gazette has an owner, and its account can be false (Tue, 06 Oct 2026)
+### Initial Gazette implementation note (superseded by the soak result below)
 
 The operator asked whether a resident writes the newspaper, and whether it
 should be neutral for us as observers. It is now both, at different layers:
