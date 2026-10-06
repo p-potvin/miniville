@@ -141,7 +141,8 @@ def test_retirement_frees_the_post(conn, monkeypatch):
 def _employ_with_tenure(conn, aid, place_name, started_day, rank=0, degree=None):
     conn.execute(
         """INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,
-           work_days,started_tick,rank) VALUES(?,?,'clerk',10000,16,30,62,?,?)""",
+           work_days,started_tick,rank,base_wage_cents)
+           VALUES(?,?,'clerk',10000,16,30,62,?,?,10000)""",
         (aid, place_id(conn, place_name), started_day * 48, rank))
     if degree:
         conn.execute("UPDATE agents SET education_level=? WHERE id=?", (degree, aid))
@@ -213,3 +214,23 @@ def test_hiring_budget_clears_the_firing_rate(conn):
     separations = 40 * P_FIRE * 7
     assert result["hired"] >= min(30, int(separations * jobs.SEPARATION_MARGIN))
     assert result["hired"] <= 30                            # never more than the candidates
+
+
+def test_seniority_pay_is_capped(conn, monkeypatch):
+    """Two per cent a year must not compound forever.
+
+    SENIORITY_MAX was defined and never applied, so over a long run the town's
+    wages outgrew anything its businesses could charge: 27 of them failed and
+    every closure took its whole staff with it.
+    """
+    monkeypatch.setattr(jobs, "SENIORITY_ANNUAL", 1.0)      # a raise every pass
+    monkeypatch.setattr(jobs, "PROMOTE_ANNUAL", 0.0)        # promotions aside
+    _employ_with_tenure(conn, 1, "Miniville Grocer", started_day=0)
+    for year in range(1, 40):                               # forty years of service
+        jobs.careers(conn, tick=(400 + year * 365) * 48, seed="test")
+    row = conn.execute("SELECT wage_cents, base_wage_cents FROM jobs "
+                       "WHERE agent_id=1").fetchone()
+    ceiling = int(row["base_wage_cents"] * (1 + jobs.SENIORITY_MAX)
+                  * (1 + jobs.PROMOTE_RAISE) ** 2)
+    assert row["wage_cents"] <= ceiling
+    assert row["wage_cents"] >= row["base_wage_cents"]

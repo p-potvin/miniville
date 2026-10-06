@@ -111,11 +111,13 @@ def _wage_for(conn: sqlite3.Connection, r) -> int:
 def _hire(conn: sqlite3.Connection, agent_id: int, place_id: int, occupation: str,
           r, tick: int) -> None:
     shift_start = r.choice([12, 14, 16, 18])
+    wage = _wage_for(conn, r)
     conn.execute(
         "INSERT OR REPLACE INTO jobs(agent_id,place_id,role,wage_cents,"
-        "shift_start,shift_end,work_days,started_tick,rank) VALUES(?,?,?,?,?,?,62,?,0)",
-        (agent_id, place_id, occupation or "worker", _wage_for(conn, r),
-         shift_start, min(shift_start + r.randint(14, 18), 44), tick))
+        "shift_start,shift_end,work_days,started_tick,rank,base_wage_cents) "
+        "VALUES(?,?,?,?,?,?,62,?,0,?)",
+        (agent_id, place_id, occupation or "worker", wage,
+         shift_start, min(shift_start + r.randint(14, 18), 44), tick, wage))
     conn.execute("UPDATE agents SET work_place_id=? WHERE id=?", (place_id, agent_id))
 
 
@@ -227,7 +229,8 @@ def careers(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     day = day_of(tick)
     rows = conn.execute(
         """SELECT j.agent_id, j.place_id, j.role, j.wage_cents, j.rank,
-                  j.started_tick, a.name aname, a.education_level, p.name pname
+                  j.started_tick, j.base_wage_cents,
+                  a.name aname, a.education_level, p.name pname
            FROM jobs j JOIN agents a ON a.id=j.agent_id
            JOIN places p ON p.id=j.place_id
            WHERE a.alive=1""").fetchall()
@@ -276,7 +279,16 @@ def careers(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
                          affinity = MIN(-25.0, relationships.affinity - 12.0),
                          label = 'rival'""", (lo, hi))
         elif r.random() < SENIORITY_ANNUAL:
-            wage = int(row["wage_cents"] * (1 + SENIORITY_ANNUAL))
+            # capped against the post's starting wage. SENIORITY_MAX was
+            # defined and never applied, so 2% a year compounded forever:
+            # over a long run the town's wages outgrew everything its
+            # businesses could charge, 27 of them failed, and each closure
+            # took its whole staff with it.
+            base = row["base_wage_cents"] or row["wage_cents"]
+            ceiling = int(base * (1 + SENIORITY_MAX) * (1 + PROMOTE_RAISE) ** 2)
+            if row["wage_cents"] >= ceiling:
+                continue
+            wage = min(ceiling, int(row["wage_cents"] * (1 + SENIORITY_ANNUAL)))
             conn.execute("UPDATE jobs SET wage_cents=? WHERE agent_id=?",
                          (wage, row["agent_id"]))
             raised += 1

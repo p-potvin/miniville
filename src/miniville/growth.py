@@ -94,13 +94,14 @@ def _give_job(conn: sqlite3.Connection, agent_id: int, occupation: str, r,
     if room is not None:
         room[place_id] -= 1
     shift_start = r.choice([12, 14, 16, 18])
+    wage = r.randint(economy.WAGE_MIN_CENTS, economy.WAGE_MAX_CENTS)
     conn.execute(
         "INSERT OR REPLACE INTO jobs(agent_id,place_id,role,wage_cents,"
-        "shift_start,shift_end,work_days,started_tick,rank) VALUES(?,?,?,?,?,?,62,?,0)",
-        (agent_id, place_id, occ,
-         r.randint(economy.WAGE_MIN_CENTS, economy.WAGE_MAX_CENTS), shift_start,
+        "shift_start,shift_end,work_days,started_tick,rank,base_wage_cents) "
+        "VALUES(?,?,?,?,?,?,62,?,0,?)",
+        (agent_id, place_id, occ, wage, shift_start,
          min(shift_start + r.randint(14, 18), 44),
-         int(get_meta(conn, "tick", "0") or 0)))
+         int(get_meta(conn, "tick", "0") or 0), wage))
     conn.execute("UPDATE agents SET work_place_id=? WHERE id=?",
                  (place_id, agent_id))
     return place_id
