@@ -28,3 +28,30 @@ replying, no git worktrees.
 ```
 
 Env: `MINIVILLE_DB` overrides `data/miniville.db`. Dataset: `E:\Nemotron-Personas-USA`.
+
+## Long runs are how this project finds its bugs
+
+Every real defect so far was **cross-system** and invisible to unit tests:
+rent destroyed while public payroll was minted; children eating only dinner
+because the school branch won the meal ticks; encounters so promiscuous that
+clubs were a rounding error; seniority pay compounding until 27 businesses
+failed; venues that paid 1.07x what they took in. Each was found by running
+the town for months and reading the numbers.
+
+So: after any change to the simulation, soak it and check it.
+
+```powershell
+.\.venv\Scripts\python.exe scripts\soak.py --days 365 --tag mine   # runs on a copy
+.\.venv\Scripts\python.exe scripts\soak_check.py data\soak-mine.db # invariants
+.\.venv\Scripts\python.exe scripts\soak_check.py --run 365 --tag mine  # both at once
+```
+
+`soak_check.py` asserts what a *living town* should hold — money conserved,
+no deficit spiral, employment in band, venues staffed and able to pay their
+way, wages not compounding, businesses not churning, the graph having
+structure, the town having friction, people content, and the town staying
+eventful. A failure names the number that broke it; the probes in
+`scripts/_*.py` (untracked, ad hoc) are what you write next to attribute it.
+
+Use `--source` to soak a specific database, and `--mortality-scale` to
+accelerate generational turnover.
