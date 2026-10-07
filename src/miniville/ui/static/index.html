@@ -22,6 +22,7 @@
   <button data-tab="debts">IOUs</button>
   <button data-tab="gazette">Gazette</button>
   <button data-tab="economy">Economy</button>
+  <button data-tab="council">Council</button>
 </nav>
 <main>
   <section id="feed" class="panel on">
@@ -89,6 +90,29 @@
     <table><thead><tr><th>Day</th><th>Revenue</th><th>Payroll</th><th>Rent</th>
       <th>Spending</th><th>Supply</th><th>Unemployment</th><th>Closed</th>
     </tr></thead><tbody id="econ-days"></tbody></table>
+  </section>
+  <section id="council" class="panel">
+    <h2>Town Council & Politics</h2>
+    <div id="council-meta" class="press-meta"></div>
+    <div id="council-policies" class="policy-grid"></div>
+    <h3>Council Seats</h3>
+    <table><thead><tr><th>Seat</th><th>Councillor</th><th>District</th><th>Backers</th>
+      <th>Median Wallet</th><th>Out of Work</th></tr></thead>
+      <tbody id="council-seats"></tbody></table>
+    <h3>Recent Motions</h3>
+    <table><thead><tr><th>Day</th><th>Policy</th><th>Target</th><th>Direction</th>
+      <th>Votes</th><th>Outcome</th></tr></thead>
+      <tbody id="council-motions"></tbody></table>
+    <div id="council-extra">
+      <div id="council-boycotts-wrap" hidden>
+        <h3>Active Boycotts</h3>
+        <ul id="council-boycotts"></ul>
+      </div>
+      <div id="council-influential-wrap">
+        <h3>Town Figures & Influence</h3>
+        <ul id="council-influential"></ul>
+      </div>
+    </div>
   </section>
 </main>
 <script src="/vendor/pixi.min.js"></script>

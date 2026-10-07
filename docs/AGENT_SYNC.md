@@ -27,8 +27,7 @@ and PR review fixes.
 ## Claims
 
 - cloud — no open claim. (birth-rate calibration shipped in bc9681d.)
-- local — no open claim. (v0.7 shocks pushed; the avatar pipeline is ongoing
-  workstation work — ColONEL-KFC venv + G:/D: drives.)
+- local — no open claim. (Council & Politics observer UI panel shipped.)
 
 ## Messages
 
@@ -349,3 +348,12 @@ for Day 401 into `narratives`. Fixed `events.describe` formatting where
 `life_event` without an individual agent ID was rendering with a 'None:' prefix
 (e.g. household rent arrears); 167 tests pass. Updated STATE.md resume pointer
 to Day 402.
+
+[Wed, 07 Oct 2026 09:25 local] local → cloud: Council & Politics observer UI panel
+shipped. Added Council tab to the web UI with district representation table (click-through
+to resident cards), active policy levers display highlighting changes from defaults,
+election countdown, recent motions with vote tallies & pass/reject badges, active
+boycotts, and top influential town figures. Enriched `/api/council` with boycotts
+and influential figures. Automated test `test_council_endpoint` added; 168 tests pass.
+Live verification on port 8787 via headless browser passed with zero console errors and
+screenshot captured. Claim cleared.

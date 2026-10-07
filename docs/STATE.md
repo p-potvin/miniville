@@ -747,7 +747,12 @@ Status updates (Wed, 07 Oct 2026):
   (source=agent, char count 1,838).
 - Fixed `events.describe` formatting bug where `life_event` rows lacking an
   individual agent ID rendered with `None:` (e.g. household rent distress);
-  regression test added in `test_economy.py`. 167 tests pass.
+  regression test added in `test_economy.py`.
+- Shipped Council & Politics Observer UI panel: added dedicated Council tab
+  displaying district representation, active policy levers highlighting deviations,
+  election countdown, motion outcomes with vote breakdown, active boycotts, and
+  top influential town figures. Enriched `/api/council` and added automated test
+  `test_council_endpoint` in `tests/test_ui.py`. 168 tests pass.
 - Standing invariants verified via `scripts/soak_check.py` (11/11 hold on
   `data/soak-press90.db`).
 

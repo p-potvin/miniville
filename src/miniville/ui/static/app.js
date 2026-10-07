@@ -191,7 +191,88 @@ async function economy() {
      <td>${d.businesses_closed}</td></tr>`).join("");
 }
 
-const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts, gazette, economy,
+function formatPolicy(name, val) {
+  if (name === "levy_rate" || name === "dividend_share" || name === "min_wage") {
+    return (val * 100).toFixed(1) + "%";
+  }
+  if (name === "rent_multiplier") {
+    return (val * 100).toFixed(0) + "%";
+  }
+  return String(val);
+}
+
+async function council() {
+  const r = await api("/api/council");
+  const seats = r.seats || [];
+  const policies = r.policies || {};
+  const nextElection = r.next_election_day;
+  const daysLeft = curDay != null && nextElection != null ? Math.max(0, nextElection - curDay) : null;
+
+  $("#council-meta").textContent =
+    `Next council election: Day ${nextElection ?? "?"}` +
+    (daysLeft != null ? ` (${daysLeft} days away)` : "") +
+    ` · 5 district seats · policy levers directly influence town books, rent, and wages.`;
+
+  const polKeys = Object.keys(policies).sort();
+  $("#council-policies").innerHTML = polKeys.map(k => {
+    const p = policies[k];
+    const label = k.replace(/_/g, " ");
+    const isMoved = Math.abs(p.now - p.default) > 1e-6;
+    return `<div class="stat${isMoved ? " active-policy" : ""}">
+      <b>${formatPolicy(k, p.now)}</b>
+      <span>${label}</span>
+      <span class="muted">def ${formatPolicy(k, p.default)} · [${formatPolicy(k, p.low)} - ${formatPolicy(k, p.high)}]</span>
+    </div>`;
+  }).join("");
+
+  $("#council-seats").innerHTML = seats.length ? seats.map(s =>
+    `<tr>
+      <td>${s.seat}</td>
+      <td><a class="click-link" onclick="mvPick({id: ${s.agent_id}})"><b>${esc(s.name || "Vacant")}</b></a></td>
+      <td>${esc(s.district || "—")}</td>
+      <td>${s.backers ?? 0}</td>
+      <td>${money(s.backers_wallet)}</td>
+      <td>${((s.backers_unemployed ?? 0) * 100).toFixed(1)}%</td>
+    </tr>`
+  ).join("") : `<tr><td colspan="6" class="muted">No council seated yet</td></tr>`;
+
+  const motions = r.motions || [];
+  $("#council-motions").innerHTML = motions.length ? motions.map(m => {
+    const pass = m.passed === 1;
+    const badge = pass ? `<span class="badge-pass">Passed</span>` : `<span class="badge-fail">Rejected</span>`;
+    const dir = m.direction > 0 ? "▲ Raise" : "▼ Lower";
+    return `<tr>
+      <td>Day ${m.day + 1}</td>
+      <td><b>${esc(m.policy)}</b></td>
+      <td>${formatPolicy(m.policy, m.value)}</td>
+      <td>${dir}</td>
+      <td>${m.votes_for} for / ${m.votes_against} against</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="6" class="muted">No motions debated yet</td></tr>`;
+
+  const boycotts = r.boycotts || [];
+  if (boycotts.length) {
+    $("#council-boycotts-wrap").hidden = false;
+    $("#council-boycotts").innerHTML = boycotts.map(b =>
+      `<li><b>${esc(b.group_name)}</b> boycotting <b>${esc(b.place_name)}</b> ` +
+      `<span class="t">until Day ${b.until_day + 1}</span><br>` +
+      `<span class="muted">${esc(b.reason || "commercial grievance")}</span></li>`
+    ).join("");
+  } else {
+    $("#council-boycotts-wrap").hidden = true;
+  }
+
+  const influential = r.influential || [];
+  $("#council-influential").innerHTML = influential.length ? influential.map(inf =>
+    `<li class="click" onclick="mvPick({id: ${inf.id}})">
+      <b>${esc(inf.name)}</b>
+      <span class="t">influence <b>${Number(inf.influence).toFixed(1)}</b></span>
+    </li>`
+  ).join("") : `<li class="muted">No influence data</li>`;
+}
+
+const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts, gazette, economy, council,
   map: () => renderMap($("#map-host")) };
 for (const b of document.querySelectorAll("#tabs button"))
   b.onclick = () => {

@@ -423,9 +423,16 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.get("/api/council")
     def council_view():
         """Who governs, what they last decided, and what they have changed."""
+        from ..conflict import most_influential
         from ..politics import POLICIES, council, next_election_day, policy
         c = conn()
         try:
+            boycotts = _rows(c, """SELECT b.*, g.name group_name, p.name place_name
+                                   FROM boycotts b
+                                   JOIN groups g ON g.id=b.group_id
+                                   JOIN places p ON p.id=b.place_id
+                                   ORDER BY b.started_day DESC""")
+            elections = _rows(c, "SELECT * FROM elections ORDER BY id DESC LIMIT 5")
             return {
                 "seats": council(c),
                 "policies": {name: {"now": policy(c, name), "default": POLICIES[name][0],
@@ -433,6 +440,9 @@ def create_app(db_path: str | None = None) -> FastAPI:
                              for name in sorted(POLICIES)},
                 "next_election_day": next_election_day(c),
                 "motions": _rows(c, "SELECT * FROM motions ORDER BY id DESC LIMIT 20"),
+                "boycotts": boycotts,
+                "elections": elections,
+                "influential": most_influential(c, 8),
             }
         finally:
             c.close()

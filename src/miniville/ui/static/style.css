@@ -64,3 +64,11 @@ td.closed { color: var(--warm); }
 button.mini { font: .72rem Consolas, monospace; padding: .15rem .5rem; margin-left: .5rem; cursor: pointer; }
 li.click { cursor: pointer; }
 li.click:hover { background: var(--panel); }
+
+.policy-grid { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1rem; }
+.stat.active-policy { border-color: var(--accent); }
+.badge-pass { color: #6bd48e; font-weight: bold; }
+.badge-fail { color: #e06c75; font-weight: bold; }
+.click-link { color: var(--accent); cursor: pointer; text-decoration: underline; }
+.click-link:hover { color: var(--fg); }
+#council-extra { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1rem; }

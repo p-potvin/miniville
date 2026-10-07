@@ -150,3 +150,43 @@ def test_economy_endpoint(client):
     # the in-progress day must not be reported as the last completed one
     assert body["stats"]["last_day"] is None
     assert body["series"] == []
+
+
+def test_council_endpoint(client, tmp_path):
+    conn = db.connect(tmp_path / "ui.db")
+    conn.execute(
+        """INSERT INTO council(seat, agent_id, elected_tick, district, backers, backers_wallet, backers_unemployed)
+           VALUES(1, 1, 48, 'Downtown', 50, 1000000, 0.10)"""
+    )
+    conn.execute(
+        """INSERT INTO motions(tick, day, policy, direction, value, passed, votes_for, votes_against)
+           VALUES(48, 1, 'levy_rate', 1, 0.06, 1, 3, 2)"""
+    )
+    c_group = conn.execute("INSERT INTO groups(name, kind, founded_tick) VALUES('Art Guild', 'club', 48)")
+    gid = c_group.lastrowid
+    p_id = conn.execute("SELECT id FROM places WHERE kind != 'home' LIMIT 1").fetchone()["id"]
+    conn.execute("INSERT INTO boycotts(group_id, place_id, started_day, until_day, reason) VALUES(?,?,1,30,'high prices')",
+                 (gid, p_id))
+    conn.commit()
+    conn.close()
+
+    body = client.get("/api/council").json()
+    assert "seats" in body
+    assert len(body["seats"]) == 1
+    assert body["seats"][0]["district"] == "Downtown"
+    assert "policies" in body
+    assert "levy_rate" in body["policies"]
+    assert "dividend_share" in body["policies"]
+    assert "rent_multiplier" in body["policies"]
+    assert "min_wage" in body["policies"]
+    assert "next_election_day" in body
+    assert "motions" in body
+    assert len(body["motions"]) == 1
+    assert body["motions"][0]["policy"] == "levy_rate"
+    assert "boycotts" in body
+    assert len(body["boycotts"]) == 1
+    assert body["boycotts"][0]["group_name"] == "Art Guild"
+    assert "influential" in body
+    assert len(body["influential"]) > 0
+
+
