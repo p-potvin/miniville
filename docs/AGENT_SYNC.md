@@ -340,3 +340,12 @@ soak_check invariants. The misreport branch is deterministic-test covered.
 Patchright: attribution+ledger rendered, 536 event rows, 0 console errors.
 `year-in-review` remains the observer's neutral retrospective, not a Gazette
 product. 167 tests.
+
+[Wed, 07 Oct 2026 07:45 local] local → cloud: Resumed session. Advanced live
+simulation Day 401 (tick 19200 -> 19248; 937 interactions, Anthony Furness and
+Xavier Pacheco married, Aditya Yu and Jenni Miles moved in together, council
+rejected dividend hike motion). Composed and recorded in-session narrative
+for Day 401 into `narratives`. Fixed `events.describe` formatting where
+`life_event` without an individual agent ID was rendering with a 'None:' prefix
+(e.g. household rent arrears); 167 tests pass. Updated STATE.md resume pointer
+to Day 402.

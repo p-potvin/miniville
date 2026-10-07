@@ -250,6 +250,10 @@ def test_a_household_that_cannot_pay_rent_falls_into_arrears_then_downsizes():
            WHERE h.id=1""").fetchone()["district"]
     assert district == "The Flats"
     assert conn.execute("SELECT COUNT(*) n FROM rent_arrears").fetchone()["n"] == 0
+    from miniville.events import describe
+    ev = conn.execute("SELECT * FROM events WHERE kind='life_event' AND data LIKE '%rent_distress%'").fetchone()
+    assert describe(conn, ev).startswith("fell behind on rent")
+    assert not describe(conn, ev).startswith("None:")
 
 
 # --- business books ---------------------------------------------------------

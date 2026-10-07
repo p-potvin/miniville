@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Sat, 03 Oct 2026 12:30
+Last updated: Wed, 07 Oct 2026 07:45
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -732,22 +732,29 @@ recirculates less. Worth a considered pass on rent recycling / levy balance.
 ## Resume note for next session
 
 Branch `autodev`, both agents pushing. World is seeded (seed=miniville) — `run`
-continues from tick 1776 (Day 38 = **Feb 7, Year 1**, winter; next holiday is
-Founders' Day, Apr 18 = Day 108, tick 5136). Do NOT `init` again unless
-intentionally resetting the town. Both economy migrations are applied (wages
-$62–252/day).
+continues from tick 19248 (Day 401 completed = **Feb 5, Year 2**, winter; next tick
+to advance is tick 19248 to 19296 for Day 402). Do NOT `init` again unless
+intentionally resetting the town. All economy migrations are applied.
 
 **Read `docs/AGENT_SYNC.md` first** — claims and messages between the workstation
 and cloud sessions live there. Pull before starting work; push small commits.
 
-CAVEAT: days 18–37 of the live world were simulated under the *pre-merge* seasons
-code (my dropped implementation), so a few chronicles say "Spring" where the merged
-calendar says winter, and the ledger contains a couple of holiday events that no
-longer exist (`Spring Blossom Festival`). Cosmetic only — nothing reads it back.
+Status updates (Wed, 07 Oct 2026):
+- Live world advanced through Day 401: 937 interactions, Anthony Furness and
+  Xavier Pacheco married, Aditya Yu and Jenni Miles moved in together, council
+  dividend hike motion rejected 2-3.
+- In-session prose narrative for Day 401 composed and stored in `narratives`
+  (source=agent, char count 1,838).
+- Fixed `events.describe` formatting bug where `life_event` rows lacking an
+  individual agent ID rendered with `None:` (e.g. household rent distress);
+  regression test added in `test_economy.py`. 167 tests pass.
+- Standing invariants verified via `scripts/soak_check.py` (11/11 hold on
+  `data/soak-press90.db`).
 
-Open items the next session could take: the two findings left for the cloud agent
-in `AGENT_SYNC.md` (duplicate `cohabitation` events; keep the `cli.py` stdout
-reconfigure), and the roadmap's next milestone — **God-mode shocks** (inject a
-factory closure / fire / festival and watch the town absorb it).
-Daily routine for the backup session: read this file → `run` the next day(s) →
-`digest` → write a `narrate-write` entry → update this file → ledger.
+Open items:
+1. Avatar pipeline: 129 deferred female residents awaiting IMDb StarMeter expansion
+   when operator approves batch.
+2. Observer UI: sigma.js bond graph and per-district heat/trend overlays.
+3. Scale test: 2k-5k agents (initial indexing/benchmarking done in bench5k.db).
+4. Routine: read this file → `run` the next day(s) → `digest` → write a
+   `narrate-write` entry → update this file → ledger.
