@@ -92,8 +92,13 @@ def test_a_quiet_venue_cannot_carry_more_staff_than_its_takings_pay(conn):
     conn.execute("UPDATE businesses SET ema_revenue=30000, opened_tick=0 WHERE place_id=?",
                  (diner,))
     db.set_meta(conn, "tick", str(60 * 48))
+    assert jobs.venue_targets(conn)[diner] == unbounded     # in the black: not capped
+    total = sum(jobs.venue_targets(conn).values())
+    conn.execute("UPDATE businesses SET balance_cents=-100 WHERE place_id=?", (diner,))
     capped = jobs.venue_targets(conn)[diner]
     assert capped < unbounded
+    # the posts it sheds go to the other venues, not out of the town
+    assert abs(sum(jobs.venue_targets(conn).values()) - total) <= 20
     assert capped <= int(30000 * jobs.AFFORD_SHARE / (15750 * 5 / 7)) + 1
     # a public venue is never capped by takings
     hall = place_id(conn, "Town Hall")

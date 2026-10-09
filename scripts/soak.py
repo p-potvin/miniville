@@ -78,8 +78,13 @@ def main() -> int:
     a = ap.parse_args()
 
     if a.mortality_scale is not None:
+        # mortality reads the env var at import, and engine (which imports it)
+        # is already loaded above — setting only the env var here silently did
+        # nothing, so every "accelerated" soak ran at the real death rate
         import os
+        from miniville import mortality
         os.environ["MINIVILLE_MORTALITY_SCALE"] = str(a.mortality_scale)
+        mortality.SCALE = float(a.mortality_scale)
 
     src = Path(a.source) if a.source else Path(
         __import__("os").environ.get("MINIVILLE_DB") or REPO / "data" / "miniville.db")

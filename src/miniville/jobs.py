@@ -74,6 +74,7 @@ def venue_targets(conn: sqlite3.Connection) -> dict[int, int]:
     rows = conn.execute(
         """SELECT p.id, p.capacity, p.tags, p.kind, COALESCE(b.ema_traffic, 0) traffic,
                   COALESCE(b.ema_revenue, 0) revenue, COALESCE(b.opened_tick, 0) opened,
+                  COALESCE(b.balance_cents, 0) balance,
                   (SELECT AVG(j.wage_cents) FROM jobs j WHERE j.place_id = p.id) wage
            FROM places p LEFT JOIN businesses b ON b.place_id = p.id
            WHERE p.kind != 'home' AND COALESCE(b.status, 'open') = 'open'""").fetchall()
@@ -88,23 +89,35 @@ def venue_targets(conn: sqlite3.Connection) -> dict[int, int]:
     scale = budget / total_w
     targets = {pid: max(2, min(STAFF_MAX, round(w * scale)))
                for pid, w in weights.items()}
-    # A commercial venue can only carry the staff its takings pay for. The
-    # weights above follow seats and foot traffic, not money: a 2026 soak had
-    # the Riverside Diner carrying 15 staff on 11 visits a day and the new
-    # coffee houses 24 staff selling $9 coffees — every one of them paying out
-    # more than it took in. Posts a venue cannot afford are not created.
+    # A commercial venue in the red can only carry the staff its takings pay
+    # for. The weights above follow seats and foot traffic, not money: a soak
+    # had the Riverside Diner carrying 15 staff on 11 visits a day and the new
+    # coffee houses 24 staff selling $9 coffees, each paying out more than it
+    # took in. Capping every commercial venue by its takings threw a third of
+    # the town out of work instead, so only a venue that is losing money is
+    # capped, and the posts it sheds go to the venues that are not: labour
+    # leaves the failing business for the thriving one.
     from .enterprise import is_commercial
     now = int(get_meta(conn, "tick", "0") or 0)
+    freed = 0
+    capped: set[int] = set()
     for r in rows:
         tags = set(json.loads(r["tags"] or "[]"))
-        if not is_commercial(tags, r["kind"]) or r["revenue"] <= 0:
+        if not is_commercial(tags, r["kind"]) or r["revenue"] <= 0 or r["balance"] >= 0:
             continue
         if now - r["opened"] < AFFORD_WARMUP_DAYS * TICKS_PER_DAY:
             continue                          # the revenue average is still warming up
         wage = r["wage"] or (WAGE_MIN_CENTS + WAGE_MAX_CENTS) / 2
-        days_worked = 5 / 7
-        affordable = int(r["revenue"] * AFFORD_SHARE / (wage * days_worked))
-        targets[r["id"]] = max(2, min(targets[r["id"]], affordable))
+        affordable = int(r["revenue"] * AFFORD_SHARE / (wage * 5 / 7))
+        cap = max(2, min(targets[r["id"]], affordable))
+        freed += targets[r["id"]] - cap
+        targets[r["id"]] = cap
+        capped.add(r["id"])
+    if freed:
+        rest = {pid: w for pid, w in weights.items() if pid not in capped}
+        rest_w = sum(rest.values()) or 1.0
+        for pid, w in rest.items():
+            targets[pid] = min(STAFF_MAX, targets[pid] + round(freed * w / rest_w))
     return targets
 
 
