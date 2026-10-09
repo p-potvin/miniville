@@ -97,7 +97,9 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 """SELECT * FROM economy_days WHERE money_supply_cents > 0
                    ORDER BY day DESC LIMIT ?""", (days,))
             series.reverse()
-            return {"stats": stats, "businesses": businesses, "series": series}
+            from ..housing import district_profile
+            return {"stats": stats, "businesses": businesses, "series": series,
+                    "districts": district_profile(c)}
         finally:
             c.close()
 

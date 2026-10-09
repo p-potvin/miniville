@@ -150,6 +150,8 @@ def test_economy_endpoint(client):
     # the in-progress day must not be reported as the last completed one
     assert body["stats"]["last_day"] is None
     assert body["series"] == []
+    assert {d["district"] for d in body["districts"]} >= {"Downtown", "The Flats"}
+    assert "owner_name" in body["businesses"][0]
 
 
 def test_council_endpoint(client, tmp_path):

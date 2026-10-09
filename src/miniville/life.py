@@ -38,19 +38,6 @@ def _fall_ill(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) -> Non
          text=f"fell ill ({days} day{'s' if days>1 else ''})", tag="sick")
 
 
-def _move_house(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) -> None:
-    hid = agent["household_id"]
-    homes = conn.execute("SELECT id FROM places WHERE kind='home'").fetchall()
-    new_home = r.choice(homes)["id"]
-    members = conn.execute(
-        "SELECT id FROM agents WHERE household_id=?", (hid,)).fetchall()
-    for m in members:
-        conn.execute("UPDATE agents SET home_place_id=? WHERE id=?", (new_home, m["id"]))
-    conn.execute("UPDATE households SET home_place_id=? WHERE id=?", (new_home, hid))
-    emit(conn, tick, "life_event", a=agent["id"], importance=MINOR,
-         text=f"moved house with {len(members)-1} other(s)", tag="move")
-
-
 def daily_life_lottery(conn: sqlite3.Connection, tick: int, seed: str) -> int:
     """Once-per-day random life events. Returns event count."""
     n = 0
@@ -80,7 +67,11 @@ def daily_life_lottery(conn: sqlite3.Connection, tick: int, seed: str) -> int:
         if r.random() < P_ILL:
             _fall_ill(conn, a, tick, r); n += 1
         if r.random() < P_MOVE:
-            _move_house(conn, a, tick, r); n += 1
+            # the household thinks about moving; what it can afford decides
+            # whether, and where (housing.py)
+            from .housing import consider_move
+            if consider_move(conn, a, tick, r):
+                n += 1
     conn.commit()
     return n
 

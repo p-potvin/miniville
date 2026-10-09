@@ -186,6 +186,10 @@ async function economy() {
      <td>${money(b.balance_cents)}</td><td>${money(b.revenue_total)}</td>
      <td>${money(b.payroll_total)}</td><td>${(b.price_index * 100).toFixed(0)}%</td>
      <td>${Math.round(b.ema_traffic)}</td></tr>`).join("");
+  $("#econ-districts").innerHTML = (r.districts || []).map(d =>
+    `<tr><td>${esc(d.district)}</td><td>${money(d.rent_cents)}</td>
+     <td>${d.households}</td><td>${d.residents}</td>
+     <td>${money(d.median_savings_cents)}</td></tr>`).join("");
   $("#econ-days").innerHTML = r.series.map(d =>
     `<tr><td>${d.day + 1}</td><td>${money(d.revenue_cents)}</td>
      <td>${money(d.payroll_cents)}</td><td>${money(d.rent_cents)}</td>
