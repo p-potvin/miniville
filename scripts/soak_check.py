@@ -185,11 +185,14 @@ def main() -> int:
     ap.add_argument("db", nargs="?", default=None)
     ap.add_argument("--run", type=int, default=0, help="soak N days first")
     ap.add_argument("--tag", default="check")
+    ap.add_argument("--source", default=None, help="db to soak (with --run)")
     a = ap.parse_args()
 
     if a.run:
         from soak import main as soak_main  # type: ignore
         sys.argv = ["soak.py", "--days", str(a.run), "--tag", a.tag, "--quiet"]
+        if a.source:
+            sys.argv += ["--source", a.source]
         soak_main()
         path = REPO / "data" / f"soak-{a.tag}.db"
     else:
