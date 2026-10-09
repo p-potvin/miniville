@@ -237,6 +237,8 @@ def test_a_household_that_cannot_pay_rent_falls_into_arrears_then_downsizes():
     home = _place(conn, "Town Hall")              # Downtown, the priciest
     _add_household(conn, 1, home)
     _add_adult(conn, 1, home, 0, household=1)     # no money at all
+    _add_adult(conn, 2, home, 0, household=1)
+    conn.execute("UPDATE agents SET is_child=1, age=9 WHERE id=2")
 
     first = economy.collect_rent(conn, 7 * DAY, "s")
     assert first["missed"] == 1 and first["downsized"] == 0
@@ -249,6 +251,11 @@ def test_a_household_that_cannot_pay_rent_falls_into_arrears_then_downsizes():
         """SELECT p.district FROM households h JOIN places p ON p.id=h.home_place_id
            WHERE h.id=1""").fetchone()["district"]
     assert district == "The Flats"
+    # the child moves with the family
+    homes = {r["home_place_id"] for r in conn.execute(
+        "SELECT home_place_id FROM agents WHERE household_id=1")}
+    assert homes == {conn.execute("SELECT home_place_id FROM households WHERE id=1"
+                                  ).fetchone()["home_place_id"]}
     assert conn.execute("SELECT COUNT(*) n FROM rent_arrears").fetchone()["n"] == 0
     from miniville.events import describe
     ev = conn.execute("SELECT * FROM events WHERE kind='life_event' AND data LIKE '%rent_distress%'").fetchone()
@@ -397,7 +404,7 @@ def test_weekly_levy_recycles_business_reserves_to_residents():
     diner = _place(conn, "Riverside Diner")
     _add_adult(conn, 1, home, 0)
     _add_adult(conn, 2, home, 0)
-    conn.execute("UPDATE businesses SET balance_cents=100_000 WHERE place_id=?", (diner,))
+    conn.execute("UPDATE businesses SET balance_cents=100000 WHERE place_id=?", (diner,))
 
     assert economy.weekly_levy(conn, DAY, "s")["levied"] == 0      # not a levy day
     out = economy.weekly_levy(conn, 7 * DAY, "s")
@@ -427,7 +434,7 @@ def test_levy_funds_public_payroll_and_banks_a_buffer(conn=None):
     conn.execute(
         """INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,
            work_days) VALUES(1,?,'nurse',20000,16,34,62)""", (hospital,))
-    conn.execute("UPDATE businesses SET balance_cents=10_000_000 WHERE place_id=?",
+    conn.execute("UPDATE businesses SET balance_cents=10000000 WHERE place_id=?",
                  (diner,))
 
     week = economy.public_payroll_week(conn)

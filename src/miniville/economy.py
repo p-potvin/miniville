@@ -478,9 +478,10 @@ def _maybe_downsize(conn: sqlite3.Connection, h: sqlite3.Row, tick: int,
         return 0
     new_home = r.choice(cheap)["id"]
     conn.execute("UPDATE households SET home_place_id=? WHERE id=?", (new_home, h["id"]))
+    # the whole household moves, children included — leaving them behind put
+    # every downsized family's kids to bed in a home nobody paid for
     conn.execute(
-        """UPDATE agents SET home_place_id=? WHERE household_id=?
-           AND alive=1 AND is_child=0""",
+        "UPDATE agents SET home_place_id=? WHERE household_id=? AND alive=1",
         (new_home, h["id"]))
     conn.execute("DELETE FROM rent_arrears WHERE household_id=?", (h["id"],))
     members = conn.execute(
