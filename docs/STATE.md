@@ -583,6 +583,52 @@ tested with a deliberately opposed council vote. A 90-day press soak is
 running to see whether routine politics produces claims and how credibility
 moves.
 
+## v0.15 — the Gazette has readers, and public opinion moves the council (Fri, 09 Oct 2026, workstation)
+
+The paper could always print a false claim; the only cost was its own
+credibility number. Nothing it printed changed a vote. Now it does.
+
+`press.py` gives the Gazette **readers** — 55% of adults scaled by its
+credibility, so a caught lie shrinks the audience — and gives the town an
+**opinion** on each lever the council can pull, in [-1, 1] (support for raising
+it). Opinion moves weekly from two directions:
+
+- **The town's own conditions** pull it toward its material interest:
+  unemployment wants the wage floor and the dividend up, pensioners want the
+  pension up, an empty purse wants the levy up, rent arrears want rent down.
+- **The Gazette's line** pushes it toward the owner's interest, scaled by the
+  paper's reach (readers/adults). A business paper wants every lever down; a
+  working paper wants the levy, dividend, wage floor and pension up and rent
+  down. Reach is `PENETRATION * credibility`, so credibility *is* influence.
+
+A councillor now weighs **opinion against their district's own interest**. The
+district's lean is ±1; opinion contributes up to ±1.5, so opinion carries a
+seat only when it is strong — a paper needs reach, not just a line. When
+opinion changes the outcome the motion records `press_swing` and the ledger
+emits **`press_influence`**: *"the Gazette's campaign swung the council's vote
+to lower rent multiplier: it carried on opinion, not on the districts' own
+interest."*
+
+**Seen on a year of the real town** (`soak_check --run 365 --tag v15`, a copy
+from tick 19680): 11/11 invariants hold, money −0.1%/y, 0 deficits. The
+business-owned Gazette (Jose Duque by year's end; Laverne Miller earlier)
+drove rent opinion to **−1.00**, and the council's rent motions tracked it:
+rises failed **0-5** on opinion (days 450, 570, 660, 720, 750) and the paper's
+campaign carried rent **cuts** 5-0 (days 480, 690). **8 `press_influence`
+events** in the year, all on rent and the levy. Readership 212 of 398 adults
+(53% reach, credibility 97%).
+
+Observer UI: the Council tab shows the paper's reach/credibility/line and the
+opinion bars; motions flag the ones opinion swung. The Gazette masthead now
+prints its readership.
+
+Files: `src/miniville/press.py` (new), `politics.py` (`_votes_yes` weighs
+opinion; `consider_motion` detects the swing and emits `press_influence`),
+`newspaper.py` (readers in the masthead; `POLICY_PREFERENCE` moved to press),
+`engine.py` (weekly `press.update`), `db.py` (`opinion` table;
+`newspapers.readers`, `motions.support`, `motions.press_swing`), `ui/server.py`,
+`ui/static/*`, `tests/test_press.py`. 205 tests.
+
 ## v0.14 — estates, pensions, owners, housing, crime (Fri, 09 Oct 2026, cloud: Claude Code)
 
 A Claude Code cloud session took the cloud seat at the operator's request. No
@@ -863,11 +909,34 @@ seeded from all-time takings) and ran Days 402-410: no deficits, purse
 $145.7k → $212.4k, 2 new estates, and the usual run of betrayals, marriages
 and separations. 198 tests.
 
+Status updates (Fri, 09 Oct 2026, workstation, later): v0.15 above — the press
+got power. `soak_check --run 365 --tag v15` on a copy from tick 19680 holds
+11/11 with **8 `press_influence` swings** (the business-owned Gazette kept rent
+down: rises failed 0-5, cuts carried 5-0). 205 tests. UI verified with
+Patchright (Council opinion bars + press reach, Gazette readership, 0 console
+errors). The live world was NOT advanced in this session beyond Day 410; the
+live run on v0.15 is the next step (migrates on connect: `opinion` table,
+`newspapers.readers`, `motions.support`/`press_swing`).
+
+**Data anomaly found (Fri, 09 Oct 2026, workstation).** The live ledger
+contains **17 stray future-dated rows** — motion events and `motions` rows at
+ticks 22080-50880 (days 460-1060) while the world's clock is at tick 19680
+(day 410). They are contiguous (event ids 70802-70818, motion ids 11-27) and
+were written in one batch around the world's day ~283: a past probe appears to
+have swept `politics.due` over future days straight into `data/miniville.db`.
+They do not affect simulation state (agents, money, chronicle, economy_days are
+all consistent at day ≤ 409), but they violate the ledger's coherence and show
+up as future-dated rows in the Council UI. **Proposed fix (needs operator OK —
+destructive):** back up, then delete `events` ids 70802-70818 and `motions` ids
+11-27. Lesson: probes must run on a copy, never the live DB.
+
 Open items:
 
 1. Avatar pipeline: 129 deferred female residents awaiting IMDb StarMeter expansion
    when operator approves batch.
 2. Observer UI: sigma.js bond graph (district overlay done in v0.14).
 3. Scale test: 2k-5k agents (initial indexing/benchmarking done in bench5k.db).
-4. Routine: read this file → `run` the next day(s) → `digest` → write a
+4. Live-world run on v0.15 (workstation): `run` the next days and watch opinion.
+5. Clean the 17 stray future-dated ledger rows (above), with operator OK.
+6. Routine: read this file → `run` the next day(s) → `digest` → write a
    `narrate-write` entry → update this file → ledger.
