@@ -112,6 +112,46 @@ def _rehome_children(conn: sqlite3.Connection, deceased: sqlite3.Row, r) -> int:
     return len(kids)
 
 
+def _settle_estate(conn: sqlite3.Connection, deceased: sqlite3.Row,
+                   survivor: int | None, tick: int) -> str:
+    """Pass the deceased's money on. Returns a phrase for the death notice.
+
+    The dead used to keep their wallets forever: every death took its savings
+    out of circulation for good, and the money supply only looked conserved
+    because it summed over the dead too. The estate goes to the surviving
+    spouse, else to whoever shared the household (the adults, else the
+    children), else to the town purse — which the levy pays back out as the
+    civic dividend once it is above its buffer.
+    """
+    aid = deceased["id"]
+    row = conn.execute("SELECT money_cents FROM agent_state WHERE agent_id=?",
+                       (aid,)).fetchone()
+    estate = int(row["money_cents"]) if row else 0
+    if estate <= 0:
+        return ""
+    heirs: list[int] = []
+    if survivor:
+        heirs = [survivor]
+    elif deceased["household_id"] is not None:
+        for want_child in (0, 1):
+            heirs = [r["id"] for r in conn.execute(
+                """SELECT id FROM agents WHERE household_id=? AND alive=1
+                   AND is_child=? AND id!=? ORDER BY id""",
+                (deceased["household_id"], want_child, aid))]
+            if heirs:
+                break
+    conn.execute("UPDATE agent_state SET money_cents=0 WHERE agent_id=?", (aid,))
+    if not heirs:
+        from .economy import town_credit
+        town_credit(conn, estate)
+        return f"; the estate of ${estate / 100:,.0f} passed to the town"
+    share, rem = divmod(estate, len(heirs))
+    for i, h in enumerate(heirs):
+        conn.execute("UPDATE agent_state SET money_cents=money_cents+? WHERE agent_id=?",
+                     (share + (rem if i == 0 else 0), h))
+    return f"; the estate of ${estate / 100:,.0f} passed to the family"
+
+
 def _mourn(conn: sqlite3.Connection, deceased_id: int, name: str, tick: int) -> int:
     """Everyone close to the deceased carries the memory."""
     rows = conn.execute(
@@ -137,6 +177,8 @@ def _die(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) -> int | No
                  "WHERE agent_id=?", (aid,))
 
     survivor = _widow(conn, aid)
+    # before the children are rehomed, while the household is still together
+    estate = _settle_estate(conn, agent, survivor, tick)
     orphans = _rehome_children(conn, agent, r)
 
     text = f"died at {agent['age']}"
@@ -147,6 +189,7 @@ def _die(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) -> int | No
     if orphans:
         text += (f" and {orphans} child"
                  f"{'ren' if orphans > 1 else ''} to be taken in")
+    text += estate
     emit(conn, tick, "life_event", a=aid, b=survivor, importance=HISTORIC,
          text=text, tag="death")
     _mourn(conn, aid, agent["name"], tick)

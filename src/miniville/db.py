@@ -481,6 +481,23 @@ def _migrate(conn: sqlite3.Connection) -> None:
             conn.execute("UPDATE jobs SET wage_cents = CAST(wage_cents * 1.4 AS INTEGER)")
         set_meta(conn, "economy_v2", "1")
 
+    # Estates: the dead kept their wallets until mortality learned to settle
+    # an estate. Whatever they still hold goes to the town purse, which pays
+    # it back out as the dividend; heirs can no longer be reconstructed.
+    if not get_meta(conn, "estates_v1"):
+        if _has_table(conn, "agent_state") and _has_table(conn, "town_account"):
+            frozen = conn.execute(
+                """SELECT COALESCE(SUM(s.money_cents),0) n FROM agent_state s
+                   JOIN agents a ON a.id=s.agent_id
+                   WHERE a.alive=0 AND s.money_cents>0""").fetchone()["n"]
+            if frozen:
+                conn.execute("UPDATE town_account SET balance_cents=balance_cents+? "
+                             "WHERE id=1", (frozen,))
+                conn.execute(
+                    """UPDATE agent_state SET money_cents=0 WHERE money_cents>0
+                       AND agent_id IN (SELECT id FROM agents WHERE alive=0)""")
+        set_meta(conn, "estates_v1", "1")
+
 
 def get_meta(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:
     row = conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
