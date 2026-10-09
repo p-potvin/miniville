@@ -18,7 +18,8 @@ import json
 import sqlite3
 
 from . import economy
-from .events import HISTORIC, NOTABLE, emit
+from .db import get_meta
+from .events import HISTORIC, MAJOR, NOTABLE, emit
 from .ingest import _list_field, _name_of, load_persona_rows
 from .rng import rng_for
 from .timekeeper import day_of
@@ -64,29 +65,43 @@ def _new_household(conn: sqlite3.Connection, members: list[int],
     return hid
 
 
-def _give_job(conn: sqlite3.Connection, agent_id: int, occupation: str, r) -> int | None:
-    """Hire a newcomer at the workplace best matching their occupation."""
+def _give_job(conn: sqlite3.Connection, agent_id: int, occupation: str, r,
+              room: dict[int, int] | None = None) -> int | None:
+    """Hire a newcomer at the workplace best matching their occupation.
+
+    `room` is the venue vacancy map (place_id -> open posts). Hiring through
+    the same targets the rest of the labour market uses stops immigration
+    from overfilling venues and pushing the town past full employment.
+    """
     occ = occupation or ""
     if "student" in occ.lower() or "retire" in occ.lower():
         return None
+    row = conn.execute("SELECT age FROM agents WHERE id=?", (agent_id,)).fetchone()
+    if row and row["age"] is not None and int(row["age"]) >= 65:
+        return None            # newcomers past retirement age do not take posts
     if r.random() < 0.10:      # 10% arrive between jobs
         return None
     tags = workplace_tags_for(occ)
     rows = economy.open_workplaces(conn)
     scored = sorted(
-        ((len(set(json.loads(x["tags"])) & set(tags)), x["id"]) for x in rows),
+        ((len(set(json.loads(x["tags"])) & set(tags)), x["id"]) for x in rows
+         if room is None or room.get(x["id"], 0) > 0),
         key=lambda t: -t[0])
     if not scored:
         return None
     best = scored[0][0]
     place_id = r.choice([pid for s, pid in scored if s == best])
+    if room is not None:
+        room[place_id] -= 1
     shift_start = r.choice([12, 14, 16, 18])
+    wage = r.randint(economy.WAGE_MIN_CENTS, economy.WAGE_MAX_CENTS)
     conn.execute(
         "INSERT OR REPLACE INTO jobs(agent_id,place_id,role,wage_cents,"
-        "shift_start,shift_end,work_days) VALUES(?,?,?,?,?,?,62)",
-        (agent_id, place_id, occ,
-         r.randint(economy.WAGE_MIN_CENTS, economy.WAGE_MAX_CENTS), shift_start,
-         min(shift_start + r.randint(14, 18), 44)))
+        "shift_start,shift_end,work_days,started_tick,rank,base_wage_cents) "
+        "VALUES(?,?,?,?,?,?,62,?,0,?)",
+        (agent_id, place_id, occ, wage, shift_start,
+         min(shift_start + r.randint(14, 18), 44),
+         int(get_meta(conn, "tick", "0") or 0), wage))
     conn.execute("UPDATE agents SET work_place_id=? WHERE id=?",
                  (place_id, agent_id))
     return place_id
@@ -105,19 +120,29 @@ def immigrate(conn: sqlite3.Connection, n: int, tick: int, seed: str,
     if not fresh:
         return 0
 
+    from .jobs import vacancies
+    room = dict(vacancies(conn))       # newcomers only take posts that exist
     arrived = 0
     for i, row in enumerate(fresh):
         r = rng_for(seed, "immigrate", tick, i)
         name = _name_of(row, tick + i)
         surname = name.split()[-1]
         home = _free_home(conn, r)
+        # the persona dataset includes minors. They used to be inserted with
+        # the is_child default of 0, so a child arrived as a job-holding head
+        # of household — 115 of them in the live world
+        try:
+            age = int(row.get("age"))
+        except (TypeError, ValueError):
+            age = 30
+        is_child = 1 if age < 18 else 0
         cur = conn.execute(
-            """INSERT INTO agents(uuid,name,sex,age,marital_status,education_level,
-               occupation,origin_city,origin_state,persona,professional_persona,
-               hobbies_json,skills_json,traits_json)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (row.get("uuid"), name, row.get("sex"), row.get("age"),
-             row.get("marital_status") or "never_married",
+            """INSERT INTO agents(uuid,name,sex,age,is_child,marital_status,
+               education_level,occupation,origin_city,origin_state,persona,
+               professional_persona,hobbies_json,skills_json,traits_json)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (row.get("uuid"), name, row.get("sex"), age, is_child,
+             "never_married" if is_child else (row.get("marital_status") or "never_married"),
              row.get("education_level"), row.get("occupation"),
              row.get("city"), row.get("state"), row.get("persona"),
              row.get("professional_persona"),
@@ -125,8 +150,17 @@ def immigrate(conn: sqlite3.Connection, n: int, tick: int, seed: str,
              json.dumps(_list_field(row.get("skills_and_expertise_list"))),
              json.dumps({"background": (row.get("cultural_background") or "")[:300]})))
         aid = int(cur.lastrowid or 0)
-        _new_household(conn, [aid], home, surname)
-        _give_job(conn, aid, row.get("occupation") or "", r)
+        if is_child:
+            # a child arrives into a household that has room, not their own
+            guardian = _household_with_room(conn, home)
+            if guardian:
+                conn.execute("UPDATE agents SET household_id=? WHERE id=?",
+                             (guardian, aid))
+            else:
+                _new_household(conn, [aid], home, surname)
+        else:
+            _new_household(conn, [aid], home, surname)
+            _give_job(conn, aid, row.get("occupation") or "", r, room)
         conn.execute(
             "INSERT INTO agent_state(agent_id, place_id, money_cents) VALUES(?,?,?)",
             (aid, home, r.randint(economy.STARTING_MONEY_MIN,
@@ -137,6 +171,17 @@ def immigrate(conn: sqlite3.Connection, n: int, tick: int, seed: str,
         arrived += 1
     conn.commit()
     return arrived
+
+
+def _household_with_room(conn: sqlite3.Connection, home_place_id: int) -> int | None:
+    """An existing household in the same home that is under its capacity."""
+    row = conn.execute(
+        """SELECT h.id, COUNT(a.id) n FROM households h
+           LEFT JOIN agents a ON a.household_id = h.id AND a.alive = 1
+           WHERE h.home_place_id = ?
+           GROUP BY h.id HAVING n < 6 ORDER BY n DESC, h.id LIMIT 1""",
+        (home_place_id,)).fetchone()
+    return row["id"] if row else None
 
 
 def births(conn: sqlite3.Connection, tick: int, seed: str) -> int:
@@ -193,8 +238,11 @@ def births(conn: sqlite3.Connection, tick: int, seed: str) -> int:
         conn.execute(
             "INSERT INTO agent_state(agent_id, place_id, money_cents) VALUES(?,?,0)",
             (aid, parent["home_place_id"]))
+        # MAJOR, not HISTORIC: a birth matters enormously to a family and very
+        # little to the town. At importance 5 every quiet week headlined a
+        # baby and the year in review was a list of them.
         emit(conn, tick, "life_event", a=c["a_id"], b=c["b_id"],
-             importance=HISTORIC, text=f"welcomed a baby, {cname}",
+             importance=MAJOR, text=f"welcomed a baby, {cname}",
              tag="birth")
         n += 1
     conn.commit()

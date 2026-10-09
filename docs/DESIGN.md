@@ -17,8 +17,17 @@ hobbies, ambitions). The town is an abstract social graph anchored to venues —
    sim's memory and the data source for chronicles, narration, and future UI.
 4. **Small agent brain, rich soup.** Agents follow schedules + needs; emergent
    story comes from encounters and relationship topology, not per-tick LLM calls.
-5. **Grows in complexity.** Planned strata: simulation → narration → observer UI
-   → seasons/economy/lifecycle → possibly God-interventions.
+5. **Grows in complexity.** The strata now include simulation, narration,
+   observer UI, seasons/economy/lifecycle, god-interventions, affiliations,
+   politics, conflict and the written record.
+6. **The world is not the newspaper.** `events` is ground truth. In-world
+   accounts (the Gazette, gossip, future speeches) can be biased or false;
+   their claims are separate records that point back to source events. The
+   observer UI shows both, and never silently treats a report as fact.
+7. **Institutions speak from a position.** The Gazette has a resident owner and
+   editor; its line affects selection, framing and (sometimes) claims. The
+   observer record stays neutral and auditable. Neutrality belongs to the
+   instrument; bias belongs to the people using it.
 
 ## Persona handling
 

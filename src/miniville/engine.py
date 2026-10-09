@@ -5,10 +5,17 @@ import sqlite3
 
 from . import (
     chronicle,
+    conflict,
+    crime,
     economy,
+    enterprise,
     events,
+    groups,
     growth,
+    jobs,
     memory,
+    politics,
+    reputation,
     mortality,
     newspaper,
     seasons,
@@ -77,21 +84,44 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     economy.ensure_businesses(conn)
     economy.record_day(conn, tick)
     stats["businesses"] = economy.settle_businesses(conn, tick, seed)
+    # pensions land before rent is due, so a retired household can pay it
+    stats["pensions"] = economy.pay_pensions(conn, tick)
     stats["rent"] = economy.collect_rent(conn, tick, seed)
     stats["levy"] = economy.weekly_levy(conn, tick, seed)
     stats["labour"] = economy.wage_dynamics(conn, tick, seed)
+    # owners draw profit, buyers and founders put capital in
+    stats["enterprise"] = enterprise.due(conn, tick, seed)
     # operator shocks land after the books settle but before the town plans
     # its day, so a venue that burnt overnight is nobody's destination
     stats["shocks"] = shocks.apply_due(conn, tick, seed)
+    # the labour market turns over before plans are built: a retiree is no
+    # longer planned at work, and a new hire is planned at their new venue
+    stats["retirements"] = len(jobs.retirements(conn, tick, seed))
+    if day_of(tick) % 7 == 0:
+        stats["turnover"] = jobs.turnover(conn, tick, seed)
+        stats["hiring"] = jobs.hiring_pass(conn, tick, seed)["hired"]
+        stats["careers"] = jobs.careers(conn, tick, seed)
+        stats["groups"] = groups.refresh_standing(conn)
 
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)
     stats["life_events"] = daily_life_lottery(conn, tick, seed)
+    stats["crime"] = crime.daily_crime(conn, tick, seed)
     stats["betrayals"] = spouse_discovery(conn, tick, seed)
     # deaths settle before births: a widow is no longer a spouse, so the
     # couple cannot also welcome a child on the same day
     stats["deaths"] = mortality.daily_mortality(conn, tick, seed)
     stats["births"] = growth.births(conn, tick, seed)
+    # what the town made of yesterday, after everyone who acted on it is gone
+    stats["standing"] = reputation.accrue(conn, tick, seed)
+    # and the town's own decisions: an election every two years, a motion a month
+    decided = politics.due(conn, tick)
+    if decided:
+        stats["politics"] = decided
+    # grudges act: a rival talks, a group boycotts, a congregation splits
+    acted = conflict.due(conn, tick, seed)
+    if acted:
+        stats["conflict"] = acted
     return stats
 
 
@@ -103,6 +133,7 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
         stats.update(_day_start(conn, tick, seed))
     _move_agents(conn, tick)
     apply_conditions(conn, tick)              # sick agents stay home resting
+    crime.apply_jail(conn)                    # ...and the jailed sit at Town Hall
     apply_deviations(conn, tick, seed)        # mood can push agents off-plan
 
     st = conn.execute(

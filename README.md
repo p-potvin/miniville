@@ -16,8 +16,21 @@ python -m venv .venv; .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
 The town has a calendar (four seasons, twelve holidays), a lifecycle (births,
-coming of age, immigration, mortality) and an economy (rent, prices, businesses
-that can fail, wages that move with unemployment).
+coming of age, immigration, mortality, estates), an economy (rent, prices,
+pensions, businesses that residents own, found, buy and lose, wages that move
+with unemployment), a housing market that sorts districts by money,
+affiliations (congregations and clubs), an elected council whose motions move
+real numbers, grudges that turn into slander, boycotts and schisms, petty
+crime, and a newspaper with an owner and a line.
+
+No dataset at hand (a cloud session, say)? Generate a stand-in with the same
+columns and soak that:
+
+```bash
+python scripts/synth_personas.py --out data/synth-personas --n 12000
+MINIVILLE_DB=data/synth.db python -m miniville.cli init --dataset data/synth-personas --agents 500
+python scripts/soak_check.py --run 365 --tag mine --source data/synth.db
+```
 
 Project memory between sessions: [`docs/STATE.md`](docs/STATE.md). Design notes:
 [`docs/DESIGN.md`](docs/DESIGN.md), [`docs/ECONOMY.md`](docs/ECONOMY.md),

@@ -5,38 +5,17 @@ per-(agent, day) probabilities. Dating arc progresses inside encounters.
 """
 from __future__ import annotations
 
-import json
 import sqlite3
 
-from . import economy
-from .events import HISTORIC, MAJOR, MINOR, NOTABLE, emit
-from .rng import chance, rng_for
-from .world import workplace_tags_for
+from .events import HISTORIC, MAJOR, MINOR, emit
+from .rng import rng_for
 
-P_FIRE, P_ILL, P_MOVE = 0.005, 0.01, 0.004
-P_HIRE_MAX = 0.15        # cap on the derived hiring rate
-
-
-def _hire(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) -> None:
-    wid = workplace_tags_for(agent["occupation"] or "")
-    rows = economy.open_workplaces(conn)
-    if not rows:                       # every business in town has closed
-        return
-    scored = sorted(rows, key=lambda x: -len(set(json.loads(x["tags"])) & set(wid)))
-    place = scored[0]
-    conn.execute(
-        "INSERT OR REPLACE INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,work_days)"
-        " VALUES(?,?,?,?,?,?,62)",
-        (agent["id"], place["id"], agent["occupation"],
-         r.randint(economy.WAGE_MIN_CENTS, economy.WAGE_MAX_CENTS),
-         r.choice([12, 14, 16, 18]), 0))
-    conn.execute(
-        "UPDATE jobs SET shift_end=shift_start+? WHERE agent_id=?",
-        (r.randint(14, 18), agent["id"]))
-    conn.execute("UPDATE agents SET work_place_id=? WHERE id=?", (place["id"], agent["id"]))
-    venue = conn.execute("SELECT name FROM places WHERE id=?", (place["id"],)).fetchone()
-    emit(conn, tick, "life_event", place_id=place["id"], a=agent["id"],
-         importance=NOTABLE, text=f"was hired at {venue['name']}", tag="hire")
+# ~25% involuntary separations a year, the shape of a real labour market. The
+# old 0.005/day fired every worker 1.8 times a year, which the town could
+# absorb only because nothing rehired anybody; with a working market it
+# churned the whole town (104 firings in 60 days for ~250 posts).
+P_FIRE, P_ILL, P_MOVE = 0.0007, 0.01, 0.004
+P_HIRE_MAX = 0.15        # legacy: the lottery's hire draw (kept for rng order)
 
 
 def _fire(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int) -> None:
@@ -59,29 +38,19 @@ def _fall_ill(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) -> Non
          text=f"fell ill ({days} day{'s' if days>1 else ''})", tag="sick")
 
 
-def _move_house(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) -> None:
-    hid = agent["household_id"]
-    homes = conn.execute("SELECT id FROM places WHERE kind='home'").fetchall()
-    new_home = r.choice(homes)["id"]
-    members = conn.execute(
-        "SELECT id FROM agents WHERE household_id=?", (hid,)).fetchall()
-    for m in members:
-        conn.execute("UPDATE agents SET home_place_id=? WHERE id=?", (new_home, m["id"]))
-    conn.execute("UPDATE households SET home_place_id=? WHERE id=?", (new_home, hid))
-    emit(conn, tick, "life_event", a=agent["id"], importance=MINOR,
-         text=f"moved house with {len(members)-1} other(s)", tag="move")
-
-
 def daily_life_lottery(conn: sqlite3.Connection, tick: int, seed: str) -> int:
     """Once-per-day random life events. Returns event count."""
     n = 0
     employed = {r["agent_id"] for r in conn.execute("SELECT agent_id FROM jobs")}
     adults = conn.execute(
         "SELECT * FROM agents WHERE alive=1 AND is_child=0").fetchall()
-    # A flat hiring rate is applied to the unemployed and a flat firing rate to
-    # the employed, so the town shed jobs whenever most people had one. Derive
-    # the hiring rate from the firing rate instead: hiring tracks firing and the
-    # employment level holds steady.
+    # Hiring lives in jobs.hiring_pass now, which fills venues to their
+    # staffing targets and refills posts after a layoff, a death or a
+    # reopening. The lottery keeps the *separations* — being fired is a life
+    # event, and the event ledger wants it — but its old balancing hire
+    # (p_hire derived from P_FIRE) chose the best tag match with no regard for
+    # how many people a venue already had, which is how one venue ended up
+    # with 348 of the town's 435 jobs.
     n_emp = sum(1 for a in adults if a["id"] in employed)
     n_unemp = max(1, len(adults) - n_emp)
     p_hire = min(P_HIRE_MAX, P_FIRE * n_emp / n_unemp)
@@ -91,12 +60,18 @@ def daily_life_lottery(conn: sqlite3.Connection, tick: int, seed: str) -> int:
         if a["id"] in employed:
             if r.random() < P_FIRE:
                 _fire(conn, a, tick); n += 1
-        elif r.random() < p_hire:
-            _hire(conn, a, tick, r); n += 1
+        else:
+            # the draw is kept (and ignored) so existing rng streams and
+            # replays do not shift now that jobs.py does the hiring
+            r.random() < p_hire
         if r.random() < P_ILL:
             _fall_ill(conn, a, tick, r); n += 1
         if r.random() < P_MOVE:
-            _move_house(conn, a, tick, r); n += 1
+            # the household thinks about moving; what it can afford decides
+            # whether, and where (housing.py)
+            from .housing import consider_move
+            if consider_move(conn, a, tick, r):
+                n += 1
     conn.commit()
     return n
 

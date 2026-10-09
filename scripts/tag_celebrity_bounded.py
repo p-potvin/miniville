@@ -84,13 +84,12 @@ def main() -> int:
                   f"({n_fail} failures)", flush=True)
 
     if not args.skip_embed:
+        import subprocess
         print("\n=== embedding eligible crops ===")
         here = Path(__file__).resolve().parent
-        rc = os.spawnv(
-            os.P_WAIT, sys.executable,
+        return subprocess.run(
             [sys.executable, str(here / "reembed_celebrity_gallery.py"),
-             "--root", str(ROOT), "--resume"])
-        return rc
+             "--root", str(ROOT), "--resume"]).returncode
     return 0
 
 

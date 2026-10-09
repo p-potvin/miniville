@@ -40,8 +40,13 @@ def _compatible(a: sqlite3.Row, b: sqlite3.Row) -> bool:
     return abs(a["age"] - b["age"]) <= 20 and not a["is_child"] and not b["is_child"]
 
 
-def _interaction_tone(r, affinity: float) -> tuple[str, float]:
-    """Returns (tone, affinity_delta)."""
+def _interaction_tone(r, affinity: float, standing: float = 0.0) -> tuple[str, float]:
+    """Returns (tone, affinity_delta).
+
+    `standing` is the pair's combined reputation: people are a little warmer
+    to someone the town already thinks well of, and warier of someone it does
+    not, so a reputation is felt before it is explained.
+    """
     roll = r.random()
     if affinity < -20:
         table = [("hostile", -3, 0.20), ("tense", -1.5, 0.35),
@@ -50,13 +55,16 @@ def _interaction_tone(r, affinity: float) -> tuple[str, float]:
         table = [("warm", +2.5, 0.45), ("friendly", +1.5, 0.35),
                  ("delightful", +4, 0.08), ("routine", +0.5, 0.12)]
     else:
+        # familiarity can also breed contempt: the longer two people have been
+        # thrown together, the more room there is for a bad afternoon
         table = [("pleasant", +1.5, 0.40), ("routine", +0.5, 0.30),
-                 ("awkward", -0.8, 0.15), ("engaging", +3, 0.15)]
+                 ("awkward", -0.8, 0.15), ("engaging", +3, 0.15),
+                 ("friction", -1.5, 0.05)]
     acc = 0.0
     for tone, delta, p in table:
         acc += p
         if roll < acc:
-            return tone, delta
+            return tone, delta * (1 + max(-0.6, min(0.6, standing / 200)))
     return "routine", +0.5
 
 
@@ -97,7 +105,15 @@ def interact(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row,
     label = rel["label"] if rel else "stranger"
     n = rel["interactions"] if rel else 0
 
-    tone, d_aff = _interaction_tone(r, aff)
+    tone, d_aff = _interaction_tone(
+        r, aff, float((a["standing"] or 0) + (b["standing"] or 0)))
+    # A slight that is never repeated is forgotten; a slight between people who
+    # already dislike each other compounds. Without this the town's worst
+    # relationship sat at affinity -2.7: the negative tones only trigger below
+    # -20, which nothing could ever reach, so the whole town liked everybody
+    # and there was nothing for a rivalry, a boycott or a slander to be about.
+    if aff < 0 and d_aff < 0:
+        d_aff *= 1 + min(3.0, abs(aff) / 10)
     # shared hobbies spark
     ha = set(json.loads(a["hobbies_json"] or "[]"))
     hb = set(json.loads(b["hobbies_json"] or "[]"))
@@ -170,8 +186,65 @@ def interact(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row,
             (boost, aid))
 
 
+# How many conversations a venue hosts in half an hour, and how many people
+# are even considered. Real contact is scarce and chosen: you talk to two or
+# three of the thirty people in the room, and you gravitate to the ones you
+# know and to your own. The old version shuffled everyone present and paired
+# them at random up to twelve pairs, every tick, at every venue — ~9,800
+# pair-encounters a day, which mixed the whole town into a fog of one-off
+# meetings (92% of all relationships sat at familiarity 1-3) and made clubs,
+# congregations and even workplaces a rounding error in the social graph.
+PAIRS_PER_PLACE = 4
+CANDIDATES = 14
+
+
+def _affinity_ctx(conn: sqlite3.Connection) -> dict:
+    """Who belongs to what — one pass, so pairing needs no per-pair queries."""
+    ctx: dict = {"groups": {}, "faith": {}, "hobbies": {}, "age": {}}
+    for r in conn.execute("SELECT agent_id, group_id FROM memberships"):
+        ctx["groups"].setdefault(r["agent_id"], set()).add(r["group_id"])
+    for r in conn.execute("SELECT id, faith, age, hobbies_json FROM agents "
+                          "WHERE alive=1"):
+        ctx["faith"][r["id"]] = r["faith"]
+        ctx["age"][r["id"]] = r["age"]
+        try:
+            ctx["hobbies"][r["id"]] = set(json.loads(r["hobbies_json"] or "[]"))
+        except (TypeError, ValueError):
+            ctx["hobbies"][r["id"]] = set()
+    return ctx
+
+
+def _known_pairs(conn: sqlite3.Connection, ids: list[int]) -> set[tuple[int, int]]:
+    """Which of these people already know each other — one query, not one per pair."""
+    if len(ids) < 2:
+        return set()
+    ph = ",".join("?" * len(ids))
+    rows = conn.execute(
+        f"""SELECT a_id, b_id FROM relationships
+            WHERE a_id IN ({ph}) AND b_id IN ({ph})""", (*ids, *ids)).fetchall()
+    return {(r["a_id"], r["b_id"]) for r in rows}
+
+
+def _pair_score(ctx: dict, known: set[tuple[int, int]], a: int, b: int,
+                jitter: float) -> float:
+    """Why these two would talk: they know each other, or they are alike."""
+    score = jitter
+    if (min(a, b), max(a, b)) in known:      # repeat contact: the strongest pull
+        score += 3.0
+    if ctx["groups"].get(a, set()) & ctx["groups"].get(b, set()):
+        score += 2.0                         # same club or congregation
+    fa, fb = ctx["faith"].get(a), ctx["faith"].get(b)
+    if fa and fa == fb:
+        score += 1.0
+    if abs((ctx["age"].get(a) or 0) - (ctx["age"].get(b) or 0)) <= 8:
+        score += 0.75
+    if ctx["hobbies"].get(a, set()) & ctx["hobbies"].get(b, set()):
+        score += 0.5
+    return score
+
+
 def run_encounters(conn: sqlite3.Connection, tick: int, seed: str,
-                   max_pairs_per_place: int = 12) -> int:
+                   max_pairs_per_place: int = PAIRS_PER_PLACE) -> int:
     """Pair up co-present agents at public venues. Returns # interactions."""
     tick_of_day = tick % 48
     holiday = holiday_for(conn, tick // 48)
@@ -184,6 +257,7 @@ def run_encounters(conn: sqlite3.Connection, tick: int, seed: str,
     places = conn.execute(
         "SELECT id, name, capacity FROM places WHERE kind IN ('public','civic','workplace')"
     ).fetchall()
+    ctx = _affinity_ctx(conn)
     n_interactions = 0
     for p in places:
         rows = conn.execute(
@@ -194,18 +268,38 @@ def run_encounters(conn: sqlite3.Connection, tick: int, seed: str,
         if len(rows) < 2:
             continue
         r = rng_for(seed, "pairing", p["id"], tick)
-        agents = list(rows)
-        r.shuffle(agents)
-        pairs = []
-        for i in range(0, len(agents) - 1, 2):
-            pairs.append((agents[i], agents[i + 1]))
-        pair_cap = max_pairs_per_place
         holiday_venue_active = (
             holiday_place_id is not None and p["id"] == holiday_place_id
         )
+        agents = list(rows)
         if holiday_venue_active:
-            pair_cap = len(pairs)
-        for a, b in pairs[:pair_cap]:
+            # a festival is the one time the whole room talks to everybody
+            r.shuffle(agents)
+            pairs = [(agents[i], agents[i + 1])
+                     for i in range(0, len(agents) - 1, 2)]
+        else:
+            r.shuffle(agents)
+            pool = agents[:CANDIDATES]
+            known = _known_pairs(conn, [x["agent_id"] for x in pool])
+            scored = []
+            for i in range(len(pool)):
+                for j in range(i + 1, len(pool)):
+                    a, b = pool[i], pool[j]
+                    scored.append(
+                        (_pair_score(ctx, known, a["agent_id"], b["agent_id"],
+                                     r.random()), i, j))
+            scored.sort(key=lambda t: (-t[0], t[1], t[2]))
+            # greedily take the best pairs, each person talking once
+            used, pairs = set(), []
+            for _s, i, j in scored:
+                if i in used or j in used:
+                    continue
+                used.add(i)
+                used.add(j)
+                pairs.append((pool[i], pool[j]))
+                if len(pairs) >= max_pairs_per_place:
+                    break
+        for a, b in pairs:
             # interaction probability: strangers lower, acquaintances higher
             rel = _get_rel(conn, a["agent_id"], b["agent_id"])
             p_int = 0.28 if not rel else min(0.9, 0.3 + rel["familiarity"] / 40)

@@ -9,7 +9,7 @@ import sqlite3
 
 import pyarrow.parquet as pq
 
-from . import economy
+from . import economy, jobs
 from .rng import rng_for, seed_int
 from .world import DISTRICTS, create_world, workplace_tags_for
 
@@ -78,15 +78,35 @@ def load_persona_rows(dataset_dir: str, n_target: int, seed: str) -> list[dict]:
 
 
 def _pick_workplace(conn, tags: list[str], r) -> int:
-    rows = conn.execute("SELECT id, tags, kind FROM places WHERE kind='workplace'").fetchall()
+    """Best-matching venue that still has room for another pair of hands.
+
+    Every non-home venue is eligible (the tavern and the theater are employers
+    too) and the staffing target keeps the town's workforce spread across them.
+    Without the target every unmatched occupation — and the generic fallback
+    tags match the town hall best — piled into one venue: the live world ended
+    up with 348 of its 435 jobs at Town Hall and none at all at the venues the
+    customers actually visit.
+    """
+    rows = conn.execute(
+        """SELECT p.id, p.tags, COUNT(j.agent_id) staff
+           FROM places p LEFT JOIN jobs j ON j.place_id = p.id
+           WHERE p.kind != 'home' GROUP BY p.id""").fetchall()
+    targets = jobs.venue_targets(conn)
     scored = []
     for row in rows:
         ptags = set(json.loads(row["tags"]))
-        scored.append((len(ptags & set(tags)), row["id"]))
-    scored.sort(key=lambda x: -x[0])
-    best = scored[0][0]
-    top = [pid for s, pid in scored if s == best]
-    return r.choice(top)
+        room = targets.get(row["id"], 0) - row["staff"]
+        if room <= 0:
+            continue
+        scored.append((len(ptags & set(tags)), room, row["id"]))
+    if not scored:
+        return conn.execute(
+            "SELECT id FROM places WHERE kind='workplace' ORDER BY id LIMIT 1"
+        ).fetchone()["id"]
+    best = max(s for s, _, _ in scored)
+    top = [(room, pid) for s, room, pid in scored if s == best]
+    most_room = max(room for room, _ in top)
+    return r.choice([pid for room, pid in top if room == most_room])
 
 
 def _pick_leisure_home(district: str, homes: dict[str, list[int]], r) -> int:
@@ -227,9 +247,10 @@ def populate(conn: sqlite3.Connection, dataset_dir: str, n_agents: int,
         shift_len = shift_r.randint(14, 18)
         wage = shift_r.randint(economy.WAGE_MIN_CENTS, economy.WAGE_MAX_CENTS)
         conn.execute(
-            "INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,work_days)"
-            " VALUES(?,?,?,?,?,?,?)",
-            (row["id"], wid, occ, wage, shift_start, min(shift_start + shift_len, 44), 62))
+            "INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,"
+            "work_days,started_tick,rank,base_wage_cents) VALUES(?,?,?,?,?,?,?,?,0,?)",
+            (row["id"], wid, occ, wage, shift_start, min(shift_start + shift_len, 44),
+             62, 0, wage))
         conn.execute("UPDATE agents SET work_place_id=? WHERE id=?", (wid, row["id"]))
         n_employed += 1
 
@@ -239,6 +260,12 @@ def populate(conn: sqlite3.Connection, dataset_dir: str, n_agents: int,
             "INSERT INTO agent_state(agent_id, place_id, money_cents) VALUES(?,?,?)",
             (row["id"], row["home_place_id"],
              r.randint(economy.STARTING_MONEY_MIN, economy.STARTING_MONEY_MAX)))
+
+    # the town starts with the purse buffer it would otherwise take weeks of
+    # rent to build: without it a new town's first pensions and public payroll
+    # ran a deficit every week of its first month
+    economy.town_credit(conn, economy.PURSE_BUFFER_WEEKS * (
+        economy.public_payroll_week(conn) + economy.pension_bill_week(conn)))
 
     conn.commit()
     stats = {

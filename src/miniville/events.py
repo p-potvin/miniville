@@ -60,7 +60,9 @@ def describe(conn: sqlite3.Connection, e: sqlite3.Row) -> str:
         # duplicate rows merge into one line: "A and B moved in together"
         if d.get("tag") in ("cohabitation", "marriage") and b:
             return f"{' and '.join(sorted((a, b)))} {d.get('text','something happened')}"
-        return f"{a}: {d.get('text','something happened')}"
+        if a:
+            return f"{a}: {d.get('text','something happened')}"
+        return d.get("text", "something happened")
     if k == "town_event":
         return f"Town: {d.get('text','')} ({p or 'everywhere'})"
     if k == "world":

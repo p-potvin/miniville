@@ -124,7 +124,11 @@ def pool(conn: sqlite3.Connection, gender: int,
         d["ages"].sort()
         d["median_age"] = d["ages"][len(d["ages"]) // 2] if d["ages"] else 30.0
         d["rows"] = d["rows"][:SAMPLES]
-    return by_id
+    # only offer identities whose source images are still on disk — some
+    # folders were consolidated into .assets/.head by the ColONEL pipeline,
+    # leaving db rows behind; casting one would silently copy nothing
+    return {iid: d for iid, d in by_id.items()
+            if Path(d["rows"][0]["image_path"]).is_file()}
 
 
 def pick(identities: dict[int, dict], used: set[int], age: float) -> int | None:
@@ -214,6 +218,10 @@ def main() -> int:
         ddir = gal_dir / dirname
         portrait = av_dir / f"a{r['id']:04d}.jpg"
         if not a.dry_run:
+            if not Path(ident["rows"][0]["image_path"]).is_file():
+                deferred.append(r["id"])       # source vanished since the pool
+                done -= 1
+                continue
             ddir.mkdir(exist_ok=True)
             out.execute(
                 "INSERT OR IGNORE INTO identities(name,status,sample_count,notes) "
@@ -222,6 +230,13 @@ def main() -> int:
                  f"src=celebrity:{sex}:{ident['name']}"))
             new_iid = out.execute(
                 "SELECT id FROM identities WHERE name=?", (dirname,)).fetchone()["id"]
+            # the portrait must show a face of the identity's own sex: the
+            # first exemplar can be a co-star or an angled face in a group
+            # shot, which is what the gender auditor keeps flagging
+            want_g = 0 if sex == "Female" else 1
+            portrait_row = next(
+                (r for r in ident["rows"] if r.get("gender") == want_g),
+                ident["rows"][0])
             for j, crop in enumerate(ident["rows"]):
                 src_img = Path(crop["image_path"])
                 dst_img = ddir / src_img.name
@@ -234,13 +249,27 @@ def main() -> int:
                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (new_iid, dirname, str(dst_img), src_img.name, crop["bbox"],
                      crop["landmarks_5pts"], crop.get("landmarks_106"),
-                     0 if sex == "Female" else 1, crop["age"], crop["embedding"],
+                     # keep the crop's OWN detected sex, not the identity's:
+                     # the portrait picker needs it to avoid a co-star's face
+                     crop.get("gender"), crop["age"], crop["embedding"],
                      crop["feature_norm"], crop["quality_score"], 1))
-                if j == 0 and src_img.exists():
-                    try:
-                        portrait_crop(src_img, json.loads(crop["bbox"]), portrait)
-                    except Exception as e:
-                        print(f"  crop failed {dirname}: {e}")
+                if crop is portrait_row:
+                    if src_img.exists():
+                        try:
+                            portrait_crop(src_img, json.loads(crop["bbox"]), portrait)
+                        except Exception as e:
+                            print(f"  crop failed {dirname}: {e}")
+                    else:
+                        # the chosen exemplar may not have copied (race with a
+                        # missing source) — fall back to the first existing one
+                        for alt in ident["rows"]:
+                            p2 = Path(alt["image_path"])
+                            if p2.exists():
+                                try:
+                                    portrait_crop(p2, json.loads(alt["bbox"]), portrait)
+                                except Exception as e:
+                                    print(f"  crop failed {dirname}: {e}")
+                                break
             mv.execute("UPDATE agents SET avatar_path=? WHERE id=?",
                        (f"/avatars/{portrait.name}", r["id"]))
         mapping.append({"resident_id": r["id"], "name": r["name"], "sex": sex,
@@ -252,16 +281,26 @@ def main() -> int:
     if not a.dry_run:
         out.commit(); mv.commit()
     mp = OUT_ROOT / "avatar_mapping.json"
-    cast = mapping
-    if a.only_missing and mp.is_file():
-        prev = json.loads(mp.read_text(encoding="utf-8")).get("cast", [])
-        cast = prev + mapping          # keep correctly-cast residents' entries
-    mp.write_text(
-        json.dumps({"cast": cast, "deferred_ids": deferred}, indent=1),
-        encoding="utf-8")
+    # merge by resident: one entry per resident, newest wins, and drop stale
+    # entries whose gallery dir no longer exists (superseded recasts)
+    cast: dict[int, dict] = {}
+    if mp.is_file():
+        for e in json.loads(mp.read_text(encoding="utf-8")).get("cast", []):
+            d = gal_dir / e["gallery_dir"]
+            if d.is_dir():
+                cast[e["resident_id"]] = e
+    for e in mapping:
+        cast[e["resident_id"]] = e
+    if not a.dry_run:
+        mp.write_text(
+            json.dumps({"cast": [cast[k] for k in sorted(cast)],
+                        "deferred_ids": deferred}, indent=1),
+            encoding="utf-8")
     uniq = len({m["identity"] for m in mapping})
     print(f"done: {done} cast ({uniq} identities), {len(deferred)} deferred "
           f"(grow the pool: Import-IMDbStarMeter.ps1 -Phase both)")
+    if a.dry_run:
+        print("dry-run: mapping NOT written")
     print(f"dry-run={a.dry_run}  gallery={gal_dir}  avatars={av_dir}")
     return 0
 

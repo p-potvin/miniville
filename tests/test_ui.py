@@ -72,9 +72,31 @@ def test_resident_detail_includes_memories(client):
     assert isinstance(mems, list)
 
 
-def test_newspaper_endpoint(client):
+def test_newspaper_endpoint(client, tmp_path, monkeypatch):
+    from miniville import newspaper
+    from miniville.events import emit
+    conn = db.connect(tmp_path / "ui.db")
+    conn.execute("""INSERT INTO newspaper_profile(id,publisher_id,editor_id,founded_tick,
+                    editorial_line,editorial_basis,credibility)
+                    VALUES(1,1,1,0,'working','workers first',1.0)""")
+    emit(conn, 48, "town_event", a=1, importance=3,
+         text="the council rejected a motion to raise levy_rate", tag="motion_rejected",
+         policy="levy_rate", direction=1, passed=False, value=0.06)
+    conn.commit()
+    monkeypatch.setattr(newspaper, "FALSE_CLAIM_BASE", 1.0)
+    newspaper.publish_week(conn, 0, "t")
+    conn.close()
     body = client.get("/api/newspaper").json()
     assert "editions" in body and "latest" in body
+    latest = body["latest"]
+    assert latest["publisher"] and latest["editor"]
+    assert latest["editorial_line"] == "working"
+    assert latest["observer_record"]
+    assert "event ledger" in latest["source_note"]
+    assert latest["claims"] and latest["claims"][0]["truth"] is False
+    assert "rejected" in latest["claims"][0]["observer_record"]
+    detail = client.get("/api/newspaper?week=1").json()
+    assert detail["week"] == 1 and detail["observer_record"]
     assert client.get("/api/newspaper?week=99").status_code == 404
 
 
@@ -105,6 +127,20 @@ def test_map_endpoint(client):
            [ (p["x"], p["y"]) for p in again["places"]]
 
 
+def test_graph_endpoint(client):
+    rows = client.get("/api/residents").json()
+    rid = rows[0]["id"]
+    body = client.get(f"/api/graph/{rid}").json()
+    assert body["ego"]["id"] == rid
+    rings = {n["ring"] for n in body["nodes"]}
+    assert 0 in rings
+    assert body["nodes"][0]["id"] == rid
+    for e in body["edges"]:
+        ids = {n["id"] for n in body["nodes"]}
+        assert e["a_id"] in ids and e["b_id"] in ids
+    assert client.get("/api/graph/99999").json() == {"error": "no such agent"}
+
+
 def test_economy_endpoint(client):
     body = client.get("/api/economy").json()
     assert "money_supply_cents" in body["stats"]
@@ -114,3 +150,45 @@ def test_economy_endpoint(client):
     # the in-progress day must not be reported as the last completed one
     assert body["stats"]["last_day"] is None
     assert body["series"] == []
+    assert {d["district"] for d in body["districts"]} >= {"Downtown", "The Flats"}
+    assert "owner_name" in body["businesses"][0]
+
+
+def test_council_endpoint(client, tmp_path):
+    conn = db.connect(tmp_path / "ui.db")
+    conn.execute(
+        """INSERT INTO council(seat, agent_id, elected_tick, district, backers, backers_wallet, backers_unemployed)
+           VALUES(1, 1, 48, 'Downtown', 50, 1000000, 0.10)"""
+    )
+    conn.execute(
+        """INSERT INTO motions(tick, day, policy, direction, value, passed, votes_for, votes_against)
+           VALUES(48, 1, 'levy_rate', 1, 0.06, 1, 3, 2)"""
+    )
+    c_group = conn.execute("INSERT INTO groups(name, kind, founded_tick) VALUES('Art Guild', 'club', 48)")
+    gid = c_group.lastrowid
+    p_id = conn.execute("SELECT id FROM places WHERE kind != 'home' LIMIT 1").fetchone()["id"]
+    conn.execute("INSERT INTO boycotts(group_id, place_id, started_day, until_day, reason) VALUES(?,?,1,30,'high prices')",
+                 (gid, p_id))
+    conn.commit()
+    conn.close()
+
+    body = client.get("/api/council").json()
+    assert "seats" in body
+    assert len(body["seats"]) == 1
+    assert body["seats"][0]["district"] == "Downtown"
+    assert "policies" in body
+    assert "levy_rate" in body["policies"]
+    assert "dividend_share" in body["policies"]
+    assert "rent_multiplier" in body["policies"]
+    assert "min_wage" in body["policies"]
+    assert "next_election_day" in body
+    assert "motions" in body
+    assert len(body["motions"]) == 1
+    assert body["motions"][0]["policy"] == "levy_rate"
+    assert "boycotts" in body
+    assert len(body["boycotts"]) == 1
+    assert body["boycotts"][0]["group_name"] == "Art Guild"
+    assert "influential" in body
+    assert len(body["influential"]) > 0
+
+

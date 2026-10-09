@@ -61,16 +61,29 @@ RENT_BY_DISTRICT = {
     "The Flats": 29000,
 }
 DEFAULT_RENT = 35000
+CHEAPEST_DISTRICT = min(RENT_BY_DISTRICT, key=RENT_BY_DISTRICT.get)
 
-GROCERY_CENTS = 750          # one grocery run per resident per day
-DINING_BASE_CENTS = 1800
-SHOPPING_BASE_CENTS = 3500
+# Prices are set so a commercial venue's takings cover its payroll with a
+# margin. Measured on a 3-year soak they did not: the customer-facing venues
+# paid 1.07x what they took (the diner 1.20, Old Mill 1.23, the tavern 1.20,
+# the grocer 1.14), so each one lived on its opening balance and its price
+# index, bled to the -$60,000 failure line and closed — 30 closures in three
+# years, each deleting its whole staff. A 25% correction closes the gap
+# without making a household's week unaffordable.
+GROCERY_CENTS = 940          # one grocery run per resident per day
+DINING_BASE_CENTS = 2250
+SHOPPING_BASE_CENTS = 4400
 GROCERY_TICK = 14            # 07:00 — the daily shop
 
 # --- business tuning --------------------------------------------------------
 
-# venues whose payroll is covered by the town rather than by customers
-PUBLIC_TAGS = {"health", "education", "civic", "office", "media", "worship"}
+# Venues whose payroll the town covers rather than their customers. The
+# amenities belong here too: the park, the marina and the library employ
+# groundskeepers and librarians and charge nobody at the door, so charging
+# their payroll to their own balance bled them to the failure line (the park
+# was -$57,000 and heading for closure) — the same mistake as the hospital.
+PUBLIC_TAGS = {"health", "education", "civic", "office", "media", "worship",
+               "outdoors", "water", "quiet", "study", "community"}
 
 FAIL_THRESHOLD_CENTS = -6_000_000     # -$60,000 of accumulated losses
 REOPEN_AFTER_DAYS = 21
@@ -86,6 +99,13 @@ BUSINESS_TAX_RATE = 0.05
 # school, the town hall) and only the surplus is handed back out, so the
 # dividend stays a modest rebate rather than becoming the town's main income.
 LEVY_DIVIDEND_SHARE = 0.35
+# how many weeks of public payroll the town keeps in the purse before the
+# surplus goes back out to residents as extra dividend
+PURSE_BUFFER_WEEKS = 6
+# the town pension: a share (council policy `pension`) of a median working
+# week, paid to every resident past retirement age who no longer works
+PENSION_BASE_WEEK_CENTS = 74_000
+PENSION_AGE = 65
 WAGE_INDEX_MIN, WAGE_INDEX_MAX = 0.6, 1.6
 UNEMPLOYMENT_HIGH = 0.12   # above this, wages drift down
 UNEMPLOYMENT_LOW = 0.05    # below this, wages drift up
@@ -96,6 +116,92 @@ PAID_LEISURE = {"coffee", "drink", "arts", "nightlife", "fitness"}
 
 def wage_index(conn: sqlite3.Connection) -> float:
     return float(get_meta(conn, "wage_index", "1.0") or 1.0)
+
+
+# --- the town's purse -------------------------------------------------------
+
+
+def town_balance(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT balance_cents FROM town_account WHERE id=1").fetchone()
+    return int(row["balance_cents"]) if row else 0
+
+
+def town_credit(conn: sqlite3.Connection, cents: int) -> None:
+    if cents:
+        conn.execute(
+            "UPDATE town_account SET balance_cents=balance_cents+? WHERE id=1",
+            (int(cents),))
+
+
+def public_payroll_week(conn: sqlite3.Connection) -> int:
+    """What a week of public-service payroll costs, from the posts on the books."""
+    rows = conn.execute(
+        """SELECT j.wage_cents, p.tags, p.kind FROM jobs j
+           JOIN places p ON p.id=j.place_id""").fetchall()
+    total = 0
+    for r in rows:
+        tags = set(json.loads(r["tags"] or "[]"))
+        if tags & PUBLIC_TAGS or r["kind"] == "civic":
+            total += int(r["wage_cents"]) * 5      # five working days
+    return total
+
+
+def _pensioners(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        """SELECT a.id FROM agents a WHERE a.alive=1 AND a.is_child=0 AND a.age>=?
+           AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.agent_id=a.id)
+           ORDER BY a.id""", (PENSION_AGE,)).fetchall()
+
+
+def pension_week(conn: sqlite3.Connection) -> int:
+    """What one pensioner is paid a week under the current policy."""
+    from .politics import policy
+    return int(PENSION_BASE_WEEK_CENTS * policy(conn, "pension"))
+
+
+def pension_bill_week(conn: sqlite3.Connection) -> int:
+    return pension_week(conn) * len(_pensioners(conn))
+
+
+def pay_pensions(conn: sqlite3.Connection, tick: int) -> dict:
+    """Weekly, before rent: the town pays its retirees out of the purse.
+
+    Retirement (jobs.retirements) ended a resident's wage and nothing replaced
+    it, so every retired household lived on its savings and the civic
+    dividend until it could not pay rent: a year-long soak found 70 of the
+    town's 105 broke households were retirees, downsized to The Flats again
+    and again. The purse is funded by rent and the levy, so this is the town
+    paying its old out of the same loop — a shortfall is a deficit, reported.
+    """
+    day = day_of(tick)
+    if day % 7 != 0 or day == 0:
+        return {"pensioners": 0, "paid": 0}
+    each = pension_week(conn)
+    people = _pensioners(conn)
+    if each <= 0 or not people:
+        return {"pensioners": 0, "paid": 0}
+    bill = each * len(people)
+    short = town_debit(conn, bill)
+    if short:
+        emit(conn, tick, "town_event", importance=NOTABLE,
+             text=f"the town ran short paying its pensions; "
+                  f"${short / 100:,.0f} went on the town's slate",
+             tag="town_deficit")
+    for p in people:
+        conn.execute("UPDATE agent_state SET money_cents=money_cents+? WHERE agent_id=?",
+                     (each, p["id"]))
+    return {"pensioners": len(people), "paid": bill}
+
+
+def town_debit(conn: sqlite3.Connection, cents: int) -> int:
+    """Spend from the purse. Returns the shortfall that had to be minted."""
+    cents = int(cents)
+    if cents <= 0:
+        return 0
+    available = town_balance(conn)
+    conn.execute("UPDATE town_account SET balance_cents=balance_cents-? WHERE id=1",
+                 (cents,))
+    return max(0, cents - available)
 
 
 def venue_price(tags: set[str], activity: str, price_index: float = 1.0) -> int:
@@ -114,13 +220,13 @@ def venue_price(tags: set[str], activity: str, price_index: float = 1.0) -> int:
             c -= 500
     elif activity == "leisure":
         if "coffee" in tags:
-            c = 700
+            c = 880
         elif "drink" in tags:
-            c = 1400
+            c = 1750
         elif "arts" in tags or "nightlife" in tags:
-            c = 1600
+            c = 2000
         elif "fitness" in tags:
-            c = 1200
+            c = 1500
         else:
             c = 0
     elif activity == "eat":
@@ -131,13 +237,15 @@ def venue_price(tags: set[str], activity: str, price_index: float = 1.0) -> int:
 
 
 def rent_for(conn: sqlite3.Connection, home_place_id: int | None) -> int:
+    """Weekly rent, scaled by whatever rent policy the council has passed."""
     if home_place_id is None:
-        return DEFAULT_RENT
-    row = conn.execute("SELECT district FROM places WHERE id=?",
-                       (home_place_id,)).fetchone()
-    if not row:
-        return DEFAULT_RENT
-    return RENT_BY_DISTRICT.get(row["district"], DEFAULT_RENT)
+        base = DEFAULT_RENT
+    else:
+        row = conn.execute("SELECT district FROM places WHERE id=?",
+                           (home_place_id,)).fetchone()
+        base = RENT_BY_DISTRICT.get(row["district"], DEFAULT_RENT) if row else DEFAULT_RENT
+    from .politics import policy
+    return int(base * policy(conn, "rent_multiplier"))
 
 
 # --- business bookkeeping ---------------------------------------------------
@@ -187,9 +295,13 @@ def pay_wages(conn: sqlite3.Connection, tick: int) -> int:
                          WHERE p.agent_id=j.agent_id
                            AND p.activity IN ('work','break'))""",
         (tod,)).fetchall()
+    # a council-set wage floor, as a share of the top of the band: 0 means no
+    # floor at all, so an untouched town pays exactly what it always did
+    from .politics import policy
+    floor = int(policy(conn, "min_wage") * WAGE_MAX_CENTS)
     total = 0
     for row in rows:
-        paid = int(round(row["wage_cents"] * idx))
+        paid = max(floor, int(round(row["wage_cents"] * idx)))
         conn.execute(
             "UPDATE agent_state SET money_cents=money_cents+? WHERE agent_id=?",
             (paid, row["agent_id"]))
@@ -247,6 +359,13 @@ def charge_spending(conn: sqlite3.Connection, tick: int) -> dict:
             credit_to = row["place_id"]
 
         if cost <= 0:
+            continue
+        # a group's boycott means its members take their custom elsewhere, so
+        # the venue loses the traffic and can fail on the loss — a grudge with
+        # an economic consequence rather than a label
+        from .conflict import boycotting
+        if credit_to is not None and boycotting(conn, row["agent_id"], credit_to,
+                                               day_of(tick)):
             continue
         affordable = min(cost, max(0, row["money_cents"]))
         if affordable <= 0:
@@ -316,6 +435,9 @@ def collect_rent(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         collected += rent
 
     if collected:
+        # rent is the town's income, not a bonfire: it funds the public
+        # services whose payroll the town pays
+        town_credit(conn, collected)
         _bump_day(conn, day, rent=collected)
     conn.commit()
     return {"collected": collected, "missed": missed, "downsized": downsized}
@@ -331,11 +453,14 @@ def weekly_levy(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     if day % 7 != 0 or day == 0:
         return {"levied": 0, "dividend": 0, "residents": 0}
 
+    from .politics import policy
+    levy_rate = policy(conn, "levy_rate")          # the council sets this
+    dividend_share = policy(conn, "dividend_share")
     levied = 0
     for b in conn.execute(
             "SELECT place_id, balance_cents FROM businesses WHERE balance_cents > 0"
     ).fetchall():
-        take = int(b["balance_cents"] * BUSINESS_TAX_RATE)
+        take = int(b["balance_cents"] * levy_rate)
         if take <= 0:
             continue
         conn.execute("UPDATE businesses SET balance_cents=balance_cents-? WHERE place_id=?",
@@ -345,8 +470,18 @@ def weekly_levy(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         return {"levied": 0, "dividend": 0, "residents": 0}
 
     # the rest of the levy is what the town runs on — the hospital, the school,
-    # the town hall — so it leaves circulation here
-    pot = int(levied * LEVY_DIVIDEND_SHARE)
+    # the town hall — so it goes into the purse that pays their payroll
+    town_credit(conn, levied - int(levied * dividend_share))
+    pot = int(levied * dividend_share)
+    # the purse keeps a few weeks of payroll in hand; anything above that is
+    # the residents' money sitting in a drawer, so it goes back out with the
+    # dividend. Without this valve the purse swallowed rent forever and every
+    # wallet in town drained while the town account grew.
+    buffer = PURSE_BUFFER_WEEKS * (public_payroll_week(conn) + pension_bill_week(conn))
+    surplus = max(0, town_balance(conn) - buffer)
+    if surplus:
+        town_debit(conn, surplus)
+        pot += surplus
     adults = conn.execute(
         "SELECT id FROM agents WHERE alive=1 AND is_child=0 ORDER BY id").fetchall()
     if pot <= 0 or not adults:
@@ -387,17 +522,24 @@ def _maybe_downsize(conn: sqlite3.Connection, h: sqlite3.Row, tick: int,
                        (h["id"],)).fetchone()
     if not row or row["missed_payments"] < 2:
         return 0
-    r = rng_for(seed, "downsize", h["id"], day_of(tick))
-    cheap = conn.execute(
-        "SELECT id FROM places WHERE kind='home' AND district='The Flats' "
-        "ORDER BY id").fetchall()
-    if not cheap:
+    here = conn.execute("SELECT district FROM places WHERE id=?",
+                        (h["home_place_id"],)).fetchone()
+    if here and here["district"] == CHEAPEST_DISTRICT:
+        # already in the cheapest district: there is nowhere cheaper to go.
+        # This used to "move" them to The Flats again every fortnight — 1,451
+        # downsizings in one soak year, most of them from The Flats.
         return 0
-    new_home = r.choice(cheap)["id"]
+    from .housing import home_with_room
+    size = conn.execute("SELECT COUNT(*) n FROM agents WHERE household_id=? AND alive=1",
+                        (h["id"],)).fetchone()["n"]
+    new_home = home_with_room(conn, CHEAPEST_DISTRICT, size)
+    if new_home is None:
+        return 0                      # nowhere in The Flats has room for them
     conn.execute("UPDATE households SET home_place_id=? WHERE id=?", (new_home, h["id"]))
+    # the whole household moves, children included — leaving them behind put
+    # every downsized family's kids to bed in a home nobody paid for
     conn.execute(
-        """UPDATE agents SET home_place_id=? WHERE household_id=?
-           AND alive=1 AND is_child=0""",
+        "UPDATE agents SET home_place_id=? WHERE household_id=? AND alive=1",
         (new_home, h["id"]))
     conn.execute("DELETE FROM rent_arrears WHERE household_id=?", (h["id"],))
     members = conn.execute(
@@ -419,7 +561,7 @@ def settle_businesses(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         return {"settled": 0, "closed": 0, "reopened": 0}
 
     ensure_businesses(conn)
-    closed = reopened = settled = 0
+    closed = reopened = settled = deficits = 0
     rows = conn.execute(
         """SELECT b.*, p.name, p.tags, p.kind FROM businesses b
            JOIN places p ON p.id=b.place_id WHERE b.last_settled_day < ?""",
@@ -435,12 +577,24 @@ def settle_businesses(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         payroll = b["payroll_today"]
         if public and staffed:
             revenue = payroll                    # funded by the town
+            # ...and the town actually pays it, out of rent and the levy. The
+            # purse can run dry; the shortfall is a municipal deficit and is
+            # reported rather than silently minted every week.
+            short = town_debit(conn, payroll)
+            if short:
+                deficits += short
+                emit(conn, tick, "town_event", place_id=b["place_id"],
+                     importance=NOTABLE,
+                     text=f"the town ran short paying {b['name']}; "
+                          f"${short / 100:,.0f} went on the town's slate",
+                     tag="town_deficit")
         elif not staffed:
             revenue = b["revenue_today"]         # owner-operated: no failure
         balance = b["balance_cents"] + revenue - payroll
 
         # traffic EMA is what "customers stopped coming" is measured against
         ema = b["ema_traffic"] * 0.9 + b["traffic_today"] * 0.1
+        ema_rev = b["ema_revenue"] * 0.9 + b["revenue_today"] * 0.1
         price_index = b["price_index"]
         if not public and staffed:
             # bleeding venues put prices up; comfortable ones are undercut by
@@ -451,10 +605,10 @@ def settle_businesses(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
                 price_index = max(PRICE_INDEX_MIN, price_index - 0.005)
 
         conn.execute(
-            """UPDATE businesses SET balance_cents=?, ema_traffic=?,
+            """UPDATE businesses SET balance_cents=?, ema_traffic=?, ema_revenue=?,
                    price_index=?, revenue_today=0, payroll_today=0,
                    traffic_today=0, last_settled_day=? WHERE place_id=?""",
-            (balance, ema, price_index, day, b["place_id"]))
+            (balance, ema, ema_rev, price_index, day, b["place_id"]))
         settled += 1
 
         if b["status"] == "open" and not public and staffed:
@@ -470,10 +624,16 @@ def settle_businesses(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
             else:
                 closed_at = b["closed_tick"] if b["closed_tick"] is not None else tick
                 if tick - closed_at >= REOPEN_AFTER_DAYS * TICKS_PER_DAY:
-                    reopened += _reopen_business(conn, b, tick)
+                    # somebody has to take it on: a resident buys it, or an
+                    # original venue reopens town-run; a founded one waits dark
+                    from .enterprise import reopen_or_wait
+                    how = reopen_or_wait(conn, b, tick, seed)
+                    if how != "dark":
+                        reopened += _reopen_business(conn, b, tick, how)
 
     conn.commit()
-    return {"settled": settled, "closed": closed, "reopened": reopened}
+    return {"settled": settled, "closed": closed, "reopened": reopened,
+            "deficit": deficits}
 
 
 def _close_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int,
@@ -484,6 +644,8 @@ def _close_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int,
     conn.execute("DELETE FROM jobs WHERE place_id=?", (b["place_id"],))
     conn.execute("UPDATE agents SET work_place_id=NULL WHERE work_place_id=?",
                  (b["place_id"],))
+    from .enterprise import lose_venture
+    lose_venture(conn, b["place_id"], tick)
     conn.execute(
         """UPDATE businesses SET status='closed', closed_tick=?, balance_cents=0,
                price_index=1.0, reopen_day=NULL WHERE place_id=?""",
@@ -495,33 +657,61 @@ def _close_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int,
     return 1
 
 
-def _reopen_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int) -> int:
+def _reopen_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int,
+                     how: str = "town") -> int:
+    # a buyer's capital is already in the reserve (enterprise.take_over); a
+    # town-run or repaired venue starts from zero
+    keep = how == "bought"
     conn.execute(
         """UPDATE businesses SET status='open', closed_tick=NULL,
-               balance_cents=0, ema_traffic=0, price_index=1.0, reopen_day=NULL
-           WHERE place_id=?""", (b["place_id"],))
-    emit(conn, tick, "town_event", place_id=b["place_id"], importance=NOTABLE,
-         text=f"{b['name']} has reopened under new management", tag="business_reopened")
+               balance_cents=CASE WHEN ? THEN balance_cents ELSE 0 END,
+               ema_traffic=0, ema_revenue=0, opened_tick=?, price_index=1.0,
+               reopen_day=NULL
+           WHERE place_id=?""", (keep, tick, b["place_id"]))
+    owner = conn.execute("SELECT owner_id FROM businesses WHERE place_id=?",
+                         (b["place_id"],)).fetchone()["owner_id"]
+    text = (f"bought {b['name']} and reopened it" if keep
+            else f"{b['name']} has reopened under new management")
+    emit(conn, tick, "town_event", a=owner if keep else None, place_id=b["place_id"],
+         importance=NOTABLE, text=text, tag="business_reopened")
     return 1
 
 
 def open_workplaces(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Workplaces a resident could actually be hired at."""
+    """Venues a resident could actually be hired at.
+
+    Every non-home venue is staffable — the tavern, the bean, the theater and
+    the gym are `kind='public'` but they are the town's employers just as much
+    as the grocer is. Restricting this to `kind='workplace'` left the venues
+    with all the customer traffic permanently unstaffed.
+    """
     return conn.execute(
         """SELECT p.id, p.name, p.tags FROM places p
            LEFT JOIN businesses b ON b.place_id=p.id
-           WHERE p.kind='workplace' AND COALESCE(b.status,'open')='open'""").fetchall()
+           WHERE p.kind != 'home' AND COALESCE(b.status,'open')='open'""").fetchall()
 
 
 # --- labour market ----------------------------------------------------------
 
 
+RETIREMENT_AGE = 65
+
+
 def unemployment(conn: sqlite3.Connection) -> float:
+    """Share of the *working-age* population without a job.
+
+    Retirees are not unemployed — counting them made every pensioner look like
+    a jobseeker, and once residents started retiring at 65 the rate read 27%
+    for a town whose labour market was actually tight.
+    """
     adults = conn.execute(
-        "SELECT COUNT(*) c FROM agents WHERE alive=1 AND is_child=0").fetchone()["c"]
+        "SELECT COUNT(*) c FROM agents WHERE alive=1 AND is_child=0 AND age < ?",
+        (RETIREMENT_AGE,)).fetchone()["c"]
     if not adults:
         return 0.0
-    employed = conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
+    employed = conn.execute(
+        """SELECT COUNT(*) c FROM jobs j JOIN agents a ON a.id=j.agent_id
+           WHERE a.alive=1 AND a.age < ?""", (RETIREMENT_AGE,)).fetchone()["c"]
     return max(0.0, (adults - employed) / adults)
 
 
@@ -583,6 +773,8 @@ def economy_stats(conn: sqlite3.Connection) -> dict:
         "in_debt": broke,
         "unemployment": unemployment(conn),
         "wage_index": wage_index(conn),
+        "town_purse_cents": town_balance(conn),
+        "public_payroll_week_cents": public_payroll_week(conn),
         "businesses_open": counts.get("open", 0),
         "businesses_closed": counts.get("closed", 0),
         "last_day": dict(day_row) if day_row else None,
@@ -608,8 +800,11 @@ def record_day(conn: sqlite3.Connection, tick: int) -> dict:
         "FROM businesses").fetchone()
     counts = {r["status"]: r["n"] for r in conn.execute(
         "SELECT status, COUNT(*) n FROM businesses GROUP BY status")}
+    tills = conn.execute(
+        "SELECT COALESCE(SUM(balance_cents),0) s FROM businesses").fetchone()["s"]
     stats = {
         "day": day,
+        "total_money_cents": money + tills + town_balance(conn),
         "revenue_cents": flows["r"],
         "payroll_cents": flows["p"],
         "rent_cents": existing["rent_cents"] if existing else 0,
@@ -625,10 +820,10 @@ def record_day(conn: sqlite3.Connection, tick: int) -> dict:
     conn.execute(
         """INSERT INTO economy_days(day,revenue_cents,payroll_cents,rent_cents,
                spending_cents,money_supply_cents,unemployment_bp,businesses_open,
-               businesses_closed,wage_index)
+               businesses_closed,wage_index,total_money_cents)
            VALUES(:day,:revenue_cents,:payroll_cents,:rent_cents,:spending_cents,
                   :money_supply_cents,:unemployment_bp,:businesses_open,
-                  :businesses_closed,:wage_index)
+                  :businesses_closed,:wage_index,:total_money_cents)
            ON CONFLICT(day) DO UPDATE SET
              revenue_cents=excluded.revenue_cents,
              payroll_cents=excluded.payroll_cents,
@@ -636,7 +831,8 @@ def record_day(conn: sqlite3.Connection, tick: int) -> dict:
              unemployment_bp=excluded.unemployment_bp,
              businesses_open=excluded.businesses_open,
              businesses_closed=excluded.businesses_closed,
-             wage_index=excluded.wage_index""",
+             wage_index=excluded.wage_index,
+             total_money_cents=excluded.total_money_cents""",
         stats)
     conn.commit()
     return stats

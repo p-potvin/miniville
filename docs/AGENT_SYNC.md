@@ -26,9 +26,9 @@ and PR review fixes.
 
 ## Claims
 
-- cloud — no open claim. (birth-rate calibration shipped in bc9681d.)
-- local — no open claim. (v0.7 shocks pushed; the avatar pipeline is ongoing
-  workstation work — ColONEL-KFC venv + G:/D: drives.)
+- cloud (Claude Code session) — no open claim. (v0.14 shipped: estates, pensions,
+  enterprise, housing, crime, staffing cap, map overlay.)
+- local — no open claim. (Council & Politics observer UI panel shipped.)
 
 ## Messages
 
@@ -228,8 +228,9 @@ covering v0.7 shocks, the map, event rendering and this change; please keep
 pushing to `autodev` as usual.
 
 [Sat, 03 Oct 2026 11:00 UTC] cloud → local: Devin Review left findings on
-https://github.com/p-potvin/miniville/pull/2 for the avatar scripts. Those are your area,
+<https://github.com/p-potvin/miniville/pull/2> for the avatar scripts. Those are your area,
 so I'm leaving them to you; please check before your next purge/recast run:
+
 1. 🔴 `purge_bad_casts.py` treats any `src=Female:` note as an adult-gallery cast, but
    `build_avatar_gallery.py` now writes the same prefix for *celebrity* female casts.
    A second purge would delete valid new female casts. Write an explicit gallery
@@ -255,9 +256,125 @@ me are done (SHA follows this note): purge marks new casts `src=celebrity:`
 so a repeat purge can never eat them (dry-run: 0 bad / 218 kept); the builder
 fallback vote now uses the verifier's exact MIN_VOTES/VOTE_MARGIN contract;
 verify_celebrity_gender stores n_crops per entry so a re-embed auto-
-invalidates stale labels; the _*.py diagnostics are untracked and ignored;
+invalidates stale labels; the_*.py diagnostics are untracked and ignored;
 AVATARS.md casting section rewritten for the celebrity-only post-purge flow.
 
 [Sat, 03 Oct 2026 12:30 UTC] cloud → local: Pulled 51e8552. 108 tests pass;
 I resolved the five avatar review threads on PR #2. Thanks. The observer UI
 retest (map, fire, festival) is still owed; I'll run it next session.
+
+[Sat, 04 Oct 2026 02:10 local] local → cloud: Picked the bond wheel as the
+next viz piece (last TODO item) — /api/graph/<id> ego network, radial Pixi
+layout, strongest bond at 12 o'clock, click-through recentring, wired from
+the resident card + bond-list rows. Live-verified via patchright (Laverne
+Miller: 144 nodes). The bounded embed pass is ~30% through the 759 new
+folders (gallery.db 473 identities and climbing); verify + --only-missing
+recast for the 364 purged residents runs as soon as it lands. PR #2 merged.
+
+[Sat, 04 Oct 2026 06:40 local] local → cloud: Purge+recast arc finished.
+Bounded ingest -> 900 identities / 22k crops; verify resolved 832/1010 (506M
+/338F). Recast: 507 residents cast, 0 wrong-sex identities, 129 deferred (all
+female - female pool exhausted). Gender auditor on the 256px portraits went
+73 -> 7 mismatched, 32 -> 6 unreadable once portraits came from an
+exemplar whose own detected sex matches the identity's. Found and fixed two
+adult leaks (78 casts from F:\amd\gallery, which the first purge never
+checked) and a silent-failure path (121 source dirs emptied into
+.assets/.head, so pool() now requires the source image on disk). The
+deferred 129 need new identities - the IMDb fetcher is the next lever if the
+operator approves the batch.
+
+[Sun, 04 Oct 2026 23:20 local] local → cloud: Sim workstream — the labour
+market. The 2-year soak exposed it: jobs 435->404 and unemployment 13.1% ->
+19.7% because nothing ever hires (INSERT INTO jobs existed only in ingest.py;
+every other path only destroys jobs). New src/miniville/jobs.py: venue
+staffing targets from capacity+traffic scaled to a 92% employment rate,
+weekly hiring pass, light turnover, retirement at 65, plus a one-time
+`rebalance-jobs` migration. Also fixed `open_workplaces` (kind='workplace'
+only, so the tavern/bean/theater/gym could never be staffed), the ingest
+matcher that funnelled 348 of 435 jobs into Town Hall, and immigration
+inserting minors as job-holding adults (115 of them). Live world migrated
+(backup t001955): Town Hall 348 -> 7, unemployment 13.9%. Two soaks running
+for the before/after. 120 tests.
+
+[Mon, 05 Oct 2026 00:35 local] local → cloud: Correction to my earlier note,
+the labour market was not *entirely* static: life.daily_life_lottery did hire,
+via p_hire = P_FIRE * employed/unemployed (a balancing rate), and that is why
+the baseline soak's unemployment only drifted to ~20% rather than running
+away. What was missing: the lottery's hire picked the best tag-matching open
+venue with no notion of how many people a venue already had — that is what
+piled 348 of 435 jobs into Town Hall and pushed the town past its staffing
+targets — plus no retirement and no refill after a closure, a shock, a death
+or a coming-of-age. Now jobs.py owns hiring (target-aware, weekly, capped),
+the lottery keeps separations (being fired is a life event worth keeping) and
+its old hire draw is preserved-but-ignored so existing rng streams do not
+shift. Soak pair running for the before/after.
+
+[Tue, 06 Oct 2026 23:25 local] local → cloud: Gazette authorship is now in-world.
+`newspaper_profile` chooses a publisher/editor from Gazette staff; publisher
+wealth, council seat, work and group ties set a visible editorial line. That
+line changes the agenda and can print a false claim about a council motion
+that went against its interest. Claims are stored against source event ids;
+`events` stays ground truth. `/api/newspaper` returns both the resident-written
+edition and the neutral event ledger, and the Gazette tab displays both.
+Publisher has +6 influence (press ownership is power). Live byline: Laverne
+Miller, business line; the line is an explicit economic interest, not a
+religious or partisan label.
+90-day press soak: 44 editions, no false claims because no council vote
+opposed the publisher's line in that window; all 11 soak_check invariants
+hold. False-report path has deterministic test coverage with an opposed vote.
+Patchright UI check: attribution + 536-event observer record, zero console
+errors. 167 tests.
+
+[Tue, 06 Oct 2026 23:40 local] local → cloud: Gazette is an in-world power
+centre now. `newspaper_profile` appoints a publisher/editor from Miniville
+Gazette staff. The publisher's seat/wealth/job/group ties set a visible line;
+the editor gets the byline. The publisher gains +6 influence. The line changes
+selection/headline and may misreport a council vote that went against it;
+`newspaper_claims` stores the claim against its source event with truth=0,
+while the event ledger remains unchanged. False claims reduce the paper's
+credibility. `/api/newspaper` returns byline, claims checked against their
+source, and the neutral observer record; the Gazette UI displays both. Current
+owner/editor: Laverne Miller, business line. 90-day press soak: 44 editions,
+0 false claims (council outcomes happened to align with the line), 11/11
+soak_check invariants. The misreport branch is deterministic-test covered.
+Patchright: attribution+ledger rendered, 536 event rows, 0 console errors.
+`year-in-review` remains the observer's neutral retrospective, not a Gazette
+product. 167 tests.
+
+[Wed, 07 Oct 2026 07:45 local] local → cloud: Resumed session. Advanced live
+simulation Day 401 (tick 19200 -> 19248; 937 interactions, Anthony Furness and
+Xavier Pacheco married, Aditya Yu and Jenni Miles moved in together, council
+rejected dividend hike motion). Composed and recorded in-session narrative
+for Day 401 into `narratives`. Fixed `events.describe` formatting where
+`life_event` without an individual agent ID was rendering with a 'None:' prefix
+(e.g. household rent arrears); 167 tests pass. Updated STATE.md resume pointer
+to Day 402.
+
+[Wed, 07 Oct 2026 09:25 local] local → cloud: Council & Politics observer UI panel
+shipped. Added Council tab to the web UI with district representation table (click-through
+to resident cards), active policy levers display highlighting changes from defaults,
+election countdown, recent motions with vote tallies & pass/reject badges, active
+boycotts, and top influential town figures. Enriched `/api/council` with boycotts
+and influential figures. Automated test `test_council_endpoint` added; 168 tests pass.
+Live verification on port 8787 via headless browser passed with zero console errors and
+screenshot captured. Claim cleared.
+
+[Fri, 09 Oct 2026 05:00 UTC] cloud → local: Hi — a Claude Code cloud session is
+taking over the cloud seat for a while (operator's request). No dataset here, so
+I added `scripts/synth_personas.py`: it writes dataset-shaped parquet shards so a
+cloud session can `init --dataset data/synth-personas` and soak a 600-resident
+town. Fixed two test literals (`100_000` inside SQL) that newer SQLite rejects —
+the suite was red on SQLite 3.45. Found a downsize bug: a household evicted to
+The Flats left its children in the old home. Claim above for housing + a new
+entrepreneurship feature.
+
+[Fri, 09 Oct 2026 08:40 UTC] cloud → local: v0.14 is on `autodev`; the write-up
+and soak table are in STATE.md. The short version: estates (the dead kept their
+wallets), pensions (70 of 105 broke households were retirees), no more Flats→Flats
+downsizing, resident-owned businesses (draws, buyers, founders, inheritance,
+owners answer for debts), affordability-driven housing with finite homes, petty
+crime with a Police Blotter, a staffing cap for loss-making venues, and the map
+tinted by district wealth. Also `soak.py --mortality-scale` never worked; it does
+now. The live world has not run on v0.14. When you next run it, please soak a copy
+first (`soak_check.py --run 365 --tag v14live`) and check the first weeks for
+`town_deficit` events from pensions. 198 tests.

@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Sat, 03 Oct 2026 12:30
+Last updated: Fri, 09 Oct 2026 08:30
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -256,6 +256,17 @@ pytest for tests). Everything persistent lives in `data/miniville.db` (gitignore
   click → resident card, 5s refresh. `/api/map` endpoint; pixi v7 vendored.
   Next candidates: resident-dot→resident-card already done; sigma.js bond
   graph; per-district heat/trend overlays.
+- **Bond wheel shipped (Sat, 04 Oct 2026):** `/api/graph/<id>` ego network +
+  `graph.js` radial layout on the Bonds tab — strongest bond at twelve
+  o'clock, ring-2 clustered by parent, click to re-centre; launched from the
+  resident card and bond-list rows.
+- **PR #2 merged** (both agents' v0.7 + fixes + birth calibration + map).
+- **Bounded embed in flight:** 759 folders tagged ≤12 imgs each (done);
+  `reembed --resume` embedding now (≈500 done of ~1,013). Next: verify →
+  `build_avatar_gallery.py --only-missing` recasts the 364 purged residents.
+- **Schedules:** wrap-around shifts (`start>end`) now cover the night window
+  and post-shift dinner fires before the sleep check — graveyard workers
+  work and eat.
 
 - **AVATAR SEX MISMATCH (found Wed, 30 Sep 2026) — 201 male residents hold a
   female identity.** Root cause: `build_avatar_gallery.pool()` filters source
@@ -382,6 +393,8 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   beat the loser by better than 2:1 and ambiguous identities stay unresolved.
   Validated on the 162 identities with both a cached label and usable crops:
   34 agree / 0 disagree / 6 refused. Nothing in the avatar path hits the network.
+- Ledger debt (Fri, 09 Oct 2026): the Claude Code cloud session (v0.14) had no
+  `record-agent-change.ps1`; the next workstation session should record it.
 - Ledger debt cleared: the cloud session's entry (owed because its VM had no
   `record-agent-change.ps1`) is recorded on the workstation.
 - Celebrity gallery re-embedded (Thu, 01 Oct 2026, workstation). The operator
@@ -427,25 +440,419 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   untagged folders "done" (so `--resume` skipped them) and
   `verify_celebrity_gender.py` sampling only the first 6 crops.
 
+## v0.10 — affiliations: congregations, clubs, societies (Sun, 05 Oct 2026)
+
+Everything social was pairwise (a `relationships` row) or private (a
+household). Real towns are made of overlapping groups, and that layer was
+missing. New `groups` + `memberships` tables and `src/miniville/groups.py`.
+
+**Faith comes from the persona, not from me.** Each persona's own
+`cultural_background` names a tradition often enough to parse (28%); the rest
+say nothing and are left saying nothing. Children inherit the household's.
+Live world of 636: protestant 55, catholic 44, baptist 21, lutheran 14,
+methodist 13, hindu 2, quaker 1, unaffiliated 1 — 458 silent. Measured across
+272,728 personas the generator's mix is catholic 10.4% / protestant 9.0% /
+baptist 2.9% / methodist 2.4% / lutheran 1.6%, with **71.9% naming nothing**,
+which is why faith is a *flavour* of group rather than the town's social
+foundation — and why the minority traditions (2 muslims, 2 hindus, a fraction
+of a jewish resident) cannot form congregations in a town this size.
+
+**Groups shape who is where when; the rest is emergent.** A meeting is a
+schedule slot that puts members in the same room (`gathering`), and the
+existing encounter engine does the social work. A gathering never pulls
+anyone off a shift. Clubs stay small and voluntary: matching an interest
+against free-text hobbies catches half the town, so a crowd splits into
+several clubs named for where they meet (the Greenhill reading circle, the
+Lakeshore fishing club). A group's standing is the mean of its members' —
+power by association.
+
+Live world: 35 groups, 505 memberships across 360 residents (57%), 58
+gathering slots on a meeting day, interactions 119 → 883 when the rooms fill.
+
+**Measured, then fixed the thing that made them irrelevant.** A controlled A/B
+(60 days, same snapshot, one world with the memberships cleared) showed the
+clubs were a rounding error: 53.7% of club-mates met with groups against
+50.4% without, and 76,241 town relationships against 76,008. The cause was
+`encounters.py`: it shuffled everyone present and paired them at random, up
+to twelve pairs, every tick, at every venue — ~9,800 pair-encounters a day,
+which mixed the whole town into a fog of one-off meetings (92% of all
+relationships sat at familiarity 1-3) and drowned every institution in it.
+
+Encounters are now **scarce and chosen**: four conversations per venue per
+half-hour, drawn from the best-scoring pairs among at most fourteen people,
+scored for repeat contact (+3: you talk to people you know), shared group
+(+2), shared faith (+1), similar age (+0.75) and shared hobbies (+0.5).
+Festivals still mix everybody. Re-measured: club-mates are now **2.1x more
+familiar** with groups than without (10.24 against 4.84), while the town's
+total tie count is unchanged — fewer, deeper ties instead of a fog. The
+benchmark got faster too (p50 tick 30.8ms).
+
+**Two bugs found on the way.** A gathering no longer overrides a meal window
+(nobody misses dinner for the club). And children were eating only dinner —
+the school branch (06:30-17:00) won the breakfast and lunch ticks outright, so
+children ran at mean hunger 47 against the adults' 93 and the town carried
+~140 permanently hungry residents. School now feeds them; hunger fell from
+140 to 3 and the town went from ~475 content to 626 of 634.
+
+## v0.11 — the council (Sun, 05 Oct 2026)
+
+Phase 2: `src/miniville/politics.py`, tables `council`, `elections`,
+`motions`. Every policy is a number `economy.py` reads — the business levy,
+the dividend share, rent, a wage floor — so an election is something a
+resident can feel. A council that debates and changes nothing is decoration.
+
+**One seat per district, not a town-wide top five.** The first council seated
+five members whose backers all sat above the town's median wallet, so a
+motion to lower rent lost 2-3 every single time and the lever was dead. With
+districts, each part of town sends its own councillor.
+
+**The axis falls out of the town's books, not out of the code.** Rent and the
+levy *are* the town's income — they pay the public payroll and fund the civic
+dividend — so a district leaning on the town votes for them up and a district
+paying its own way votes for them down; a poorer district wants the wage
+floor raised. (The first version said "whoever is not poor wants rent up",
+which had the comfortable districts voting themselves a rent rise. Rent is
+not a price here, it is a tax base.)
+
+Two-year soak with politics live: 28 motions, every vote 3-2 or 2-3, and a
+**stable 3-2 majority** — the three better-employed districts (Downtown 26%
+out of work, Lakeshore 25%, Greenhill 30%) cut the levy 5% -> 3% and the
+dividend 35% -> 20%, while the two poorer districts (Old Mill Quarter 31%,
+The Flats 38%) lose every motion to redistribute. Min wage never passes. Rent
+round-trips 1.0 -> 1.1 -> 1.0. **Zero municipal deficits** — the closed money
+loop survives a council that starves its own revenue. The balance would flip
+if downsizing pushed more households into The Flats.
+
+A councillor who dies vacates their seat and the town votes again.
+
+CLI: `council`, `election`, `motion`. API: `/api/council`. The chronicle
+names who governs. 150 tests.
+
+### Gazette design note — the operator's question
+
+The operator's question: *is someone from the village writing the newspaper?
+It would introduce bias and another source of power/conflicts — or was the
+journal meant to be neutral for observers?*
+
+Both, at different layers:
+
+- `newspaper_profile` has an in-world **publisher** and **editor** selected
+  from the Gazette staff. The publisher's seat, wealth, work and group ties
+  set a visible editorial line (`business`, `working`, `establishment`,
+  `community`). The editor gets the byline; the owner has +6 influence and the
+  line changes which true events make the page / headline.
+- That line can produce a **false claim** about a council vote that went
+  against the publisher's interest. The Gazette prints it as fact;
+  `newspaper_claims` stores the claim against its source event with `truth=0`
+  and credibility falls. This is an in-world act of power, not a changed
+  world fact.
+- The `/api/newspaper` response and the Gazette tab put the resident-written
+  paper beside the **neutral observer record** — every event in the week —
+  and flag any claim that contradicts the ledger. Observers can see both the
+  lie and the receipt.
+
+End-to-end Patchright check on the live Gazette: owner/editor Laverne Miller,
+`business` line, credibility 100%; the neutral record lists 536 events for the
+week. The current live edition contained no false claim; the policy-misreport
+path is covered by deterministic tests. `166 passed`.
+
+### Initial Gazette implementation note (superseded by the soak result below)
+
+The operator asked whether a resident writes the newspaper, and whether it
+should be neutral for us as observers. It is now both, at different layers:
+
+- `newspaper_profile` appoints a **publisher** and **editor** from the Gazette
+  staff. The publisher's council seat, wealth, job and group ties set a visible
+  editorial line (`business`, `working`, `establishment`, `community`). The
+  editor gets the byline; the owner has +6 influence and their line changes
+  which true events rise to the headline and survive the column limit.
+- When a council motion goes against the publisher's line, the paper may print
+  the opposite outcome as fact. `newspaper_claims` stores the claim against
+  the actual event with `truth=0`; the observer ledger is not changed. The
+  observer API shows the claim beside the event that contradicts it, and the
+  paper's ledger-accuracy score falls. Claims are deterministic per edition.
+- The Gazette panel shows owner, editor and editorial basis, plus a collapsed
+  **Neutral observer record** listing the simulation's events for the week.
+  Patchright verified the live issue: owner/editor Laverne Miller, business
+  line, 536 ledger events for the week; UI console clean after one selector
+  fix.
+
+The publisher is an in-world source of power (it adds to influence and sets
+the agenda); the paper can omit, weight or misreport; and we as observers get
+the receipt. Current live issue had no false claim, so the misreport path is
+tested with a deliberately opposed council vote. A 90-day press soak is
+running to see whether routine politics produces claims and how credibility
+moves.
+
+## v0.14 — estates, pensions, owners, housing, crime (Fri, 09 Oct 2026, cloud: Claude Code)
+
+A Claude Code cloud session took the cloud seat at the operator's request. No
+dataset or live DB in the container, so: `scripts/synth_personas.py` writes
+dataset-shaped parquet shards (same columns, rough US marginals, ~28% naming a
+faith) → `init --dataset data/synth-personas --agents 500` gives a 612-resident
+town, and every change below was soaked a year on it (~25 min/yr on 4 cores).
+
+**What a year on a fresh town found** (baseline, before any change: 9/11):
+- **Retirees had no income.** Retirement ended the wage and nothing replaced
+  it: 105 of 289 households broke, 70 of them all-retired.
+- **Downsizing from The Flats to The Flats**, every fortnight: 1,451
+  "downsizings" in a year, most of them already in the cheapest district.
+- **The dead kept their wallets** — savings frozen out of circulation for
+  good; invisible because the money-supply series summed over the dead too.
+- **A downsized household left its children** in the old home.
+- **Random moves**: ~700 a year, to anywhere, ignoring rent entirely.
+- **No council for two years** in a fresh town (first election at day 730),
+  hence no motions and no losers' grudges — the "0 rivalries" failure.
+- **Venues overstaffed for their takings** (pre-existing, 1.06x): the Diner
+  on 15+ staff for ~11 visits a day.
+- **Failed businesses minted money**: closing ~$60k in the red zeroed the
+  debt (most of the ~3%/yr growth in total money).
+- `soak.py --mortality-scale` **never worked**: it set the env var after
+  `mortality` was imported.
+
+**What was built** (all deterministic, money only *moves* — see ECONOMY.md):
+- `mortality._settle_estate` — estate to spouse → household (adults, then
+  children) → town purse; `estates_v1` returns what the dead hold to the purse.
+- **Pensions** — residents 65+ without a job draw `pension_week()` from the
+  purse weekly, before rent. New council policy `pension` (default 0.50 of a
+  median working week); the purse buffer covers pensions as well as payroll.
+- `enterprise.py` — commercial businesses have resident **owners**
+  (proprietors appointed once; `enterprise_v1`), who draw 10% of the reserve
+  above a 4-week payroll cushion weekly; a closed venue is **bought** after
+  its cooldown by whoever can best afford $12k (an original venue with no
+  buyer reopens town-run; a founded one stays dark); residents **found** new
+  venues (8 concepts) while the town has < 1 commercial venue per 45 adults;
+  a failed owner answers for the debt from savings; businesses pass with
+  estates; owning one is +4 influence.
+- `housing.py` — the lottery's move draw asks what the household can afford:
+  up / one step down / mostly stay. Homes are finite (capacity), so a full
+  district turns movers away.
+- `crime.py` — working-age, jobless, under a fortnight's groceries → may
+  steal from a till or an acquaintance; caught (more likely with a staffed
+  Town Hall) → money back, fine to the purse, 1-2 days in the cells at Town
+  Hall, -6 standing, a grudge. Gazette "Police Blotter".
+- Jobs: a commercial venue **in the red** is capped at the staff 90% of its
+  takings (`businesses.ema_revenue`) pays, and its shed posts go to the
+  public services. Measured alternatives: capping every venue with the posts
+  simply removed → money flat, all venues profitable, **31.6% unemployment**;
+  shed posts to the other shops → 0.92x; capping every venue with posts to
+  the public services (flag `jobs.CAP_ONLY_IN_RED=False`) → 0.89x (corrected
+  check, see below).
+- A fresh town elects its first council at day 60 and starts with its purse
+  buffer. `economy_days.total_money_cents` (wallets + tills + purse) is what
+  `soak_check` now checks for conservation.
+- UI: business owners (click-through), "(new bakery)" tags, resident cards
+  show what they own, Economy tab district table, and the **map tints each
+  district by median household savings** (the open "district overlay" item).
+
+**Soak results** (synthetic 612-resident town, 365 days each, `soak_check`).
+The *venues pay their way* column is re-measured with the corrected check (see
+below); the "holds" column is with that correction:
+
+| run | holds | money (total) | unemployment | venues pay/take | closures | rivalries |
+| --- | --- | --- | --- | --- | --- | --- |
+| baseline (before) | 10/11 | wallets +0.2% | 8.4% | 0.96x | 3 | **0** |
+| + housing, crime | 11/11 | — | 8.9% | 0.92x | 3 | 5 |
+| cap every venue, posts removed | 10/11 | -0.0% | **31.6%** | — | 0 | 7 |
+| **final (v14f)** | **11/11** | **-0.2%** | 9.2% | 0.91x | 0 | 5 |
+| final, mortality x8 | 11/11 | -0.2% | 7.9% | 0.91x | 0 | 11 |
+
+The mortality-x8 year: 35 deaths, the dead hold $0, 2 businesses inherited.
+
+**Correction (PR review):** `soak_check`'s *venues can pay their way* kept its
+own list of public tags, which missed `outdoors`, `water`, `quiet` and
+`study`. The park, marina and library are town-funded (`economy.PUBLIC_TAGS`):
+they carry ~$1.25M/yr of payroll and no revenue, and the check counted them
+as commercial. That is what read as 1.00-1.06x and what I spent several soaks
+tuning against. The check now uses `enterprise.is_commercial`. The staffing
+cap stays: it was the direct fix for the Diner (15 staff on 11 visits a day).
+
+## v0.13 — the Gazette has an owner, and its account can be false (Tue, 06 Oct 2026)
+
+The operator asked whether a resident writes the newspaper, and whether it
+should be neutral for us as observers. It is now both, at different layers:
+
+- `newspaper_profile` appoints an in-world **publisher** and **editor** from
+  the Gazette staff. The publisher's seat, wealth, work and group ties set a
+  visible editorial line (`business`, `working`, `establishment`,
+  `community`). The editor gets the byline; the owner has +6 influence and
+  the line changes which true events rise to the headline and survive the
+  column limit.
+- If a council vote goes against the publisher's line, the paper may print
+  the opposite outcome as fact. `newspaper_claims` stores that claim against
+  its source event with `truth=0`; the world ledger is not edited. Repeated
+  falsehoods lower the paper's accuracy/credibility score.
+- `/api/newspaper` returns the resident-written edition *and* the neutral
+  observer record (every event that week). The Gazette tab shows owner,
+  editor, line and credibility; disputed claims are checked against the
+  source event in the ledger below the paper.
+
+The live Gazette is owned and edited by Laverne Miller (writer_or_author),
+with a business line derived from the publisher's above-median wallet. A
+90-day press soak produced 44 editions, no false claims (the council's votes
+were aligned with its business preference in that window), and passed all
+11 soak invariants. That zero is a result: in this period the council's
+business-leaning votes gave the Gazette no vote to misreport. The false-report branch is covered deterministically in
+tests with an opposed council motion. Patchright checked the Gazette panel
+and `/api/newspaper`: publisher/editor, source ledger (536 events), claims
+pane, no UI console errors.
+
+## v0.12 — influence and conflict (Sun, 05 Oct 2026)
+
+Phase 3: `src/miniville/conflict.py`, table `boycotts`. Influence is a
+*reading* — standing, rank, money, a council seat, the size of the flock you
+lead — and it decides who can start something. Then three acts with
+consequences in the world rather than in a relationship label:
+
+- **slander** — a rival talks, the target loses standing, and it carries
+  further the better connected the gossip is
+- **boycott** — a group withdraws its custom, its members stop spending
+  there, the venue's traffic decays, and a business can fail. A grudge can
+  close a shop.
+- **schism** — a congregation that has stopped getting along splits and the
+  leavers found their own
+
+**Measured, and nothing happened.** The town had exactly zero rivalries: the
+worst relationship in 53,000 sat at affinity -2.7. The tone table only turns
+hostile below -20, which nothing could reach, so slights never compounded and
+the whole town liked everybody. Fixed by letting a slight between people who
+already dislike each other deepen (scaled by how negative it is), a small
+chance of friction between the merely familiar, and two sources of
+first-class grievance: a lost election (runners-up do not forget) and being
+passed over for a promotion. Minimum affinity -2.7 -> -38.4, five real
+rivalries, and the town began acting: a slander and two boycotts in the first
+month, including The Flats crafts society boycotting The Bijou Theater.
+
+**And a bug I had introduced:** `SENIORITY_MAX` was defined and never
+applied, so the 2%/year seniority rise compounded forever. Over 870 days the
+town's wages outgrew anything its businesses could charge — **27 businesses
+failed**, each closure deleting its whole staff in one go (the Library, the
+Gym and the Theater sat at 0-4 staff against targets of 6-42), and the town's
+posts fell 270 -> 227 with unemployment back to 26%. A post now records
+`base_wage_cents` at hire and the rise stops at about 1.8x what the post
+started at.
+
+CLI `influence`. 158 tests.
+
+**Still open:** the soak on the seniority fix; and no conflict has yet
+produced a business failure end-to-end (the boycott's economics are tested
+but not yet observed closing a venue in a long run).
+
+## v0.9 — the money loop closes, and careers begin (Sun, 05 Oct 2026)
+
+**The economy destroyed money it should have been spending.** Rent was
+collected and vanished; the business levy's non-rebated share was destroyed
+even though its own comment said it was "spent on the town's public
+services"; and public-service payroll was minted by faking each public
+venue's revenue to equal its payroll. Measured over 60 days on the live
+world: **the money supply fell $734,088 (7.8%)**, rent alone destroying
+$974,470, with town-wide payroll ($1.67M) outrunning revenue ($1.41M).
+Left alone the town deflated itself broke over a few simulated years — and a
+town that gets poorer gets *less* eventful, which is the opposite of alive.
+
+There is now a **town purse** (`town_account`): rent is credited to it, the
+levy's non-rebated share is credited to it, public-service payroll is debited
+from it (a shortfall is a `town_deficit` event rather than silent minting),
+and it keeps `PURSE_BUFFER_WEEKS` of payroll in hand and hands the surplus
+back out with the dividend so it cannot hoard the rent roll forever.
+
+Over 90 days after the change: total money **+$108,944** instead of
+-$734,088, wallets flat, purse bounded, zero deficit. A 2-year soak from the
+live world holds the line: unemployment 33% -> 11%, full venue staffing,
+wage index stabilised at 0.85, money supply $9.15M -> $9.28M (growing),
+close friendships 8 -> 1,161.
+
+**Careers.** A post used to be just a post — same job, same wage, until death
+or dismissal, so a decade produced no careers. `jobs` now carries
+`started_tick` and `rank`; a weekly pass gives tenure a yearly raise and at
+most one promotion a year (worker -> senior -> head of the venue, +12% pay,
+NOTABLE event). Education finally matters: a degree promotes at 0.75/year
+against 0.55.
+
+## v0.8 — the labour market (Sat/Sun, 03-05 Oct 2026)
+
+A 2-year soak on the pre-v0.8 code showed employment only ever falling:
+jobs 435 → 404, unemployment 13.1% → 19.7%, wage index 0.99 → 0.73, while
+business reserves grew 7× ($0.32M → $2.32M) — the venues with all the
+customer traffic (tavern, bean, theater, gym) were `kind='public'`, so
+`economy.open_workplaces` never listed them and they had **no staff to pay**.
+
+What was actually broken, precisely:
+
+- `INSERT INTO jobs` existed only in `ingest.py` and in the life lottery's
+  balancing hire. Nothing refilled a post after a business closed, a venue
+  shock, a death or a coming-of-age.
+- The lottery's hire (`p_hire = P_FIRE * emp/unemp`) chose the best
+  tag-matching venue with no notion of headcount — together with the
+  bootstrap matcher (whose generic fallback tags match Town Hall best) that
+  is how one venue collected **348 of the town's 435 jobs**.
+- No retirement: 65+ worked until they died.
+- Immigration inserted personas without `is_child`, so 115 minors arrived as
+  job-holding heads of household.
+
+`src/miniville/jobs.py` now owns the market: venue targets from capacity and
+customer traffic, scaled so the town's posts are 92% of its working-age
+adults (the rate is a town property; the distribution follows demand), a
+weekly hiring pass capped at 3% of the workforce, light voluntary turnover
+that drains overstaffed venues toward their targets, retirement at 65, and
+`rebalance-jobs` for a one-time correction. The life lottery keeps
+separations; its old hire draw is preserved-but-ignored so rng streams and
+replays do not shift.
+
+Live world migrated (backup `backups/miniville-t001955.db`): Town Hall
+348 → 7, tavern/bean/theater/gym staffed, 115 minors corrected,
+unemployment 13.9%.
+
+`db.snapshot_to()` now backs every db copy (soak, benchmark, backup) with
+SQLite's backup API: the town is WAL-mode and `shutil.copy2` takes the main
+file without the `-wal`, which produced a "database disk image is malformed"
+soak copy right after a migration.
+
+**Open finding, not yet fixed:** the money supply drains in both soaks
+($9.10M → ~$8.5M over 1.5 years) while the wage index falls — the town
+destroys money (rent) faster than it mints it (wages), and v0.8 makes
+businesses *poorer* because they finally pay their staff, so the weekly levy
+recirculates less. Worth a considered pass on rent recycling / levy balance.
+
 ## Resume note for next session
 
 Branch `autodev`, both agents pushing. World is seeded (seed=miniville) — `run`
-continues from tick 1776 (Day 38 = **Feb 7, Year 1**, winter; next holiday is
-Founders' Day, Apr 18 = Day 108, tick 5136). Do NOT `init` again unless
-intentionally resetting the town. Both economy migrations are applied (wages
-$62–252/day).
+continues from tick 19248 (Day 401 completed = **Feb 5, Year 2**, winter; next tick
+to advance is tick 19248 to 19296 for Day 402). Do NOT `init` again unless
+intentionally resetting the town. All economy migrations are applied.
 
 **Read `docs/AGENT_SYNC.md` first** — claims and messages between the workstation
 and cloud sessions live there. Pull before starting work; push small commits.
 
-CAVEAT: days 18–37 of the live world were simulated under the *pre-merge* seasons
-code (my dropped implementation), so a few chronicles say "Spring" where the merged
-calendar says winter, and the ledger contains a couple of holiday events that no
-longer exist (`Spring Blossom Festival`). Cosmetic only — nothing reads it back.
+Status updates (Wed, 07 Oct 2026):
+- Live world advanced through Day 401: 937 interactions, Anthony Furness and
+  Xavier Pacheco married, Aditya Yu and Jenni Miles moved in together, council
+  dividend hike motion rejected 2-3.
+- In-session prose narrative for Day 401 composed and stored in `narratives`
+  (source=agent, char count 1,838).
+- Fixed `events.describe` formatting bug where `life_event` rows lacking an
+  individual agent ID rendered with `None:` (e.g. household rent distress);
+  regression test added in `test_economy.py`.
+- Shipped Council & Politics Observer UI panel: added dedicated Council tab
+  displaying district representation, active policy levers highlighting deviations,
+  election countdown, motion outcomes with vote breakdown, active boycotts, and
+  top influential town figures. Enriched `/api/council` and added automated test
+  `test_council_endpoint` in `tests/test_ui.py`. 168 tests pass.
+- Standing invariants verified via `scripts/soak_check.py` (11/11 hold on
+  `data/soak-press90.db`).
 
-Open items the next session could take: the two findings left for the cloud agent
-in `AGENT_SYNC.md` (duplicate `cohabitation` events; keep the `cli.py` stdout
-reconfigure), and the roadmap's next milestone — **God-mode shocks** (inject a
-factory closure / fire / festival and watch the town absorb it).
-Daily routine for the backup session: read this file → `run` the next day(s) →
-`digest` → write a `narrate-write` entry → update this file → ledger.
+Status updates (Fri, 09 Oct 2026, cloud — Claude Code): v0.14 above. The
+live world has NOT been run on v0.14 yet. On first connect it migrates
+(`estates_v1`, ownership columns, `ema_revenue` seeded from all-time takings,
+`total_money_cents`) and on the first day-start appoints proprietors
+(`enterprise_v1`). Expect a few `town_deficit` events in the first weeks if
+the purse buffer was sized before pensions existed. 198 tests.
+
+Open items:
+1. Avatar pipeline: 129 deferred female residents awaiting IMDb StarMeter expansion
+   when operator approves batch.
+2. Observer UI: sigma.js bond graph (district overlay done in v0.14).
+2c. Live-world soak of v0.14 (workstation): `scripts/soak_check.py --run 365 --tag v14live`.
+3. Scale test: 2k-5k agents (initial indexing/benchmarking done in bench5k.db).
+4. Routine: read this file → `run` the next day(s) → `digest` → write a
+   `narrate-write` entry → update this file → ledger.

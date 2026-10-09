@@ -28,6 +28,8 @@ SHOP_TAGS = ["retail", "trades"]
 SHOP_KINDS = ("workplace", "public")
 DINING_KINDS = ("workplace", "public")
 SHOPPING_WINDOWS = (20, 32, 42)   # 10:00, 16:00, 21:00
+GATHERING_TICKS = 3               # a club night runs two hours, not thirty minutes
+MEAL_TICKS = (14, 26, 38)         # breakfast, lunch, dinner — see build_plan
 
 
 def _venue_by_tags(conn: sqlite3.Connection, tags: list[str], kinds=("public", "civic")):
@@ -113,10 +115,16 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
 
     for t in range(TICKS_PER_DAY):
         place, act = home, "sleep"
-        in_work_shift = works_today and job["shift_start"] <= t < job["shift_end"]
+        if works_today and job["shift_start"] < job["shift_end"]:
+            in_work_shift = job["shift_start"] <= t < job["shift_end"]
+        elif works_today:
+            in_work_shift = t >= job["shift_start"] or t < job["shift_end"]
+        else:
+            in_work_shift = False
         if in_work_shift:
             # lunch break mid-shift so workers don't starve
-            mid = (job["shift_start"] + job["shift_end"]) // 2
+            length = (job["shift_end"] - job["shift_start"]) % TICKS_PER_DAY
+            mid = (job["shift_start"] + length // 2) % TICKS_PER_DAY
             plan[t] = (job["place_id"], "break" if t == mid else "work")
             continue
 
@@ -126,7 +134,11 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
             and school_id
         )
         if in_school:
-            plan[t] = (school_id, "school")
+            # school runs 06:30-17:00, which covers breakfast and lunch: the
+            # school branch used to win those ticks outright, so children ate
+            # only dinner and drifted permanently hungry (mean hunger 47
+            # against the adults' 93)
+            plan[t] = (school_id, "eat" if t in MEAL_TICKS else "school")
             continue
 
         in_holiday = (
@@ -138,13 +150,14 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
             plan[t] = (venue_id or home, "celebrate")
             continue
 
-        if t < WAKE_TICK or t >= SLEEP_TICK:
-            plan[t] = (place, act)
-            continue
-
-        # post-shift dinner for workers whose shift ends at/past dinner time
+        # post-shift dinner before the sleep check: a worker who finishes
+        # after bedtime still gets their meal on the way home
         if works_today and t == job["shift_end"]:
             plan[t] = (home, "eat")
+            continue
+
+        if t < WAKE_TICK or t >= SLEEP_TICK:
+            plan[t] = (place, act)
             continue
 
         if t in (14, 26, 38):  # meal windows
@@ -177,13 +190,42 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
                 continue
         plan[t] = (home, "home")
 
+    # A gathering outranks whatever else was planned for that hour, and it
+    # lasts GATHERING_TICKS: one tick of co-presence is a single encounter and
+    # nothing accumulates from it, which is why the town's whole social graph
+    # sat at familiarity 1-3 — a fog of one-off meetings. A club that sits
+    # together for two hours builds something.
+    meeting = ctx.get("meetings", {}).get(agent["id"])
+    if meeting:
+        venue_id, meet_tick, _name = meeting
+        if in_work_shift_for(works_today, job, meet_tick) is False:
+            for t in range(meet_tick, min(meet_tick + GATHERING_TICKS, TICKS_PER_DAY)):
+                if t in MEAL_TICKS:
+                    continue      # nobody misses dinner for the club
+                plan[t] = (venue_id, "gathering")
+
     return [(t, p, a) for t, (p, a) in sorted(plan.items())]
+
+
+def in_work_shift_for(works_today: bool, job, tick: int) -> bool:
+    """True when the tick falls inside a shift — a gathering never pulls
+    someone off their post."""
+    if not works_today or job is None:
+        return False
+    start, end = job["shift_start"], job["shift_end"]
+    if start < end:
+        return start <= tick < end
+    return tick >= start or tick < end
 
 
 def rebuild_day_plans(conn: sqlite3.Connection, day: int, seed: str) -> int:
     conn.execute("DELETE FROM plans")
     agents = conn.execute("SELECT * FROM agents WHERE alive=1").fetchall()
     ctx = _plan_ctx(conn)
+    # today's gatherings, one query for the whole town: a group is just an
+    # arrangement of who is in the room, and encounters do the rest
+    from .groups import meetings_today
+    ctx["meetings"] = meetings_today(conn, day)
     rows = []
     for a in agents:
         rows.extend(

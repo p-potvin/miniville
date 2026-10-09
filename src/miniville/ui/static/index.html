@@ -22,6 +22,7 @@
   <button data-tab="debts">IOUs</button>
   <button data-tab="gazette">Gazette</button>
   <button data-tab="economy">Economy</button>
+  <button data-tab="council">Council</button>
 </nav>
 <main>
   <section id="feed" class="panel on">
@@ -50,7 +51,8 @@
     <div id="narratives"></div>
   </section>
   <section id="rels" class="panel">
-    <h2>Relationships</h2>
+    <h2>Relationships <small class="muted">click a resident's card → bond wheel · click a node to re-centre</small></h2>
+    <div id="bond-host"></div>
     <select id="rel-filter">
       <option value="">all</option><option>spouse</option><option>partner</option>
       <option>sweetheart</option><option>close_friend</option><option>friend</option>
@@ -65,23 +67,61 @@
   <section id="gazette" class="panel">
     <h2>The Miniville Gazette
       <select id="gaz-week"></select></h2>
+    <div id="gaz-meta" class="press-meta"></div>
     <pre id="gaz-text"></pre>
+    <section id="gaz-claims" class="press-claims" hidden>
+      <h3>Claims checked against the event ledger</h3>
+      <ul id="gaz-claims-list"></ul>
+    </section>
+    <details id="gaz-record-wrap">
+      <summary>Neutral observer record — the simulation event ledger</summary>
+      <p class="muted">The Gazette above is a resident's account. This record is what actually happened in the simulation.</p>
+      <ul id="gaz-record" class="observer-record"></ul>
+    </details>
   </section>
   <section id="economy" class="panel">
     <h2>Economy</h2>
     <div id="econ-stats"></div>
     <h3>Businesses</h3>
-    <table><thead><tr><th>Business</th><th>Kind</th><th>Status</th>
+    <table><thead><tr><th>Business</th><th>Owner</th><th>Kind</th><th>Status</th>
       <th>Balance</th><th>Revenue</th><th>Payroll</th><th>Prices</th><th>Traffic</th>
     </tr></thead><tbody id="econ-body"></tbody></table>
+    <h3>Districts</h3>
+    <table><thead><tr><th>District</th><th>Rent /wk</th><th>Households</th>
+      <th>Residents</th><th>Median household savings</th>
+    </tr></thead><tbody id="econ-districts"></tbody></table>
     <h3>Recent days</h3>
     <table><thead><tr><th>Day</th><th>Revenue</th><th>Payroll</th><th>Rent</th>
       <th>Spending</th><th>Supply</th><th>Unemployment</th><th>Closed</th>
     </tr></thead><tbody id="econ-days"></tbody></table>
   </section>
+  <section id="council" class="panel">
+    <h2>Town Council & Politics</h2>
+    <div id="council-meta" class="press-meta"></div>
+    <div id="council-policies" class="policy-grid"></div>
+    <h3>Council Seats</h3>
+    <table><thead><tr><th>Seat</th><th>Councillor</th><th>District</th><th>Backers</th>
+      <th>Median Wallet</th><th>Out of Work</th></tr></thead>
+      <tbody id="council-seats"></tbody></table>
+    <h3>Recent Motions</h3>
+    <table><thead><tr><th>Day</th><th>Policy</th><th>Target</th><th>Direction</th>
+      <th>Votes</th><th>Outcome</th></tr></thead>
+      <tbody id="council-motions"></tbody></table>
+    <div id="council-extra">
+      <div id="council-boycotts-wrap" hidden>
+        <h3>Active Boycotts</h3>
+        <ul id="council-boycotts"></ul>
+      </div>
+      <div id="council-influential-wrap">
+        <h3>Town Figures & Influence</h3>
+        <ul id="council-influential"></ul>
+      </div>
+    </div>
+  </section>
 </main>
 <script src="/vendor/pixi.min.js"></script>
 <script src="/app.js"></script>
 <script src="/map.js"></script>
+<script src="/graph.js"></script>
 </body>
 </html>

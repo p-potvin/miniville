@@ -16,6 +16,75 @@ unused source are deferred until the galleries grow.
   `deferred_ids` for residents awaiting new gallery members
 - `agents.avatar_path` stores the URL (`/avatars/aNNNN.jpg`)
 
+### Result of the purge + recast (Sat, 04 Oct 2026)
+
+Bounded re-ingest (≤12 imgs/folder over 759 folders) grew the gallery to
+**900 identities / 22k crops**; `verify_celebrity_gender` resolved 832 of
+1,010 (506 male, 338 female). The recast then cast **507 residents, 0
+wrong-sex identities**, and the gender auditor (which runs genderage on each
+256px portrait) went **73 → 7 mismatched, 32 → 6 unreadable** after portraits
+were re-cropped from an exemplar whose own detected sex matches the identity's.
+
+Two adult-gallery leaks were found and fixed on the way:
+
+- 78 casts came from `F:\amd\gallery` (the second adult gallery, 7k dirs) —
+  the first purge only knew `G:\Gallery`; `purge_bad_casts.py` now unions both.
+- 121 source folders were emptied into `.assets/.head` by the head pipeline;
+  their db rows survived and the pool offered them, producing 56 residents
+  with an `avatar_path` pointing at nothing. `pool()` now requires the source
+  image to exist.
+
+**43 residents are deferred** (all female) after the cleanup + re-vote below.
+The operator asked whether 1,000 identities against ~590 residents really
+cannot cover 150 female casts — the answer is that the *identities* exist but
+the *photos* do not. Final accounting of the 1,013 source folders:
+
+| | count |
+| --- | --- |
+| usable exemplar images (after cleanup) | 21,085 of 75,711 |
+| identities with a determinable sex | 734 (452 male, 282 female) |
+| ...female already worn | 274 |
+| ...female still free | 8 |
+| identities whose folders are empty (`.assets`/`.head`) | ~130 |
+| identities with no solo photo at all | 237 |
+| identities with a genuinely ambiguous vote | 45 |
+
+Relaxing the "facing camera" rule would revive exactly **1** identity, so the
+only real lever is new identities via `Import-IMDbStarMeter.ps1`.
+
+**Before the cleanup** (the state at the first recast):
+
+| | count |
+| --- | --- |
+| verified female identities | 338 |
+| ...already cast | 280 |
+| ...uncast, images on disk | **0** |
+| ...uncast, folder emptied into `.assets`/`.head` | 58 |
+| unresolved-sex identities (vote ambiguous) | 169, of which **161 still have photos** |
+
+So the free female pool is genuinely 0; the lever is the 161 unresolved
+identities, whose votes were polluted by multi-person photos.
+
+### Gallery cleanup (Sun, 04 Oct 2026, operator request)
+
+"Keep only those with 1 person facing the camera and remove the rest."
+`scripts/clean_gallery_images.py` keeps an image iff its sidecar says exactly
+1 person, facing camera, with a visible face and no quality exclusion;
+everything else moves to `<gallery>\.rejected\<identity>\` (reversible).
+
+```
+kept (exemplar-usable): 21,085
+quarantined:            54,626   (2-people 23,850; 3-people 10,476;
+                                  4-people 5,797; … over-shoulder 359;
+                                  facing away 174; large_text 1,258;
+                                  color_tint 20; nobody 632)
+```
+
+72% of the gallery was multi-person scenes — that is what left 169 identities
+undecided and produced bad portrait crops. `verify_celebrity_gender --force`
+then re-votes every identity on the surviving clean images only (quarantined
+crops fail to read and simply do not vote).
+
 ## Casting
 
 `scripts/build_avatar_gallery.py` (miniville venv; stdlib + pillow):

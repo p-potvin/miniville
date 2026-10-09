@@ -87,18 +87,21 @@ class TownMap {
     const g = new PIXI.Graphics();
     this.staticLayer.addChild(g);
 
-    // district tiles
+    // district tiles, tinted by how much the households living there have
+    // put by: as housing sorts the town by money, the map shows it
     const zones = {};
+    const savings = data.districts.filter(d => d.profile)
+      .map(d => d.profile.median_savings_cents);
+    const lo = Math.min(...savings), hi = Math.max(...savings);
     for (const d of data.districts) {
       zones[d.name] = d;
       g.lineStyle(1.5, MV_EDGE, 1).beginFill(MV_PANEL, 0.85)
         .drawRoundedRect(d.x, d.y, d.w, d.h, 14).endFill();
-      const name = new PIXI.Text(d.name.toUpperCase(), {
-        fontFamily: "Consolas, monospace", fontSize: 15,
-        fontWeight: "bold", fill: 0x7784a0,
-      });
-      name.position.set(d.x + 10, d.y + 8);
-      this.staticLayer.addChild(name);
+      if (d.profile && hi > lo) {
+        const t = (d.profile.median_savings_cents - lo) / (hi - lo);
+        g.lineStyle(0).beginFill(0xd4a72c, 0.04 + 0.16 * t)
+          .drawRoundedRect(d.x, d.y, d.w, d.h, 14).endFill();
+      }
       // homes block: bottom strip of the tile
       if (d.homes) {
         const hb = new PIXI.Graphics();
@@ -112,6 +115,22 @@ class TownMap {
         this.staticLayer.addChild(ht);
         d._homesRect = { x: d.x + 16, y: d.y + d.h - 70, w: d.w - 32, h: 44 };
       }
+      if (d.profile) {
+        const p = d.profile;
+        const info = new PIXI.Text(
+          `rent $${Math.round(p.rent_cents / 100)}/wk · ${p.residents} res · ` +
+          `median savings $${Math.round(p.median_savings_cents / 100).toLocaleString()}`, {
+            fontFamily: "Consolas, monospace", fontSize: 11, fill: 0xb8a65a,
+          });
+        info.position.set(d.x + 110, d.y + d.h - 24);   // beside "homes · N"
+        this.staticLayer.addChild(info);
+      }
+      const name = new PIXI.Text(d.name.toUpperCase(), {
+        fontFamily: "Consolas, monospace", fontSize: 15,
+        fontWeight: "bold", fill: 0x7784a0,
+      });
+      name.position.set(d.x + 10, d.y + 8);
+      this.staticLayer.addChild(name);
     }
 
     // venues
@@ -147,6 +166,16 @@ class TownMap {
     const dotTex = this._dotTexture();
     for (const [pid, list] of Object.entries(byVenue)) {
       const v = this.venues[pid];
+      if (list.length) {
+        const n = new PIXI.Text(String(list.length), {
+          fontFamily: "Consolas, monospace", fontSize: 13,
+          fontWeight: "bold", fill: 0xffffff,
+          stroke: 0x000000, strokeThickness: 4,
+        });
+        n.anchor.set(0.5, 1);
+        n.position.set(v.x, v.y - v.size / 2 - 3);
+        this.staticLayer.addChild(n);
+      }
       list.forEach((a, i) => {
         const r = v.size / 2 + 8 + Math.floor(i / 14) * 8;
         const ang = i * 2.399963;                    // golden angle scatter
@@ -156,6 +185,15 @@ class TownMap {
     for (const [dname, list] of Object.entries(byDistrict)) {
       const zone = zones[dname] || zones._other || data.districts.at(-1);
       const rect = zone._homesRect || { x: zone.x + 16, y: zone.y + zone.h - 60, w: zone.w - 32, h: 40 };
+      if (list.length) {
+        const n = new PIXI.Text(`${list.length} home`, {
+          fontFamily: "Consolas, monospace", fontSize: 11,
+          fontWeight: "bold", fill: 0xb8c0d0,
+        });
+        n.anchor.set(1, 1);
+        n.position.set(zone.x + zone.w - 12, zone.y + zone.h - 22);
+        this.staticLayer.addChild(n);
+      }
       const cols = Math.max(1, Math.floor(rect.w / 12));
       list.forEach((a, i) => {
         const cx = rect.x + 6 + (i % cols) * 12;

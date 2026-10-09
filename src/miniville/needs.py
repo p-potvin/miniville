@@ -15,10 +15,14 @@ ACTIVITY_EFFECTS = {
     "eat_out": {"hunger": +24, "fun": +3, "social": +1.5},
     "shopping": {"hunger": +6, "fun": +2.5, "social": +1.2, "stress": -0.4},
     "leisure": {"fun": +4.5, "social": +2.0, "stress": -1.2, "energy": -0.3},
+    # a club night or a service: the most social thing a resident does
+    "gathering": {"fun": +4.0, "social": +3.5, "stress": -1.5, "energy": -0.3},
     "celebrate": {"fun": +5.0, "social": +3.0, "stress": -1.5, "energy": -0.4, "hunger": +4},
     "social_call": {"social": +3.5, "fun": +2.0, "energy": -0.4},
     "wallow":  {"stress": +1.0, "fun": -1.0, "social": -1.0, "energy": +0.2},
     "resting": {"energy": +1.5, "stress": -0.5, "social": -0.5},
+    # a day or two in the cells at Town Hall: fed, bored, and ashamed
+    "jailed":  {"hunger": +1.4, "energy": +0.8, "stress": +0.8, "fun": -0.6, "social": -0.3},
     "home":    {"fun": +1.0, "stress": -0.6, "energy": +0.4, "social": +0.15},
     "idle":    {},
 }

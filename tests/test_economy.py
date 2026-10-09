@@ -237,6 +237,8 @@ def test_a_household_that_cannot_pay_rent_falls_into_arrears_then_downsizes():
     home = _place(conn, "Town Hall")              # Downtown, the priciest
     _add_household(conn, 1, home)
     _add_adult(conn, 1, home, 0, household=1)     # no money at all
+    _add_adult(conn, 2, home, 0, household=1)
+    conn.execute("UPDATE agents SET is_child=1, age=9 WHERE id=2")
 
     first = economy.collect_rent(conn, 7 * DAY, "s")
     assert first["missed"] == 1 and first["downsized"] == 0
@@ -249,7 +251,16 @@ def test_a_household_that_cannot_pay_rent_falls_into_arrears_then_downsizes():
         """SELECT p.district FROM households h JOIN places p ON p.id=h.home_place_id
            WHERE h.id=1""").fetchone()["district"]
     assert district == "The Flats"
+    # the child moves with the family
+    homes = {r["home_place_id"] for r in conn.execute(
+        "SELECT home_place_id FROM agents WHERE household_id=1")}
+    assert homes == {conn.execute("SELECT home_place_id FROM households WHERE id=1"
+                                  ).fetchone()["home_place_id"]}
     assert conn.execute("SELECT COUNT(*) n FROM rent_arrears").fetchone()["n"] == 0
+    from miniville.events import describe
+    ev = conn.execute("SELECT * FROM events WHERE kind='life_event' AND data LIKE '%rent_distress%'").fetchone()
+    assert describe(conn, ev).startswith("fell behind on rent")
+    assert not describe(conn, ev).startswith("None:")
 
 
 # --- business books ---------------------------------------------------------
@@ -393,20 +404,51 @@ def test_weekly_levy_recycles_business_reserves_to_residents():
     diner = _place(conn, "Riverside Diner")
     _add_adult(conn, 1, home, 0)
     _add_adult(conn, 2, home, 0)
-    conn.execute("UPDATE businesses SET balance_cents=100_000 WHERE place_id=?", (diner,))
+    conn.execute("UPDATE businesses SET balance_cents=100000 WHERE place_id=?", (diner,))
 
     assert economy.weekly_levy(conn, DAY, "s")["levied"] == 0      # not a levy day
     out = economy.weekly_levy(conn, 7 * DAY, "s")
     taxed = int(100_000 * economy.BUSINESS_TAX_RATE)
     assert out["levied"] == taxed
     assert out["residents"] == 2
-    # the surplus share comes back out as a dividend; the rest funds the town
-    expected = int(taxed * economy.LEVY_DIVIDEND_SHARE)
-    assert out["dividend"] == expected // 2
+    # the town has no public payroll to fund in this fixture, so the purse
+    # needs no buffer and the whole levy comes back out as the dividend
+    assert economy.public_payroll_week(conn) == 0
+    assert out["dividend"] == taxed // 2
     assert conn.execute("SELECT SUM(money_cents) s FROM agent_state"
-                        ).fetchone()["s"] == expected
+                        ).fetchone()["s"] == taxed
+    assert economy.town_balance(conn) == 0
     assert conn.execute("SELECT balance_cents FROM businesses WHERE place_id=?",
                         (diner,)).fetchone()["balance_cents"] == 100_000 - taxed
+
+
+def test_levy_funds_public_payroll_and_banks_a_buffer(conn=None):
+    """With public staff on the books the purse keeps a buffer, and the levy
+    still funds the payroll rather than vanishing."""
+    conn = _world()
+    home = _place(conn, "Town Hall")
+    hospital = _place(conn, "Miniville General Hospital")
+    diner = _place(conn, "Riverside Diner")
+    _add_adult(conn, 1, home, 0)
+    _add_adult(conn, 2, home, 0)
+    conn.execute(
+        """INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,
+           work_days) VALUES(1,?,'nurse',20000,16,34,62)""", (hospital,))
+    conn.execute("UPDATE businesses SET balance_cents=10000000 WHERE place_id=?",
+                 (diner,))
+
+    week = economy.public_payroll_week(conn)
+    assert week == 100_000                       # one post, five days
+    out = economy.weekly_levy(conn, 7 * DAY, "s")
+    taxed = int(10_000_000 * economy.BUSINESS_TAX_RATE)
+    assert out["levied"] == taxed
+    # the purse banks up to its buffer instead of handing everything out
+    assert economy.town_balance(conn) <= economy.PURSE_BUFFER_WEEKS * week
+    assert out["dividend"] * 2 <= taxed
+    # and the payroll comes out of the purse, not out of thin air
+    before = economy.town_balance(conn)
+    economy.settle_businesses(conn, 7 * DAY + 48, "s")
+    assert economy.town_balance(conn) <= before
 
 
 def test_economy_stats_reports_the_town():
@@ -436,3 +478,47 @@ def test_record_day_writes_a_time_series_row():
     # the in-progress day must not be reported as the last completed day
     economy._bump_day(conn, 1, spending=123)
     assert economy.economy_stats(conn)["last_day"]["day"] == 0
+
+
+# --- pensions -----------------------------------------------------------------
+
+
+def test_retirees_draw_a_pension_from_the_purse_before_rent():
+    conn = _world()
+    home = _place(conn, "Town Hall")
+    _add_adult(conn, 1, home, 0)
+    _add_adult(conn, 2, home, 0)
+    conn.execute("UPDATE agents SET age=70 WHERE id=1")       # retired
+    conn.execute("UPDATE town_account SET balance_cents=1000000")
+    assert economy.pay_pensions(conn, 3 * DAY)["paid"] == 0   # not a pay day
+    out = economy.pay_pensions(conn, 7 * DAY)
+    each = economy.pension_week(conn)
+    assert out == {"pensioners": 1, "paid": each}
+    money = {r["agent_id"]: r["money_cents"] for r in conn.execute(
+        "SELECT agent_id, money_cents FROM agent_state")}
+    assert money == {1: each, 2: 0}
+    assert economy.town_balance(conn) == 1000000 - each      # paid, not minted
+
+
+def test_a_working_senior_draws_no_pension():
+    conn = _world()
+    home = _place(conn, "Town Hall")
+    _add_adult(conn, 1, home, 0)
+    conn.execute("UPDATE agents SET age=68 WHERE id=1")
+    conn.execute(
+        """INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,
+           work_days) VALUES(1,?,'clerk',10000,16,34,62)""", (home,))
+    assert economy.pay_pensions(conn, 7 * DAY)["pensioners"] == 0
+
+
+def test_a_household_already_in_the_flats_is_not_downsized_again():
+    conn = _world()
+    flat = conn.execute("SELECT id FROM places WHERE district='The Flats' AND kind='home' "
+                        "ORDER BY id LIMIT 1").fetchone()["id"]
+    _add_household(conn, 1, flat)
+    _add_adult(conn, 1, flat, 0, household=1)
+    economy.collect_rent(conn, 7 * DAY, "s")
+    second = economy.collect_rent(conn, 14 * DAY, "s")
+    assert second["missed"] == 1 and second["downsized"] == 0
+    assert conn.execute("SELECT COUNT(*) n FROM events WHERE data LIKE '%\"downsize\"%'"
+                        ).fetchone()["n"] == 0

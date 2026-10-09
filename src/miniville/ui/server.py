@@ -5,6 +5,7 @@ resolved path so the dashboard follows MINIVILLE_DB / --db like the CLI.
 """
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from pathlib import Path
@@ -86,14 +87,19 @@ def create_app(db_path: str | None = None) -> FastAPI:
             businesses = _rows(c,
                 """SELECT p.name, p.kind, p.district, b.status, b.balance_cents,
                           b.revenue_total, b.payroll_total, b.price_index,
-                          b.ema_traffic, b.closed_tick
+                          b.ema_traffic, b.closed_tick, b.owner_id,
+                          o.name owner_name, b.founded_tick, b.concept,
+                          b.draws_total
                    FROM businesses b JOIN places p ON p.id=b.place_id
+                   LEFT JOIN agents o ON o.id=b.owner_id
                    ORDER BY b.balance_cents DESC""")
             series = _rows(c,
                 """SELECT * FROM economy_days WHERE money_supply_cents > 0
                    ORDER BY day DESC LIMIT ?""", (days,))
             series.reverse()
-            return {"stats": stats, "businesses": businesses, "series": series}
+            from ..housing import district_profile
+            return {"stats": stats, "businesses": businesses, "series": series,
+                    "districts": district_profile(c)}
         finally:
             c.close()
 
@@ -195,10 +201,17 @@ def create_app(db_path: str | None = None) -> FastAPI:
             mems = [{"day": m["day"] + 1, "kind": m["kind"], "text": m["text"],
                      "importance": m["importance"]}
                     for m in retrieve(c, agent_id, k=8)]
-            return {"agent": dict(a), "state": dict(st) if st else {},
+            from ..groups import memberships_of
+            from ..conflict import influence_of
+            from ..enterprise import owned_by
+            a = dict(a)
+            a["influence"] = influence_of(c, agent_id)
+            return {"agent": a, "state": dict(st) if st else {},
                     "job": dict(job) if job else None,
                     "debts": {"owes": owed_by, "owed": owed_to},
-                    "relationships": rels, "recent": recent, "memories": mems}
+                    "relationships": rels, "recent": recent, "memories": mems,
+                    "groups": memberships_of(c, agent_id),
+                    "owns": [dict(b) for b in owned_by(c, agent_id)]}
         finally:
             c.close()
 
@@ -215,22 +228,60 @@ def create_app(db_path: str | None = None) -> FastAPI:
 
     @app.get("/api/newspaper")
     def newspaper(week: int | None = Query(None)):
+        """The Gazette's account, plus the neutral event ledger beside it."""
+        from ..events import describe
+        from ..newspaper import observer_record
         c = conn()
+
+        def edition(row):
+            data = dict(row)
+            data["week"] += 1
+            publisher = c.execute("SELECT name FROM agents WHERE id=?",
+                                  (data.get("publisher_id"),)).fetchone()
+            editor = c.execute("SELECT name FROM agents WHERE id=?",
+                               (data.get("editor_id"),)).fetchone()
+            data["publisher"] = publisher["name"] if publisher else "Gazette staff"
+            data["editor"] = editor["name"] if editor else "Gazette staff"
+            data["editorial_basis"] = data.get("editorial_basis") or "independent local paper"
+            data["credibility"] = float(data.get("credibility") or 1.0)
+            try:
+                stored_claims = json.loads(data.get("claims_json") or "[]")
+            except (TypeError, ValueError):
+                stored_claims = []
+            claims = []
+            for claim in stored_claims:
+                event = c.execute("SELECT * FROM events WHERE id=?",
+                                  (claim.get("event_id"),)).fetchone()
+                claims.append({**claim, "observer_record": describe(c, event) if event else None,
+                               "verdict": "conflicts with the event ledger"
+                               if claim.get("truth") is False else "unverified"})
+            data["claims"] = claims
+            data["observer_record"] = observer_record(c, data["week"] - 1)
+            data["source_note"] = (
+                "The Gazette is written by residents and has an editorial line. "
+                "The Observer Record below is the simulation's event ledger.")
+            return data
+
         try:
             if week is not None:
                 row = c.execute("SELECT * FROM newspapers WHERE week=?",
                                 (week - 1,)).fetchone()
                 if not row:
                     raise HTTPException(404, "no edition for that week")
-                return dict(row)
-            rows = _rows(c, "SELECT week, created_tick FROM newspapers "
-                            "ORDER BY week DESC LIMIT 20")
+                return edition(row)
+            rows = _rows(c, "SELECT week, created_tick, publisher_id, editor_id, "
+                            "editorial_line, editorial_basis, credibility "
+                            "FROM newspapers ORDER BY week DESC LIMIT 20")
             for r in rows:
                 r["week"] += 1
+                for field in ("publisher_id", "editor_id"):
+                    if r[field]:
+                        person = c.execute("SELECT name FROM agents WHERE id=?",
+                                            (r[field],)).fetchone()
+                        r[field.replace("_id", "")] = person["name"] if person else None
             latest = c.execute("SELECT * FROM newspapers ORDER BY week DESC "
                                "LIMIT 1").fetchone()
-            return {"editions": rows,
-                    "latest": dict(latest) if latest else None}
+            return {"editions": rows, "latest": edition(latest) if latest else None}
         finally:
             c.close()
 
@@ -295,11 +346,113 @@ def create_app(db_path: str | None = None) -> FastAPI:
             home_counts = {name: c.execute(
                 "SELECT COUNT(*) n FROM places WHERE kind='home' AND district=?",
                 (name,)).fetchone()["n"] for name in DISTRICT_TILES}
+            from ..housing import district_profile
+            profile = {d["district"]: d for d in district_profile(c)}
             return {
-                "districts": [dict(z, homes=home_counts.get(z["name"], 0))
+                "districts": [dict(z, homes=home_counts.get(z["name"], 0),
+                                   profile=profile.get(z["name"]))
                               for z in districts.values()],
                 "places": places,
                 "agents": agents,
+            }
+        finally:
+            c.close()
+
+    @app.get("/api/graph/{agent_id}")
+    def graph(agent_id: int):
+        """Ego relationship network: the resident, their partners (ring 1) and
+        their partners' partners (ring 2). The client lays it out radially.
+        Bounded to ~120 nodes / 160 edges so it stays readable."""
+        c = conn()
+        try:
+            ego = c.execute(
+                "SELECT id, name, sex FROM agents WHERE id=?",
+                (agent_id,)).fetchone()
+            if not ego:
+                return {"error": "no such agent"}
+            rels = _rows(c, """
+                SELECT a_id, b_id, label, affinity, familiarity, romance
+                FROM relationships
+                WHERE a_id=? OR b_id=?""", (agent_id, agent_id))
+            ring1 = sorted({(r["b_id"] if r["a_id"] == agent_id else r["a_id"])
+                            for r in rels})
+            # second ring: partners of partners, strongest first, capped
+            ring2_raw = {}
+            if ring1:
+                ph = ",".join("?" * len(ring1))
+                rows = c.execute(
+                    f"""SELECT a_id, b_id, label, affinity, familiarity
+                        FROM relationships
+                        WHERE (a_id IN ({ph}) OR b_id IN ({ph}))
+                          AND a_id != ? AND b_id != ?""",
+                    (*ring1, *ring1, agent_id, agent_id)).fetchall()
+                for r in rows:
+                    for end in (r["a_id"], r["b_id"]):
+                        if end != agent_id and end not in ring1:
+                            ring2_raw[end] = max(
+                                ring2_raw.get(end, 0), r["familiarity"])
+                ring2_edges = [r for r in rows
+                               if r["a_id"] in ring1 or r["b_id"] in ring1]
+            else:
+                ring2_edges = []
+            ring2 = [k for k, _ in sorted(
+                ring2_raw.items(), key=lambda kv: -kv[1])][:100]
+            ids = [agent_id] + ring1 + ring2
+            ph = ",".join("?" * len(ids))
+            names = {r["id"]: r for r in c.execute(
+                f"SELECT id, name, sex FROM agents WHERE id IN ({ph})", ids)}
+            node_set = set(ids)
+            edges = rels + ring2_edges
+            # cap edges by familiarity for readability
+            edges = [e for e in edges
+                     if e["a_id"] in node_set and e["b_id"] in node_set]
+            edges.sort(key=lambda e: -e["familiarity"])
+            edges = edges[:160]
+            nodes = ([{"id": agent_id, "name": ego["name"],
+                       "sex": ego["sex"], "ring": 0}]
+                     + [{"id": i, "name": names[i]["name"],
+                         "sex": names[i]["sex"], "ring": 1}
+                        for i in ring1 if i in names]
+                     + [{"id": i, "name": names[i]["name"],
+                         "sex": names[i]["sex"], "ring": 2}
+                        for i in ring2 if i in names])
+            return {"ego": dict(ego), "nodes": nodes, "edges": edges}
+        finally:
+            c.close()
+
+    @app.get("/api/groups")
+    def groups_view():
+        """The town's affiliations, with their rosters."""
+        from ..groups import roster
+        c = conn()
+        try:
+            return {"groups": roster(c)}
+        finally:
+            c.close()
+
+    @app.get("/api/council")
+    def council_view():
+        """Who governs, what they last decided, and what they have changed."""
+        from ..conflict import most_influential
+        from ..politics import POLICIES, council, next_election_day, policy
+        c = conn()
+        try:
+            boycotts = _rows(c, """SELECT b.*, g.name group_name, p.name place_name
+                                   FROM boycotts b
+                                   JOIN groups g ON g.id=b.group_id
+                                   JOIN places p ON p.id=b.place_id
+                                   ORDER BY b.started_day DESC""")
+            elections = _rows(c, "SELECT * FROM elections ORDER BY id DESC LIMIT 5")
+            return {
+                "seats": council(c),
+                "policies": {name: {"now": policy(c, name), "default": POLICIES[name][0],
+                                    "low": POLICIES[name][1], "high": POLICIES[name][2]}
+                             for name in sorted(POLICIES)},
+                "next_election_day": next_election_day(c),
+                "motions": _rows(c, "SELECT * FROM motions ORDER BY id DESC LIMIT 20"),
+                "boycotts": boycotts,
+                "elections": elections,
+                "influential": most_influential(c, 8),
             }
         finally:
             c.close()

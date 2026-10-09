@@ -35,7 +35,16 @@ def cmd_init(args) -> int:
     dbmod.set_meta(conn, "tick", "0")
     economy.ensure_businesses(conn)
     conn.commit()
+    # a town comes with its congregations and clubs already in it
+    from .groups import assign_faith, form_groups, refresh_standing
+    faith = assign_faith(conn)
+    founded = form_groups(conn, 0, args.seed)
+    refresh_standing(conn)
+    conn.commit()
     print(f"Miniville populated: {stats}")
+    print(f"  faith parsed from personas: {faith['named']} named, "
+          f"{faith['inherited']} children inherited")
+    print(f"  affiliations founded: {len(founded['founded'])}")
     return 0
 
 
@@ -49,24 +58,28 @@ def cmd_economy(args) -> int:
     print(f"median wallet:   ${s['median_balance_cents'] / 100:,.0f}   "
           f"mean ${s['mean_balance_cents'] / 100:,.0f}")
     print(f"residents in debt: {s['in_debt']}")
+    print(f"town purse:      ${s['town_purse_cents'] / 100:,.0f}   "
+          f"(public payroll ${s['public_payroll_week_cents'] / 100:,.0f}/week)")
     print(f"unemployment:    {s['unemployment'] * 100:.1f}%")
     print(f"wage index:      {s['wage_index'] * 100:.0f}% of baseline")
     print(f"businesses:      {s['businesses_open']} open, "
           f"{s['businesses_closed']} closed")
     print()
     print(f"{'business':<30} {'status':<7} {'balance':>12} {'rev/day':>10} "
-          f"{'pay/day':>10} {'px':>5}")
+          f"{'pay/day':>10} {'px':>5}  owner")
     for r in conn.execute(
             """SELECT p.name, p.kind, b.status, b.balance_cents, b.revenue_total,
                       b.payroll_total, b.price_index, b.last_settled_day,
-                      b.revenue_today, b.payroll_today
+                      b.revenue_today, b.payroll_today, o.name owner,
+                      b.founded_tick
                FROM businesses b JOIN places p ON p.id=b.place_id
+               LEFT JOIN agents o ON o.id=b.owner_id
                ORDER BY b.balance_cents"""):
-        settled = r["last_settled_day"]
+        owner = (r["owner"] or "-") + (" (founded)" if r["founded_tick"] is not None else "")
         print(f"{r['name']:<30} {r['status']:<7} "
               f"${r['balance_cents'] / 100:>11,.0f} "
               f"${r['revenue_today'] / 100:>9,.0f} ${r['payroll_today'] / 100:>9,.0f} "
-              f"{r['price_index']:>5.2f}")
+              f"{r['price_index']:>5.2f}  {owner}")
     if args.days:
         print()
         print(f"{'day':>4} {'revenue':>12} {'payroll':>12} {'rent':>10} "
@@ -218,6 +231,170 @@ def cmd_immigrate(args) -> int:
     return 0
 
 
+def cmd_year_in_review(args) -> int:
+    from .db import get_meta
+    from .newspaper import year_in_review
+    conn = _conn(args)
+    day = int(get_meta(conn, "tick", "0") or 0) // 48
+    year = args.year or max(1, day // 365 + (1 if day % 365 else 0))
+    print(year_in_review(conn, year))
+    return 0
+
+
+def cmd_influence(args) -> int:
+    from .conflict import influence_of, most_influential
+    conn = _conn(args)
+    rows = most_influential(conn, args.top)
+    if not rows:
+        print("nobody has any influence yet")
+        return 0
+    print(f"{'resident':24s} {'influence':>9s}  {'standing':>8s}  {'rank':>4s}  "
+          f"{'seat':>4s}  {'leads':>5s}")
+    for r in rows:
+        aid = r["id"]
+        job = conn.execute(
+            "SELECT rank FROM jobs WHERE agent_id=?", (aid,)).fetchone()
+        seat = conn.execute("SELECT COUNT(*) n FROM council WHERE agent_id=?",
+                            (aid,)).fetchone()["n"]
+        leads = conn.execute(
+            """SELECT COUNT(*) n FROM memberships WHERE agent_id=? AND role='officer'""",
+            (aid,)).fetchone()["n"]
+        standing = conn.execute("SELECT standing FROM agents WHERE id=?",
+                                (aid,)).fetchone()["standing"]
+        print(f"  {r['name'][:22]:22s} {r['influence']:9.2f} {standing or 0:8d}  "
+              f"{job['rank'] if job else 0:4d}  {seat:4d}  {leads:5d}")
+    return 0
+
+
+def cmd_council(args) -> int:
+    from .db import get_meta
+    from .politics import POLICIES, council, next_election_day, policy
+    conn = _conn(args)
+    day = int(get_meta(conn, "tick", "0") or 0) // 48
+    seats = council(conn)
+    if not seats:
+        print("no council seated yet — run `election`")
+    else:
+        print(f"{'seat':4s} {'councillor':22s} {'district':18s} {'votes':>6s} "
+              f"{'wallet':>10s} {'out of work':>11s}")
+        for s in seats:
+            print(f"  {s['seat']:<2d} {s['name'] or '?':22s} {s['district'] or '?':18s} "
+                  f"{s['backers']:6d} {s['backers_wallet'] / 100:10,.0f} "
+                  f"{s['backers_unemployed'] * 100:10.0f}%")
+    med = conn.execute(
+        """SELECT s.money_cents m FROM agent_state s JOIN agents a ON a.id=s.agent_id
+           WHERE a.alive=1 AND a.is_child=0 ORDER BY s.money_cents""").fetchall()
+    if med:
+        print(f"\nadult median wallet ${med[len(med) // 2]['m'] / 100:,.0f} "
+              f"— a district below it wants the wage floor raised, a district "
+              f"more out of work than average wants rent and the levy raised")
+    print(f"next election: day {next_election_day(conn)} (now day {day})")
+    print(f"{'policy':18s} {'now':>8s} {'default':>8s}   range")
+    for name, (default, low, high, _step) in sorted(POLICIES.items()):
+        print(f"  {name:16s} {policy(conn, name):8.3f} {default:8.3f}   "
+              f"{low} - {high}")
+    return 0
+
+
+def cmd_election(args) -> int:
+    from .db import get_meta
+    from .politics import hold_election
+    conn = _conn(args)
+    seed = get_meta(conn, "seed", "miniville")
+    tick = int(get_meta(conn, "tick", "0") or 0)
+    out = hold_election(conn, tick, seed)
+    conn.commit()
+    if not out["seated"]:
+        print("nobody stood for office")
+        return 0
+    print(f"turnout {out['turnout']}")
+    for s in out["seated"]:
+        print(f"  seat {s['seat']}: {s['name']} — {s['votes']} votes "
+              f"({s['district'] or 'no fixed address'})")
+    return 0
+
+
+def cmd_motion(args) -> int:
+    from .db import get_meta
+    from .politics import consider_motion
+    conn = _conn(args)
+    seed = get_meta(conn, "seed", "miniville")
+    tick = int(get_meta(conn, "tick", "0") or 0)
+    out = consider_motion(conn, tick, seed)
+    conn.commit()
+    if not out:
+        print("no council seated, or the policy is already at its rail")
+        return 0
+    verdict = "passed" if out["passed"] else "rejected"
+    print(f"{out['policy']} {'+' if out['direction'] > 0 else '-'}"
+          f"{out['value']:.3f} — {verdict} ({out['for']} for, {out['against']} against)")
+    return 0
+
+
+def cmd_form_groups(args) -> int:
+    from .db import get_meta
+    from .groups import assign_faith, form_groups, refresh_standing, roster
+    conn = _conn(args)
+    seed = get_meta(conn, "seed", "miniville")
+    tick = int(get_meta(conn, "tick", "0") or 0)
+    faith = assign_faith(conn)
+    print(f"faith parsed from personas: {faith['named']} residents "
+          f"({faith['inherited']} children inherited)")
+    out = form_groups(conn, tick, seed)
+    refresh_standing(conn)
+    conn.commit()
+    for g in out["founded"]:
+        print(f"  founded {g['name']} ({g['kind']}, {g['members']} members)")
+    if not out["founded"]:
+        print("  nothing new to found")
+    return cmd_groups(args)
+
+
+def cmd_groups(args) -> int:
+    from .groups import roster
+    conn = _conn(args)
+    rows = roster(conn)
+    if not rows:
+        print("no groups yet — run `form-groups`")
+        return 0
+    print(f"\n{'group':32s} {'kind':13s} {'members':>7s} {'standing':>8s}  meets")
+    for r in rows:
+        when = ""
+        if r["meets_day"] is not None and r["meets_tick"] is not None:
+            day = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][r["meets_day"]]
+            when = f"{day} {r['meets_tick'] // 2:02d}:{(r['meets_tick'] % 2) * 30:02d} " \
+                   f"at {r['venue']}"
+        print(f"  {r['name'][:30]:30s} {r['kind']:13s} {r['members']:7d} "
+              f"{r['standing']:+8d}  {when}")
+    return 0
+
+
+def cmd_rebalance_jobs(args) -> int:
+    from .db import get_meta
+    from .jobs import fix_minor_flags, rebalance, venue_targets
+    conn = _conn(args)
+    seed = get_meta(conn, "seed", "miniville")
+    tick = int(get_meta(conn, "tick", "0") or 0)
+    minors = fix_minor_flags(conn)
+    if minors:
+        print(f"corrected {minors} under-18 resident(s) flagged as adults")
+    before = conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
+    out = rebalance(conn, tick, seed)
+    conn.commit()
+    after = conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
+    print(f"jobs {before} -> {after}   released {out['released']}, "
+          f"rehired {out['rehired']}, still unemployed {out['still_unemployed']}")
+    print("\nvenue                     target  staff")
+    targets = venue_targets(conn)
+    staff = {r["place_id"]: r["n"] for r in conn.execute(
+        "SELECT place_id, COUNT(*) n FROM jobs GROUP BY place_id")}
+    for row in conn.execute(
+            "SELECT id, name FROM places WHERE kind != 'home' ORDER BY id"):
+        print(f"  {row['name'][:24]:24s} {targets.get(row['id'], 0):6d} "
+              f"{staff.get(row['id'], 0):6d}")
+    return 0
+
+
 def cmd_newspaper(args) -> int:
     from .db import get_meta
     from .newspaper import latest, publish_week, week_of
@@ -338,7 +515,7 @@ def cmd_benchmark(args) -> int:
     from . import engine
     src = Path(args.db) if args.db else dbmod.DEFAULT_DB
     tmp = Path(tempfile.mkdtemp()) / "bench.db"
-    shutil.copy2(src, tmp)
+    dbmod.snapshot_to(src, tmp)           # WAL-safe: copy2 can tear a live db
     conn = dbmod.connect(tmp)
     seed = dbmod.get_meta(conn, "seed", "miniville")
     times = []
@@ -440,6 +617,28 @@ def main(argv=None) -> int:
     psk.set_defaults(fn=cmd_shock)
     plk = sub.add_parser("shocks", help="list injected shocks")
     plk.set_defaults(fn=cmd_shocks)
+    pjb = sub.add_parser("rebalance-jobs",
+                         help="move surplus jobs onto the venues that need them")
+    pjb.set_defaults(fn=cmd_rebalance_jobs)
+    pgf = sub.add_parser("form-groups",
+                         help="found the town's congregations and clubs")
+    pgf.set_defaults(fn=cmd_form_groups)
+    pgl = sub.add_parser("groups", help="list the town's affiliations")
+    pgl.set_defaults(fn=cmd_groups)
+    pco = sub.add_parser("council", help="seats, policies and the next election")
+    pco.set_defaults(fn=cmd_council)
+    pel = sub.add_parser("election", help="hold a town election now")
+    pel.set_defaults(fn=cmd_election)
+    pmo = sub.add_parser("motion", help="put a motion to the council now")
+    pmo.set_defaults(fn=cmd_motion)
+    pyr = sub.add_parser("year-in-review",
+                         help="a year of the town, read back from its ledger")
+    pyr.add_argument("--year", type=int, default=None,
+                     help="calendar year (default: the one just ended)")
+    pyr.set_defaults(fn=cmd_year_in_review)
+    pin = sub.add_parser("influence", help="who actually runs this town")
+    pin.add_argument("--top", type=int, default=12)
+    pin.set_defaults(fn=cmd_influence)
 
     args = p.parse_args(argv)
     return args.fn(args)

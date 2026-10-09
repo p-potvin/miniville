@@ -132,3 +132,53 @@ def test_orphans_join_a_living_adult_household(conn):
     assert child["home_place_id"] == conn.execute(
         "SELECT home_place_id FROM households WHERE id=2").fetchone()[0]
     assert adult is not None
+
+
+def _money(conn, aid):
+    return conn.execute("SELECT money_cents FROM agent_state WHERE agent_id=?",
+                        (aid,)).fetchone()["money_cents"]
+
+
+def test_the_spouse_inherits(conn):
+    conn.execute("UPDATE agent_state SET money_cents=0")
+    conn.execute("UPDATE agent_state SET money_cents=50000 WHERE agent_id=1")
+    agent = conn.execute("SELECT * FROM agents WHERE id=1").fetchone()
+    mortality._die(conn, agent, 0, mortality.rng_for("t", 1))
+    assert _money(conn, 1) == 0
+    assert _money(conn, 2) == 50000
+    assert _money(conn, 3) == 0          # the child is not the heir while a spouse lives
+
+
+def test_an_estate_with_no_family_goes_to_the_town(conn):
+    from miniville import economy
+    conn.execute("UPDATE agent_state SET money_cents=30000 WHERE agent_id=4")
+    conn.execute("UPDATE agent_state SET money_cents=0 WHERE agent_id!=4")
+    before = economy.town_balance(conn)
+    agent = conn.execute("SELECT * FROM agents WHERE id=4").fetchone()
+    mortality._die(conn, agent, 0, mortality.rng_for("t", 4))
+    assert _money(conn, 4) == 0
+    assert economy.town_balance(conn) == before + 30000
+    total = conn.execute("SELECT SUM(money_cents) s FROM agent_state").fetchone()["s"]
+    assert total == 0                    # nothing minted, nothing lost
+
+
+def test_orphaned_children_inherit_before_they_are_rehomed(conn):
+    # the spouse dies first, then the parent: the child is the only heir
+    conn.execute("UPDATE agent_state SET money_cents=0")
+    conn.execute("UPDATE agent_state SET money_cents=40000 WHERE agent_id=1")
+    for aid in (2, 1):
+        agent = conn.execute("SELECT * FROM agents WHERE id=?", (aid,)).fetchone()
+        mortality._die(conn, agent, 0, mortality.rng_for("t", aid))
+    assert _money(conn, 3) == 40000
+
+
+def test_migration_returns_frozen_estates_to_the_town(conn):
+    from miniville import economy
+    conn.execute("UPDATE agent_state SET money_cents=0")
+    conn.execute("UPDATE agents SET alive=0 WHERE id=1")
+    conn.execute("UPDATE agent_state SET money_cents=12345 WHERE agent_id=1")
+    conn.execute("DELETE FROM meta WHERE key='estates_v1'")
+    db._migrate(conn)
+    db._migrate(conn)                    # idempotent
+    assert _money(conn, 1) == 0
+    assert economy.town_balance(conn) == 12345
