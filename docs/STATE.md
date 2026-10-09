@@ -393,6 +393,8 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   beat the loser by better than 2:1 and ambiguous identities stay unresolved.
   Validated on the 162 identities with both a cached label and usable crops:
   34 agree / 0 disagree / 6 refused. Nothing in the avatar path hits the network.
+- Ledger debt (Fri, 09 Oct 2026): the Claude Code cloud session (v0.14) had no
+  `record-agent-change.ps1`; the next workstation session should record it.
 - Ledger debt cleared: the cloud session's entry (owed because its VM had no
   `record-agent-change.ps1`) is recorded on the workstation.
 - Celebrity gallery re-embedded (Thu, 01 Oct 2026, workstation). The operator
