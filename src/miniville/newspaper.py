@@ -96,9 +96,9 @@ LINE_BONUS = {
 
 POLICY_PREFERENCE = {
     "business": {"levy_rate": -1, "dividend_share": -1,
-                 "rent_multiplier": -1, "min_wage": -1},
+                 "rent_multiplier": -1, "min_wage": -1, "pension": -1},
     "working": {"levy_rate": 1, "dividend_share": 1,
-                "rent_multiplier": -1, "min_wage": 1},
+                "rent_multiplier": -1, "min_wage": 1, "pension": 1},
     "establishment": {},
     "community": {},
 }

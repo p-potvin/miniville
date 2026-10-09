@@ -61,6 +61,7 @@ RENT_BY_DISTRICT = {
     "The Flats": 29000,
 }
 DEFAULT_RENT = 35000
+CHEAPEST_DISTRICT = min(RENT_BY_DISTRICT, key=RENT_BY_DISTRICT.get)
 
 # Prices are set so a commercial venue's takings cover its payroll with a
 # margin. Measured on a 3-year soak they did not: the customer-facing venues
@@ -101,6 +102,10 @@ LEVY_DIVIDEND_SHARE = 0.35
 # how many weeks of public payroll the town keeps in the purse before the
 # surplus goes back out to residents as extra dividend
 PURSE_BUFFER_WEEKS = 6
+# the town pension: a share (council policy `pension`) of a median working
+# week, paid to every resident past retirement age who no longer works
+PENSION_BASE_WEEK_CENTS = 74_000
+PENSION_AGE = 65
 WAGE_INDEX_MIN, WAGE_INDEX_MAX = 0.6, 1.6
 UNEMPLOYMENT_HIGH = 0.12   # above this, wages drift down
 UNEMPLOYMENT_LOW = 0.05    # below this, wages drift up
@@ -139,6 +144,53 @@ def public_payroll_week(conn: sqlite3.Connection) -> int:
         if tags & PUBLIC_TAGS or r["kind"] == "civic":
             total += int(r["wage_cents"]) * 5      # five working days
     return total
+
+
+def _pensioners(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        """SELECT a.id FROM agents a WHERE a.alive=1 AND a.is_child=0 AND a.age>=?
+           AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.agent_id=a.id)
+           ORDER BY a.id""", (PENSION_AGE,)).fetchall()
+
+
+def pension_week(conn: sqlite3.Connection) -> int:
+    """What one pensioner is paid a week under the current policy."""
+    from .politics import policy
+    return int(PENSION_BASE_WEEK_CENTS * policy(conn, "pension"))
+
+
+def pension_bill_week(conn: sqlite3.Connection) -> int:
+    return pension_week(conn) * len(_pensioners(conn))
+
+
+def pay_pensions(conn: sqlite3.Connection, tick: int) -> dict:
+    """Weekly, before rent: the town pays its retirees out of the purse.
+
+    Retirement (jobs.retirements) ended a resident's wage and nothing replaced
+    it, so every retired household lived on its savings and the civic
+    dividend until it could not pay rent: a year-long soak found 70 of the
+    town's 105 broke households were retirees, downsized to The Flats again
+    and again. The purse is funded by rent and the levy, so this is the town
+    paying its old out of the same loop — a shortfall is a deficit, reported.
+    """
+    day = day_of(tick)
+    if day % 7 != 0 or day == 0:
+        return {"pensioners": 0, "paid": 0}
+    each = pension_week(conn)
+    people = _pensioners(conn)
+    if each <= 0 or not people:
+        return {"pensioners": 0, "paid": 0}
+    bill = each * len(people)
+    short = town_debit(conn, bill)
+    if short:
+        emit(conn, tick, "town_event", importance=NOTABLE,
+             text=f"the town ran short paying its pensions; "
+                  f"${short / 100:,.0f} went on the town's slate",
+             tag="town_deficit")
+    for p in people:
+        conn.execute("UPDATE agent_state SET money_cents=money_cents+? WHERE agent_id=?",
+                     (each, p["id"]))
+    return {"pensioners": len(people), "paid": bill}
 
 
 def town_debit(conn: sqlite3.Connection, cents: int) -> int:
@@ -425,7 +477,7 @@ def weekly_levy(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     # the residents' money sitting in a drawer, so it goes back out with the
     # dividend. Without this valve the purse swallowed rent forever and every
     # wallet in town drained while the town account grew.
-    buffer = PURSE_BUFFER_WEEKS * public_payroll_week(conn)
+    buffer = PURSE_BUFFER_WEEKS * (public_payroll_week(conn) + pension_bill_week(conn))
     surplus = max(0, town_balance(conn) - buffer)
     if surplus:
         town_debit(conn, surplus)
@@ -469,6 +521,13 @@ def _maybe_downsize(conn: sqlite3.Connection, h: sqlite3.Row, tick: int,
     row = conn.execute("SELECT * FROM rent_arrears WHERE household_id=?",
                        (h["id"],)).fetchone()
     if not row or row["missed_payments"] < 2:
+        return 0
+    here = conn.execute("SELECT district FROM places WHERE id=?",
+                        (h["home_place_id"],)).fetchone()
+    if here and here["district"] == CHEAPEST_DISTRICT:
+        # already in the cheapest district: there is nowhere cheaper to go.
+        # This used to "move" them to The Flats again every fortnight — 1,451
+        # downsizings in one soak year, most of them from The Flats.
         return 0
     r = rng_for(seed, "downsize", h["id"], day_of(tick))
     cheap = conn.execute(

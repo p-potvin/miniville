@@ -83,6 +83,8 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     economy.ensure_businesses(conn)
     economy.record_day(conn, tick)
     stats["businesses"] = economy.settle_businesses(conn, tick, seed)
+    # pensions land before rent is due, so a retired household can pay it
+    stats["pensions"] = economy.pay_pensions(conn, tick)
     stats["rent"] = economy.collect_rent(conn, tick, seed)
     stats["levy"] = economy.weekly_levy(conn, tick, seed)
     stats["labour"] = economy.wage_dynamics(conn, tick, seed)

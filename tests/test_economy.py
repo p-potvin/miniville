@@ -478,3 +478,47 @@ def test_record_day_writes_a_time_series_row():
     # the in-progress day must not be reported as the last completed day
     economy._bump_day(conn, 1, spending=123)
     assert economy.economy_stats(conn)["last_day"]["day"] == 0
+
+
+# --- pensions -----------------------------------------------------------------
+
+
+def test_retirees_draw_a_pension_from_the_purse_before_rent():
+    conn = _world()
+    home = _place(conn, "Town Hall")
+    _add_adult(conn, 1, home, 0)
+    _add_adult(conn, 2, home, 0)
+    conn.execute("UPDATE agents SET age=70 WHERE id=1")       # retired
+    conn.execute("UPDATE town_account SET balance_cents=1000000")
+    assert economy.pay_pensions(conn, 3 * DAY)["paid"] == 0   # not a pay day
+    out = economy.pay_pensions(conn, 7 * DAY)
+    each = economy.pension_week(conn)
+    assert out == {"pensioners": 1, "paid": each}
+    money = {r["agent_id"]: r["money_cents"] for r in conn.execute(
+        "SELECT agent_id, money_cents FROM agent_state")}
+    assert money == {1: each, 2: 0}
+    assert economy.town_balance(conn) == 1000000 - each      # paid, not minted
+
+
+def test_a_working_senior_draws_no_pension():
+    conn = _world()
+    home = _place(conn, "Town Hall")
+    _add_adult(conn, 1, home, 0)
+    conn.execute("UPDATE agents SET age=68 WHERE id=1")
+    conn.execute(
+        """INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,
+           work_days) VALUES(1,?,'clerk',10000,16,34,62)""", (home,))
+    assert economy.pay_pensions(conn, 7 * DAY)["pensioners"] == 0
+
+
+def test_a_household_already_in_the_flats_is_not_downsized_again():
+    conn = _world()
+    flat = conn.execute("SELECT id FROM places WHERE district='The Flats' AND kind='home' "
+                        "ORDER BY id LIMIT 1").fetchone()["id"]
+    _add_household(conn, 1, flat)
+    _add_adult(conn, 1, flat, 0, household=1)
+    economy.collect_rent(conn, 7 * DAY, "s")
+    second = economy.collect_rent(conn, 14 * DAY, "s")
+    assert second["missed"] == 1 and second["downsized"] == 0
+    assert conn.execute("SELECT COUNT(*) n FROM events WHERE data LIKE '%\"downsize\"%'"
+                        ).fetchone()["n"] == 0

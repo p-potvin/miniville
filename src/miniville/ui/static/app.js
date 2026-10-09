@@ -195,7 +195,7 @@ async function economy() {
 }
 
 function formatPolicy(name, val) {
-  if (name === "levy_rate" || name === "dividend_share" || name === "min_wage") {
+  if (name === "levy_rate" || name === "dividend_share" || name === "min_wage" || name === "pension") {
     return (val * 100).toFixed(1) + "%";
   }
   if (name === "rent_multiplier") {

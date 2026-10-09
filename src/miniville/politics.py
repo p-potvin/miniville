@@ -10,6 +10,7 @@ a resident can feel:
 | `dividend_share` | how much of the levy goes back out as the dividend | 0.10 - 0.90 |
 | `rent_multiplier` | scales every household's weekly rent | 0.60 - 1.40 |
 | `min_wage` | a floor under every wage paid | 0 - 1.0 (share of the wage band) |
+| `pension` | the weekly town pension, as a share of a median working week | 0.20 - 0.90 |
 
 Residents vote for the candidate most like them — same congregation, same
 district, similar work — and a councillor's record of *who* elected them
@@ -30,6 +31,7 @@ from .timekeeper import day_of
 
 SEATS = 5
 TERM_DAYS = 730                     # a two-year term
+FIRST_ELECTION_DAY = 60
 MIN_STANDING_TO_STAND = 8           # you need a name to stand at all
 MAX_CANDIDATES = 12
 
@@ -39,6 +41,7 @@ POLICIES: dict[str, tuple[float, float, float, float]] = {
     "dividend_share": (0.35, 0.10, 0.90, 0.05),
     "rent_multiplier": (1.0, 0.60, 1.40, 0.05),
     "min_wage": (0.0, 0.0, 1.0, 0.10),
+    "pension": (0.50, 0.20, 0.90, 0.05),
 }
 
 
@@ -65,11 +68,14 @@ def _clamp(name: str, value: float) -> float:
 def next_election_day(conn: sqlite3.Connection) -> int:
     raw = get_meta(conn, "next_election_day", None)
     if raw is None:
-        return TERM_DAYS
+        # a new town elects its first council once residents have had time to
+        # make a name; waiting a full term left a fresh town ungoverned (no
+        # motions, no losing candidates' grudges) for its first two years
+        return FIRST_ELECTION_DAY
     try:
         return int(raw)
     except (TypeError, ValueError):
-        return TERM_DAYS
+        return FIRST_ELECTION_DAY
 
 
 def hold_election(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
@@ -269,6 +275,9 @@ def _votes_yes(motion_policy: str, direction: int, member: dict,
         return (direction > 0) == dependent
     if motion_policy == "min_wage":
         return (direction > 0) == poor
+    if motion_policy == "pension":
+        # the pension is paid out of the purse, like the dividend
+        return (direction > 0) == dependent
     return False
 
 
@@ -306,7 +315,8 @@ def consider_motion(conn: sqlite3.Connection, tick: int, seed: str) -> dict | No
     text = {"levy_rate": f"the business levy to {value * 100:.0f}%",
             "dividend_share": f"the civic dividend to {value * 100:.0f}% of the levy",
             "rent_multiplier": f"rent to {value * 100:.0f}% of its rate",
-            "min_wage": f"the wage floor to {value * 100:.0f}%"}[name]
+            "min_wage": f"the wage floor to {value * 100:.0f}%",
+            "pension": f"the town pension to {value * 100:.0f}% of a working week"}[name]
     emit(conn, tick, "town_event", importance=NOTABLE if passed else 1,
          text=(f"the council {verb} {text}" if passed
                else f"the council rejected a motion to {verb[:-1]} {text}"),
