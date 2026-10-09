@@ -387,17 +387,33 @@ def reopen_or_wait(conn: sqlite3.Connection, b: sqlite3.Row, tick: int,
     return "dark" if b["founded_tick"] is not None else "town"
 
 
-def lose_venture(conn: sqlite3.Connection, place_id: int, tick: int) -> None:
-    """On closure the owner loses the venue (and whatever they put in)."""
-    b = conn.execute("SELECT owner_id, capital_cents FROM businesses WHERE place_id=?",
-                     (place_id,)).fetchone()
+def lose_venture(conn: sqlite3.Connection, place_id: int, tick: int) -> int:
+    """On closure the owner loses the venue, and answers for its debts out of
+    their own savings. Returns what the owner paid.
+
+    A failed business closes some $60k in the red, and closing used to simply
+    zero that: the wages it had paid on credit stayed in circulation and the
+    debt vanished, minting the difference (most of a fresh town's ~3%/year
+    growth in total money). The owner's savings now cover what they can; only
+    the rest is written off.
+    """
+    b = conn.execute(
+        "SELECT owner_id, capital_cents, balance_cents FROM businesses WHERE place_id=?",
+        (place_id,)).fetchone()
     if not b or b["owner_id"] is None:
-        return
+        return 0
+    debt = max(0, -int(b["balance_cents"]))
+    paid = min(debt, max(0, _money(conn, b["owner_id"])))
+    if paid:
+        _move_money(conn, b["owner_id"], place_id, paid)
     name = conn.execute("SELECT name FROM places WHERE id=?", (place_id,)).fetchone()["name"]
-    remember(conn, b["owner_id"], tick, f"{name} failed. I lost the business.",
+    remember(conn, b["owner_id"], tick,
+             f"{name} failed. I lost the business"
+             + (f" and ${paid / 100:,.0f} of my own money with it." if paid else "."),
              kind="enterprise", importance=5)
     conn.execute("UPDATE businesses SET owner_id=NULL, capital_cents=0 WHERE place_id=?",
                  (place_id,))
+    return paid
 
 
 # --- inheritance (called by mortality) ---------------------------------------

@@ -798,8 +798,11 @@ def record_day(conn: sqlite3.Connection, tick: int) -> dict:
         "FROM businesses").fetchone()
     counts = {r["status"]: r["n"] for r in conn.execute(
         "SELECT status, COUNT(*) n FROM businesses GROUP BY status")}
+    tills = conn.execute(
+        "SELECT COALESCE(SUM(balance_cents),0) s FROM businesses").fetchone()["s"]
     stats = {
         "day": day,
+        "total_money_cents": money + tills + town_balance(conn),
         "revenue_cents": flows["r"],
         "payroll_cents": flows["p"],
         "rent_cents": existing["rent_cents"] if existing else 0,
@@ -815,10 +818,10 @@ def record_day(conn: sqlite3.Connection, tick: int) -> dict:
     conn.execute(
         """INSERT INTO economy_days(day,revenue_cents,payroll_cents,rent_cents,
                spending_cents,money_supply_cents,unemployment_bp,businesses_open,
-               businesses_closed,wage_index)
+               businesses_closed,wage_index,total_money_cents)
            VALUES(:day,:revenue_cents,:payroll_cents,:rent_cents,:spending_cents,
                   :money_supply_cents,:unemployment_bp,:businesses_open,
-                  :businesses_closed,:wage_index)
+                  :businesses_closed,:wage_index,:total_money_cents)
            ON CONFLICT(day) DO UPDATE SET
              revenue_cents=excluded.revenue_cents,
              payroll_cents=excluded.payroll_cents,
@@ -826,7 +829,8 @@ def record_day(conn: sqlite3.Connection, tick: int) -> dict:
              unemployment_bp=excluded.unemployment_bp,
              businesses_open=excluded.businesses_open,
              businesses_closed=excluded.businesses_closed,
-             wage_index=excluded.wage_index""",
+             wage_index=excluded.wage_index,
+             total_money_cents=excluded.total_money_cents""",
         stats)
     conn.commit()
     return stats

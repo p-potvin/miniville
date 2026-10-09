@@ -198,3 +198,18 @@ def test_owning_a_business_is_influence():
     conn.execute("UPDATE businesses SET owner_id=1 WHERE place_id=?",
                  (_place(conn, "Riverside Diner"),))
     assert influence_of(conn, 1) > base
+
+
+def test_a_failed_owner_answers_for_the_debt_out_of_savings():
+    conn = _world()
+    diner = _place(conn, "Riverside Diner")
+    _adult(conn, 1, 2_500_000); _job(conn, 1, diner)
+    debt = -economy.FAIL_THRESHOLD_CENTS + 1
+    conn.execute("UPDATE businesses SET owner_id=1, balance_cents=? WHERE place_id=?",
+                 (-debt, diner))
+    before = _total(conn)
+    economy.settle_businesses(conn, 2 * DAY, "t")
+    assert conn.execute("SELECT money_cents FROM agent_state WHERE agent_id=1"
+                        ).fetchone()["money_cents"] == 0
+    # only what the owner could not cover is written off
+    assert _total(conn) == before + debt - 2_500_000

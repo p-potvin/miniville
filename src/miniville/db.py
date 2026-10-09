@@ -458,6 +458,15 @@ def _migrate(conn: sqlite3.Connection) -> None:
         from .enterprise import migrate as enterprise_migrate
         enterprise_migrate(conn)
 
+    # total money (wallets + tills + purse): the conserved quantity. The
+    # wallet-only money supply moves whenever money changes hands between a
+    # resident and a till or the purse, which is not a leak.
+    if _has_table(conn, "economy_days"):
+        ecols = {r["name"] for r in conn.execute("PRAGMA table_info(economy_days)")}
+        if "total_money_cents" not in ecols:
+            conn.execute("ALTER TABLE economy_days ADD COLUMN total_money_cents "
+                         "INTEGER NOT NULL DEFAULT 0")
+
     # the economy rescalings need the meta table; hand-built or legacy DBs
     # (which the tests use) may not have it yet
     if not _has_table(conn, "meta"):
