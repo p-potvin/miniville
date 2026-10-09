@@ -70,12 +70,15 @@ SECTIONS = {
     "wage_change": "Working Life",
     "rent_distress": "Town Life",
     "downsize": "Town Life",
+    "arrest": "Police Blotter",
+    "theft": "Police Blotter",
 }
 
 # printed in this order when the week has anything for them
 SECTION_ORDER = ("The Town Council", "Arrivals", "Weddings & Births",
                  "Working Life", "Clubs & Congregations", "The Feud",
-                 "The Scandal Sheet", "Neighbors", "Obituaries", "Town Life")
+                 "The Scandal Sheet", "Police Blotter", "Neighbors", "Obituaries",
+                 "Town Life")
 
 # A front page is an agenda, not a second event ledger. The owner/editor line
 # changes which true events rise to the top and what gets space; it does not
@@ -83,12 +86,14 @@ SECTION_ORDER = ("The Town Council", "Arrivals", "Weddings & Births",
 # checked against the observer record.
 LINE_BONUS = {
     "working": {"fired": 5, "quit": 3, "rent_distress": 4, "downsize": 5,
+                "arrest": -1,
                 "motion_passed": 2, "boycott": 2, "promoted": -1},
     "business": {"business_reopened": 5, "business_founded": 5,
                  "business_closed": -2,
                  "motion_passed": 2, "dividend": -2, "rent_distress": -1,
                  "promoted": 2},
     "establishment": {"election": 5, "motion_passed": 4, "motion_rejected": 2,
+                       "arrest": 3, "theft": 2,
                        "slander": -2, "boycott": -1},
     "community": {"group_founded": 4, "schism": 3, "favor": 3,
                    "favor_repaid": 2, "birth": 3, "death": 2},

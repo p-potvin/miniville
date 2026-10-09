@@ -44,6 +44,7 @@ WEIGHTS = {
     "rent_distress": -2,
     "downsize": -3,
     "betrayal": -10,       # caught cheating
+    "arrest": -6,          # caught stealing
 }
 STANDING_MIN, STANDING_MAX = -100, 100
 # A reputation fades if you stop earning it: once a month, a point back toward

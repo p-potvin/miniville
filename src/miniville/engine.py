@@ -6,6 +6,7 @@ import sqlite3
 from . import (
     chronicle,
     conflict,
+    crime,
     economy,
     enterprise,
     events,
@@ -105,6 +106,7 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)
     stats["life_events"] = daily_life_lottery(conn, tick, seed)
+    stats["crime"] = crime.daily_crime(conn, tick, seed)
     stats["betrayals"] = spouse_discovery(conn, tick, seed)
     # deaths settle before births: a widow is no longer a spouse, so the
     # couple cannot also welcome a child on the same day
@@ -131,6 +133,7 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
         stats.update(_day_start(conn, tick, seed))
     _move_agents(conn, tick)
     apply_conditions(conn, tick)              # sick agents stay home resting
+    crime.apply_jail(conn)                    # ...and the jailed sit at Town Hall
     apply_deviations(conn, tick, seed)        # mood can push agents off-plan
 
     st = conn.execute(
