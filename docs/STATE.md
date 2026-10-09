@@ -864,8 +864,8 @@ recirculates less. Worth a considered pass on rent recycling / levy balance.
 ## Resume note for next session
 
 Branch `autodev`, both agents pushing. World is seeded (seed=miniville) — `run`
-continues from tick 20112 (Day 419 completed = **Feb 23, Year 2**, winter; next tick
-to advance is tick 20112 to 20160 for Day 420). Do NOT `init` again unless
+continues from tick 25872 (Day 539 completed = **Jun 23, Year 2**, summer; next tick
+to advance is tick 25872 to 25920 for Day 540). Do NOT `init` again unless
 intentionally resetting the town. All economy migrations are applied (v0.14's
 `estates_v1`, `enterprise_v1` and `economy_v2` ran on the first connect; v0.15's
 `opinion` table and press columns likewise).
@@ -915,13 +915,23 @@ got power. `soak_check --run 365 --tag v15` on a copy from tick 19680 holds
 11/11 with **8 `press_influence` swings** (the business-owned Gazette kept rent
 down: rises failed 0-5, cuts carried 5-0). 205 tests. UI verified with
 Patchright (Council opinion bars + press reach, Gazette readership, 0 console
-errors). The live world was NOT advanced in this session beyond Day 410; the
-live run on v0.15 is the next step (migrates on connect: `opinion` table,
-`newspapers.readers`, `motions.support`/`press_swing`).
+errors).
+
+**The live world then ran on v0.15** (Days 411-539, after the repair above).
+The same arc played out for real: the council carried rent to **1.15** on Day
+420 (a legitimate motion), then opinion turned and the Gazette's campaign
+killed the next rise **0-5** on Day 450 (`press_influence`), and on Day 480
+**carried a rent cut back to 1.10 5-0** (`press_influence`, the paper backing
+its own line). Opinion at Day 539: rent -0.76, levy -0.43, min_wage -0.29,
+dividend -0.07, pension +0.33 — the pension is the one lever where the town's
+material interest (its seniors) still beats the business line. Readership 215,
+credibility 1.0, 51 editions. Moods healthy (627 content, 4 miserable), 0
+future-dated rows. In-session prose narrative for Day 451 stored in
+`narratives` (source=agent, 1,865 chars).
 
 **Data anomaly found (Fri, 09 Oct 2026, workstation).** The live ledger
 contains **17 stray future-dated rows** — motion events and `motions` rows at
-ticks 22080-50880 (days 460-1060) while the world's clock is at tick 19680
+ticks 22080-50880 (days 460-1060) while the world's clock was at tick 19680
 (day 410). They are contiguous (event ids 70802-70818, motion ids 11-27).
 
 **Root cause (confirmed from the agent-ledger).** The ledger entry for the
@@ -962,6 +972,7 @@ Open items:
    when operator approves batch.
 2. Observer UI: sigma.js bond graph (district overlay done in v0.14).
 3. Scale test: 2k-5k agents (initial indexing/benchmarking done in bench5k.db).
-4. Live-world run on v0.15 (workstation): watch opinion and any `press_influence`.
+4. The council's next election is Day 1100 — the press has not yet been tested
+   on an election (endorsements are not modelled; the line only moves opinion).
 5. Routine: read this file → `run` the next day(s) → `digest` → write a
    `narrate-write` entry → update this file → ledger.
