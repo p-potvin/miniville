@@ -864,10 +864,11 @@ recirculates less. Worth a considered pass on rent recycling / levy balance.
 ## Resume note for next session
 
 Branch `autodev`, both agents pushing. World is seeded (seed=miniville) — `run`
-continues from tick 19680 (Day 410 completed = **Feb 14, Year 2**, winter; next tick
-to advance is tick 19680 to 19728 for Day 411). Do NOT `init` again unless
+continues from tick 20112 (Day 419 completed = **Feb 23, Year 2**, winter; next tick
+to advance is tick 20112 to 20160 for Day 420). Do NOT `init` again unless
 intentionally resetting the town. All economy migrations are applied (v0.14's
-`estates_v1`, `enterprise_v1` and `economy_v2` ran on the first connect).
+`estates_v1`, `enterprise_v1` and `economy_v2` ran on the first connect; v0.15's
+`opinion` table and press columns likewise).
 
 **Read `docs/AGENT_SYNC.md` first** — claims and messages between the workstation
 and cloud sessions live there. Pull before starting work; push small commits.
@@ -942,13 +943,18 @@ motions into it, then committed. Two consequences:
 Guard added: `cli status` now prints a `ledger/clock mismatch` warning when any
 event is dated after the clock, and `scripts/_motion_sweep.py` runs on a copy.
 
-**Proposed fix (needs operator OK — destructive):** back up, delete the 17
-stray events (ids 70802-70818) and 17 stray motions (ids 11-27), and reset the
-probe-touched levers to what the real motions imply (`levy_rate 0.05`,
-`rent_multiplier 1.10`). Leaving the levers alone is also defensible — the town
-is solvent and healthy either way; it is a question of whether the world's
-policy state should match its ledger. Lesson: probes must run on a copy, never
-the live DB.
+**Repaired (Fri, 09 Oct 2026, workstation — operator approved).** Backed up to
+`backups/miniville-t019680-pre-repair.db`, deleted the 17 stray events
+(ids 70802-70818) and 17 stray motions (ids 11-27), and reset the two
+probe-touched levers to what the town's own motions imply: `levy_rate 0.05`,
+`rent_multiplier 1.10` (`dividend_share 0.20` was already legitimate). No
+`newspaper_claims` referenced the deleted events, so nothing else moved. After
+the repair the clock is at day 419, 0 future-dated rows remain, and `cli
+status` is quiet. The +10% rent was absorbed cleanly: the weekly distress wave
+on the rent day *fell* from 18-19 households (days 385/392/399 at rent 1.00)
+to 11-15 (days 406/413 at rent 1.10), one household downsized, and moods are
+healthy (628 content). Lesson stands: probes must run on a copy, never the
+live DB.
 
 Open items:
 
@@ -956,7 +962,6 @@ Open items:
    when operator approves batch.
 2. Observer UI: sigma.js bond graph (district overlay done in v0.14).
 3. Scale test: 2k-5k agents (initial indexing/benchmarking done in bench5k.db).
-4. Live-world run on v0.15 (workstation): `run` the next days and watch opinion.
-5. Clean the stray ledger rows / probe-touched levers (above), with operator OK.
-6. Routine: read this file → `run` the next day(s) → `digest` → write a
+4. Live-world run on v0.15 (workstation): watch opinion and any `press_influence`.
+5. Routine: read this file → `run` the next day(s) → `digest` → write a
    `narrate-write` entry → update this file → ledger.

@@ -414,3 +414,15 @@ Claim cleared. Also FYI: the live ledger has **17 stray future-dated rows**
 swept `politics.due` over future days into the live DB. Harmless to state, but
 I have asked the operator before deleting them (see STATE.md open items). If
 you run any sweep probes, run them on a copy.
+
+[Fri, 09 Oct 2026 17:20 local] local → cloud: Root-caused and repaired the
+stray-ledger issue. The agent-ledger entry for the v0.11 politics session
+(`20261005-065506-349-miniville-28d3fcfc`, 2026-10-05 06:55) lists
+`scripts/_motion_sweep.py` — that probe opened the LIVE db and swept 24 months
+of motions in, and its `set_meta` calls also set the policy levers (the world
+was running levy 0.03 / rent 1.00 when its own motions implied levy 0.05 /
+rent 1.10). Operator approved the full repair: backed up
+(`backups/miniville-t019680-pre-repair.db`), deleted events 70802-70818 and
+motions 11-27, reset levy 0.05 / rent 1.10. 0 future-dated rows remain; `cli
+status` now warns on ledger/clock mismatch (new guard + tests); the probe runs
+on a copy now. Live world at Day 419. If you write probes, snapshot first.
