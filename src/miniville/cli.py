@@ -133,6 +133,16 @@ def cmd_status(args) -> int:
     print("  relationships:", {l["label"]: l["c"] for l in labels})
     from . import economy
     print("  economy:", economy.economy_line(conn))
+    # The ledger should never hold events dated after the clock. A probe that
+    # wrote into the live DB (see docs/STATE.md, Fri 09 Oct 2026) or a restore
+    # that rolled the clock back leaves rows from the future; say so loudly
+    # rather than letting them show up as future-dated rows in the observer UI.
+    future = conn.execute("SELECT COUNT(*) c FROM events WHERE tick > ?",
+                          (tick,)).fetchone()["c"]
+    if future:
+        newest = conn.execute("SELECT MAX(tick) FROM events").fetchone()[0]
+        print(f"  !! ledger/clock mismatch: {future} events dated after the clock "
+              f"(now tick {tick}, newest tick {newest})")
     return 0
 
 

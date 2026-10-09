@@ -921,14 +921,34 @@ live run on v0.15 is the next step (migrates on connect: `opinion` table,
 **Data anomaly found (Fri, 09 Oct 2026, workstation).** The live ledger
 contains **17 stray future-dated rows** — motion events and `motions` rows at
 ticks 22080-50880 (days 460-1060) while the world's clock is at tick 19680
-(day 410). They are contiguous (event ids 70802-70818, motion ids 11-27) and
-were written in one batch around the world's day ~283: a past probe appears to
-have swept `politics.due` over future days straight into `data/miniville.db`.
-They do not affect simulation state (agents, money, chronicle, economy_days are
-all consistent at day ≤ 409), but they violate the ledger's coherence and show
-up as future-dated rows in the Council UI. **Proposed fix (needs operator OK —
-destructive):** back up, then delete `events` ids 70802-70818 and `motions` ids
-11-27. Lesson: probes must run on a copy, never the live DB.
+(day 410). They are contiguous (event ids 70802-70818, motion ids 11-27).
+
+**Root cause (confirmed from the agent-ledger).** The ledger entry for the
+v0.11 politics session (`20261005-065506-349-miniville-28d3fcfc`, 2026-10-05
+06:55, head `41c9ce1`) lists `scripts/_motion_sweep.py` among its commands.
+That probe opened `data/miniville.db` **directly** and swept 24 months of
+motions into it, then committed. Two consequences:
+
+1. 17 motion events + 17 `motions` rows dated after the clock (ledger/clock
+   incoherence; they surface as future-dated rows in the Council UI).
+2. **The probe also set the policy levers** (`set_meta` on every motion that
+   passed). The live world now runs on `levy_rate 0.03` and
+   `rent_multiplier 1.00`, but the town's *own* surviving motions imply
+   `levy_rate 0.05` (day 370 raise rejected) and `rent_multiplier 1.10`
+   (day 220 and day 250 raises carried; day 310/390 raises rejected).
+   `dividend_share 0.20` is explained by the real day-360 motion. So the
+   current levy and rent were chosen by a probe, not by the council.
+
+Guard added: `cli status` now prints a `ledger/clock mismatch` warning when any
+event is dated after the clock, and `scripts/_motion_sweep.py` runs on a copy.
+
+**Proposed fix (needs operator OK — destructive):** back up, delete the 17
+stray events (ids 70802-70818) and 17 stray motions (ids 11-27), and reset the
+probe-touched levers to what the real motions imply (`levy_rate 0.05`,
+`rent_multiplier 1.10`). Leaving the levers alone is also defensible — the town
+is solvent and healthy either way; it is a question of whether the world's
+policy state should match its ledger. Lesson: probes must run on a copy, never
+the live DB.
 
 Open items:
 
@@ -937,6 +957,6 @@ Open items:
 2. Observer UI: sigma.js bond graph (district overlay done in v0.14).
 3. Scale test: 2k-5k agents (initial indexing/benchmarking done in bench5k.db).
 4. Live-world run on v0.15 (workstation): `run` the next days and watch opinion.
-5. Clean the 17 stray future-dated ledger rows (above), with operator OK.
+5. Clean the stray ledger rows / probe-touched levers (above), with operator OK.
 6. Routine: read this file → `run` the next day(s) → `digest` → write a
    `narrate-write` entry → update this file → ledger.
