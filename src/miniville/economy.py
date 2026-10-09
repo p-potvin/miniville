@@ -529,13 +529,12 @@ def _maybe_downsize(conn: sqlite3.Connection, h: sqlite3.Row, tick: int,
         # This used to "move" them to The Flats again every fortnight — 1,451
         # downsizings in one soak year, most of them from The Flats.
         return 0
-    r = rng_for(seed, "downsize", h["id"], day_of(tick))
-    cheap = conn.execute(
-        "SELECT id FROM places WHERE kind='home' AND district='The Flats' "
-        "ORDER BY id").fetchall()
-    if not cheap:
-        return 0
-    new_home = r.choice(cheap)["id"]
+    from .housing import home_with_room
+    size = conn.execute("SELECT COUNT(*) n FROM agents WHERE household_id=? AND alive=1",
+                        (h["id"],)).fetchone()["n"]
+    new_home = home_with_room(conn, CHEAPEST_DISTRICT, size)
+    if new_home is None:
+        return 0                      # nowhere in The Flats has room for them
     conn.execute("UPDATE households SET home_place_id=? WHERE id=?", (new_home, h["id"]))
     # the whole household moves, children included — leaving them behind put
     # every downsized family's kids to bed in a home nobody paid for

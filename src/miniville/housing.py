@@ -16,8 +16,9 @@ Now a household that considers moving asks what it can afford:
   own district (a bigger place, a quieter street).
 
 Districts sort themselves by money over the years, which is exactly what the
-council's district seats are sensitive to. The home inside a district is the
-least crowded one, so a district fills evenly. Deterministic.
+council's district seats are sensitive to. Housing is finite: a household
+moves only into a home with room for all of it (the least crowded one, so a
+district fills evenly), and a full district turns movers away. Deterministic.
 """
 from __future__ import annotations
 
@@ -53,13 +54,19 @@ def household_means(conn: sqlite3.Connection, hid: int) -> tuple[int, int]:
     return income, savings
 
 
-def _home_in(conn: sqlite3.Connection, district: str, exclude: int | None) -> int | None:
+def home_with_room(conn: sqlite3.Connection, district: str, size: int,
+                   exclude: int | None = None) -> int | None:
+    """The least crowded home in `district` that can take `size` more people,
+    or None when the district is full. Housing is finite: without this the
+    well-off all moved up into Downtown, which had no reason to stop them."""
     row = conn.execute(
-        """SELECT p.id, (SELECT COUNT(*) FROM agents a
+        """SELECT p.id, p.capacity, (SELECT COUNT(*) FROM agents a
                          WHERE a.home_place_id=p.id AND a.alive=1) n
            FROM places p WHERE p.kind='home' AND p.district=? AND p.id != ?
            ORDER BY n, p.id LIMIT 1""", (district, exclude or -1)).fetchone()
-    return row["id"] if row else None
+    if not row or row["n"] + size > row["capacity"]:
+        return None
+    return row["id"]
 
 
 def choose_district(conn: sqlite3.Connection, hid: int, current: str | None,
@@ -101,11 +108,11 @@ def consider_move(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) ->
     district, why = choose_district(conn, hid, current, r)
     if district is None:
         return False
-    new_home = _home_in(conn, district, old_home)
-    if new_home is None:
-        return False
     members = conn.execute(
         "SELECT id FROM agents WHERE household_id=? AND alive=1", (hid,)).fetchall()
+    new_home = home_with_room(conn, district, len(members), old_home)
+    if new_home is None:
+        return False
     conn.execute("UPDATE agents SET home_place_id=? WHERE household_id=? AND alive=1",
                  (new_home, hid))
     conn.execute("UPDATE households SET home_place_id=? WHERE id=?", (new_home, hid))

@@ -103,3 +103,19 @@ def test_district_profile_reports_every_district():
     prof = {p["district"]: p for p in housing.district_profile(conn)}
     assert set(prof) == set(economy.RENT_BY_DISTRICT)
     assert prof["Lakeshore"]["households"] == 1 and prof["Lakeshore"]["residents"] == 1
+
+
+def test_a_full_district_turns_movers_away():
+    conn = _world()
+    # fill both Downtown homes to capacity
+    for i, home in enumerate((_home(conn, "Downtown", 0), _home(conn, "Downtown", 1))):
+        for k in range(6):
+            aid = 100 + i * 10 + k
+            conn.execute(
+                """INSERT INTO agents(id,name,age,sex,marital_status,home_place_id,
+                       is_child) VALUES(?,?,30,'Male','never_married',?,0)""",
+                (aid, f"Tenant {aid}", home))
+    a = _household(conn, 1, "The Flats", money=5_000_000, wage=25_000)
+    assert housing.home_with_room(conn, "Downtown", 1) is None
+    housing.consider_move(conn, a, 0, _Roll(0.1))
+    assert _district(conn, 1) != "Downtown"
