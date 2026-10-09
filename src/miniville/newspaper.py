@@ -46,6 +46,8 @@ SECTIONS = {
     "shock_closure": "Working Life",
     "business_closed": "Working Life",
     "business_reopened": "Working Life",
+    "business_founded": "Working Life",
+    "inheritance": "Working Life",
     # the paper used to be blind to everything the town gained later: no
     # council, no clubs, no feuds, no careers, no obituaries
     "hired": "Working Life",
@@ -82,7 +84,8 @@ SECTION_ORDER = ("The Town Council", "Arrivals", "Weddings & Births",
 LINE_BONUS = {
     "working": {"fired": 5, "quit": 3, "rent_distress": 4, "downsize": 5,
                 "motion_passed": 2, "boycott": 2, "promoted": -1},
-    "business": {"business_reopened": 5, "business_closed": -2,
+    "business": {"business_reopened": 5, "business_founded": 5,
+                 "business_closed": -2,
                  "motion_passed": 2, "dividend": -2, "rent_distress": -1,
                  "promoted": 2},
     "establishment": {"election": 5, "motion_passed": 4, "motion_rejected": 2,
@@ -532,9 +535,10 @@ def year_in_review(conn: sqlite3.Connection, year: int) -> str:
     # the year's business
     closed = _count(conn, "business_closed", start, end)
     opened = _count(conn, "business_reopened", start, end)
+    founded = _count(conn, "business_founded", start, end)
     from .economy import town_balance
     lines.append("THE TOWN'S BOOKS")
-    lines.append(f"  {closed} business(es) failed, {opened} reopened. "
+    lines.append(f"  {founded} business(es) founded, {closed} failed, {opened} reopened. "
                  f"The town holds ${town_balance(conn) / 100:,.0f}.")
     lines.append("")
 

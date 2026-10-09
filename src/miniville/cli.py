@@ -66,18 +66,20 @@ def cmd_economy(args) -> int:
           f"{s['businesses_closed']} closed")
     print()
     print(f"{'business':<30} {'status':<7} {'balance':>12} {'rev/day':>10} "
-          f"{'pay/day':>10} {'px':>5}")
+          f"{'pay/day':>10} {'px':>5}  owner")
     for r in conn.execute(
             """SELECT p.name, p.kind, b.status, b.balance_cents, b.revenue_total,
                       b.payroll_total, b.price_index, b.last_settled_day,
-                      b.revenue_today, b.payroll_today
+                      b.revenue_today, b.payroll_today, o.name owner,
+                      b.founded_tick
                FROM businesses b JOIN places p ON p.id=b.place_id
+               LEFT JOIN agents o ON o.id=b.owner_id
                ORDER BY b.balance_cents"""):
-        settled = r["last_settled_day"]
+        owner = (r["owner"] or "-") + (" (founded)" if r["founded_tick"] is not None else "")
         print(f"{r['name']:<30} {r['status']:<7} "
               f"${r['balance_cents'] / 100:>11,.0f} "
               f"${r['revenue_today'] / 100:>9,.0f} ${r['payroll_today'] / 100:>9,.0f} "
-              f"{r['price_index']:>5.2f}")
+              f"{r['price_index']:>5.2f}  {owner}")
     if args.days:
         print()
         print(f"{'day':>4} {'revenue':>12} {'payroll':>12} {'rent':>10} "

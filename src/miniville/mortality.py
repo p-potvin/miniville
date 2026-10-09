@@ -152,6 +152,21 @@ def _settle_estate(conn: sqlite3.Connection, deceased: sqlite3.Row,
     return f"; the estate of ${estate / 100:,.0f} passed to the family"
 
 
+def _pass_on_businesses(conn: sqlite3.Connection, deceased: sqlite3.Row,
+                        survivor: int | None, tick: int) -> None:
+    """A business goes to the spouse, else the eldest adult of the household;
+    with nobody to take it on it is left unowned."""
+    from .enterprise import pass_on
+    heir = survivor
+    if heir is None and deceased["household_id"] is not None:
+        row = conn.execute(
+            """SELECT id FROM agents WHERE household_id=? AND alive=1 AND is_child=0
+               AND id!=? ORDER BY age DESC, id LIMIT 1""",
+            (deceased["household_id"], deceased["id"])).fetchone()
+        heir = row["id"] if row else None
+    pass_on(conn, deceased["id"], heir, tick)
+
+
 def _mourn(conn: sqlite3.Connection, deceased_id: int, name: str, tick: int) -> int:
     """Everyone close to the deceased carries the memory."""
     rows = conn.execute(
@@ -179,6 +194,7 @@ def _die(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) -> int | No
     survivor = _widow(conn, aid)
     # before the children are rehomed, while the household is still together
     estate = _settle_estate(conn, agent, survivor, tick)
+    _pass_on_businesses(conn, agent, survivor, tick)
     orphans = _rehome_children(conn, agent, r)
 
     text = f"died at {agent['age']}"

@@ -565,7 +565,12 @@ def settle_businesses(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
             else:
                 closed_at = b["closed_tick"] if b["closed_tick"] is not None else tick
                 if tick - closed_at >= REOPEN_AFTER_DAYS * TICKS_PER_DAY:
-                    reopened += _reopen_business(conn, b, tick)
+                    # somebody has to take it on: a resident buys it, or an
+                    # original venue reopens town-run; a founded one waits dark
+                    from .enterprise import reopen_or_wait
+                    how = reopen_or_wait(conn, b, tick, seed)
+                    if how != "dark":
+                        reopened += _reopen_business(conn, b, tick, how)
 
     conn.commit()
     return {"settled": settled, "closed": closed, "reopened": reopened,
@@ -580,6 +585,8 @@ def _close_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int,
     conn.execute("DELETE FROM jobs WHERE place_id=?", (b["place_id"],))
     conn.execute("UPDATE agents SET work_place_id=NULL WHERE work_place_id=?",
                  (b["place_id"],))
+    from .enterprise import lose_venture
+    lose_venture(conn, b["place_id"], tick)
     conn.execute(
         """UPDATE businesses SET status='closed', closed_tick=?, balance_cents=0,
                price_index=1.0, reopen_day=NULL WHERE place_id=?""",
@@ -591,13 +598,22 @@ def _close_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int,
     return 1
 
 
-def _reopen_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int) -> int:
+def _reopen_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int,
+                     how: str = "town") -> int:
+    # a buyer's capital is already in the reserve (enterprise.take_over); a
+    # town-run or repaired venue starts from zero
+    keep = how == "bought"
     conn.execute(
         """UPDATE businesses SET status='open', closed_tick=NULL,
-               balance_cents=0, ema_traffic=0, price_index=1.0, reopen_day=NULL
-           WHERE place_id=?""", (b["place_id"],))
-    emit(conn, tick, "town_event", place_id=b["place_id"], importance=NOTABLE,
-         text=f"{b['name']} has reopened under new management", tag="business_reopened")
+               balance_cents=CASE WHEN ? THEN balance_cents ELSE 0 END,
+               ema_traffic=0, price_index=1.0, reopen_day=NULL
+           WHERE place_id=?""", (keep, b["place_id"]))
+    owner = conn.execute("SELECT owner_id FROM businesses WHERE place_id=?",
+                         (b["place_id"],)).fetchone()["owner_id"]
+    text = (f"bought {b['name']} and reopened it" if keep
+            else f"{b['name']} has reopened under new management")
+    emit(conn, tick, "town_event", a=owner if keep else None, place_id=b["place_id"],
+         importance=NOTABLE, text=text, tag="business_reopened")
     return 1
 
 

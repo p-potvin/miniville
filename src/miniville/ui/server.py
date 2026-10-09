@@ -87,8 +87,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
             businesses = _rows(c,
                 """SELECT p.name, p.kind, p.district, b.status, b.balance_cents,
                           b.revenue_total, b.payroll_total, b.price_index,
-                          b.ema_traffic, b.closed_tick
+                          b.ema_traffic, b.closed_tick, b.owner_id,
+                          o.name owner_name, b.founded_tick, b.concept,
+                          b.draws_total
                    FROM businesses b JOIN places p ON p.id=b.place_id
+                   LEFT JOIN agents o ON o.id=b.owner_id
                    ORDER BY b.balance_cents DESC""")
             series = _rows(c,
                 """SELECT * FROM economy_days WHERE money_supply_cents > 0
@@ -198,13 +201,15 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     for m in retrieve(c, agent_id, k=8)]
             from ..groups import memberships_of
             from ..conflict import influence_of
+            from ..enterprise import owned_by
             a = dict(a)
             a["influence"] = influence_of(c, agent_id)
             return {"agent": a, "state": dict(st) if st else {},
                     "job": dict(job) if job else None,
                     "debts": {"owes": owed_by, "owed": owed_to},
                     "relationships": rels, "recent": recent, "memories": mems,
-                    "groups": memberships_of(c, agent_id)}
+                    "groups": memberships_of(c, agent_id),
+                    "owns": [dict(b) for b in owned_by(c, agent_id)]}
         finally:
             c.close()
 

@@ -58,6 +58,9 @@ def influence_of(conn: sqlite3.Connection, agent_id: int) -> float:
                WHERE m2.group_id = m.group_id)), 0) flock
            FROM memberships m WHERE m.agent_id = ? AND m.role = 'officer'""",
         (agent_id,)).fetchone()
+    owns = conn.execute(
+        "SELECT COUNT(*) n FROM businesses WHERE owner_id=? AND status='open'",
+        (agent_id,)).fetchone()["n"]
     wallets = conn.execute(
         """SELECT s.money_cents m FROM agent_state s JOIN agents a ON a.id=s.agent_id
            WHERE a.alive=1 AND a.is_child=0""").fetchall()
@@ -68,6 +71,7 @@ def influence_of(conn: sqlite3.Connection, agent_id: int) -> float:
                  + max(-3.0, min(3.0, wealth * 3.0))
                  + seat * 8.0
                  + (6.0 if publisher else 0.0)  # owns the town's paper
+                 + owns * 4.0                   # owns a shop people depend on
                  + officer["n"] * 2.0
                  + (officer["flock"] or 0) ** 0.5 * 0.5, 2)
 

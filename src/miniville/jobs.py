@@ -62,14 +62,16 @@ def venue_targets(conn: sqlite3.Connection) -> dict[int, int]:
     Weights come from capacity and customer traffic, then they are scaled so
     the town's posts add up to `EMPLOYMENT_RATE` of its working-age adults:
     the *rate* is a property of the town (bootstrap hires 92% of adults) while
-    the *distribution* follows demand. Letting the weights set the total too
+    the *distribution* follows demand. Only open venues share the budget: a
+    venue that is dark (and a failed founding may stay dark for good) would
+    otherwise sit on posts nobody can fill. Letting the weights set the total too
     would have shrunk a 636-person town to 317 jobs — 36% unemployment — the
     moment the town hall's bootstrap pile-up was corrected.
     """
     rows = conn.execute(
         """SELECT p.id, p.capacity, p.tags, COALESCE(b.ema_traffic, 0) traffic
            FROM places p LEFT JOIN businesses b ON b.place_id = p.id
-           WHERE p.kind != 'home'""").fetchall()
+           WHERE p.kind != 'home' AND COALESCE(b.status, 'open') = 'open'""").fetchall()
     adults = conn.execute(
         "SELECT COUNT(*) n FROM agents WHERE alive=1 AND is_child=0 AND age < ?",
         (RETIRE_AGE,)).fetchone()["n"]

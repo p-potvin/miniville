@@ -454,6 +454,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
         bcols = {r["name"] for r in conn.execute("PRAGMA table_info(businesses)")}
         if "reopen_day" not in bcols:
             conn.execute("ALTER TABLE businesses ADD COLUMN reopen_day INTEGER")
+        # ownership: residents own, buy and found businesses (enterprise.py)
+        from .enterprise import migrate as enterprise_migrate
+        enterprise_migrate(conn)
 
     # the economy rescalings need the meta table; hand-built or legacy DBs
     # (which the tests use) may not have it yet

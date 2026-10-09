@@ -49,6 +49,7 @@ async function residentCard(id) {
     <h3>${esc(a.name)} <button class="mini" onclick="mvBond(${id})">bond wheel</button></h3>
     <p>${a.age} ${esc(a.sex)} · ${esc(a.occupation)} · ${esc(a.marital_status)}
        ${r.job ? `· works at ${esc(r.job.place)}` : "· unemployed"}
+       ${r.owns && r.owns.length ? `· owns <b>${r.owns.map(b => esc(b.name)).join(", ")}</b>` : ""}
        · standing <b>${a.standing ?? 0}</b>
        · influence <b>${(a.influence ?? 0).toFixed(1)}</b></p>
     <p class="state">energy ${Math.round(s.energy ?? 0)} · hunger ${Math.round(s.hunger ?? 0)}
@@ -178,7 +179,9 @@ async function economy() {
      <div class="stat"><b>${money(s.town_purse_cents)}</b><span>town purse</span></div>
      <div class="stat"><b>${money(s.public_payroll_week_cents)}</b><span>public payroll /wk</span></div>`;
   $("#econ-body").innerHTML = r.businesses.map(b =>
-    `<tr><td>${esc(b.name)}</td><td>${esc(b.kind)}</td>
+    `<tr><td>${esc(b.name)}${b.founded_tick != null ? ` <span class="muted">(new ${esc(b.concept || "")})</span>` : ""}</td>
+     <td>${b.owner_id ? `<a class="click-link" onclick="mvPick({id: ${b.owner_id}})">${esc(b.owner_name)}</a>` : `<span class="muted">—</span>`}</td>
+     <td>${esc(b.kind)}</td>
      <td class="${b.status === "closed" ? "closed" : ""}">${b.status}</td>
      <td>${money(b.balance_cents)}</td><td>${money(b.revenue_total)}</td>
      <td>${money(b.payroll_total)}</td><td>${(b.price_index * 100).toFixed(0)}%</td>

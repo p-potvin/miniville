@@ -7,6 +7,7 @@ from . import (
     chronicle,
     conflict,
     economy,
+    enterprise,
     events,
     groups,
     growth,
@@ -85,6 +86,8 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     stats["rent"] = economy.collect_rent(conn, tick, seed)
     stats["levy"] = economy.weekly_levy(conn, tick, seed)
     stats["labour"] = economy.wage_dynamics(conn, tick, seed)
+    # owners draw profit, buyers and founders put capital in
+    stats["enterprise"] = enterprise.due(conn, tick, seed)
     # operator shocks land after the books settle but before the town plans
     # its day, so a venue that burnt overnight is nobody's destination
     stats["shocks"] = shocks.apply_due(conn, tick, seed)
