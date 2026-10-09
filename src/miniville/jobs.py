@@ -24,15 +24,18 @@ from __future__ import annotations
 import json
 import sqlite3
 
+from .db import get_meta
 from .economy import WAGE_INDEX_MIN, WAGE_MAX_CENTS, WAGE_MIN_CENTS, wage_index
 from .events import MINOR, NOTABLE, emit
 from .rng import rng_for
-from .timekeeper import day_of
+from .timekeeper import TICKS_PER_DAY, day_of
 from .world import workplace_tags_for
 
 # a venue's crew, scaled by what it has to do
 COMMERCIAL_TAGS = {"food", "drink", "retail", "coffee", "arts", "nightlife", "fitness"}
 STAFF_MAX = 60
+AFFORD_SHARE = 0.9           # payroll a commercial venue's takings can carry
+AFFORD_WARMUP_DAYS = 28      # before then its revenue average means little
 EMPLOYMENT_RATE = 0.92       # share of working-age adults the town can employ
 
 # market churn
@@ -69,7 +72,9 @@ def venue_targets(conn: sqlite3.Connection) -> dict[int, int]:
     moment the town hall's bootstrap pile-up was corrected.
     """
     rows = conn.execute(
-        """SELECT p.id, p.capacity, p.tags, COALESCE(b.ema_traffic, 0) traffic
+        """SELECT p.id, p.capacity, p.tags, p.kind, COALESCE(b.ema_traffic, 0) traffic,
+                  COALESCE(b.ema_revenue, 0) revenue, COALESCE(b.opened_tick, 0) opened,
+                  (SELECT AVG(j.wage_cents) FROM jobs j WHERE j.place_id = p.id) wage
            FROM places p LEFT JOIN businesses b ON b.place_id = p.id
            WHERE p.kind != 'home' AND COALESCE(b.status, 'open') = 'open'""").fetchall()
     adults = conn.execute(
@@ -81,8 +86,26 @@ def venue_targets(conn: sqlite3.Connection) -> dict[int, int]:
     total_w = sum(weights.values()) or 1.0
     budget = max(len(weights) * 2, int(adults * EMPLOYMENT_RATE))
     scale = budget / total_w
-    return {pid: max(2, min(STAFF_MAX, round(w * scale)))
-            for pid, w in weights.items()}
+    targets = {pid: max(2, min(STAFF_MAX, round(w * scale)))
+               for pid, w in weights.items()}
+    # A commercial venue can only carry the staff its takings pay for. The
+    # weights above follow seats and foot traffic, not money: a 2026 soak had
+    # the Riverside Diner carrying 15 staff on 11 visits a day and the new
+    # coffee houses 24 staff selling $9 coffees — every one of them paying out
+    # more than it took in. Posts a venue cannot afford are not created.
+    from .enterprise import is_commercial
+    now = int(get_meta(conn, "tick", "0") or 0)
+    for r in rows:
+        tags = set(json.loads(r["tags"] or "[]"))
+        if not is_commercial(tags, r["kind"]) or r["revenue"] <= 0:
+            continue
+        if now - r["opened"] < AFFORD_WARMUP_DAYS * TICKS_PER_DAY:
+            continue                          # the revenue average is still warming up
+        wage = r["wage"] or (WAGE_MIN_CENTS + WAGE_MAX_CENTS) / 2
+        days_worked = 5 / 7
+        affordable = int(r["revenue"] * AFFORD_SHARE / (wage * days_worked))
+        targets[r["id"]] = max(2, min(targets[r["id"]], affordable))
+    return targets
 
 
 def vacancies(conn: sqlite3.Connection) -> list[tuple[int, int]]:

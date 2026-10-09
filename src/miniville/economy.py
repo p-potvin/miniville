@@ -594,6 +594,7 @@ def settle_businesses(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
 
         # traffic EMA is what "customers stopped coming" is measured against
         ema = b["ema_traffic"] * 0.9 + b["traffic_today"] * 0.1
+        ema_rev = b["ema_revenue"] * 0.9 + b["revenue_today"] * 0.1
         price_index = b["price_index"]
         if not public and staffed:
             # bleeding venues put prices up; comfortable ones are undercut by
@@ -604,10 +605,10 @@ def settle_businesses(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
                 price_index = max(PRICE_INDEX_MIN, price_index - 0.005)
 
         conn.execute(
-            """UPDATE businesses SET balance_cents=?, ema_traffic=?,
+            """UPDATE businesses SET balance_cents=?, ema_traffic=?, ema_revenue=?,
                    price_index=?, revenue_today=0, payroll_today=0,
                    traffic_today=0, last_settled_day=? WHERE place_id=?""",
-            (balance, ema, price_index, day, b["place_id"]))
+            (balance, ema, ema_rev, price_index, day, b["place_id"]))
         settled += 1
 
         if b["status"] == "open" and not public and staffed:
@@ -664,8 +665,9 @@ def _reopen_business(conn: sqlite3.Connection, b: sqlite3.Row, tick: int,
     conn.execute(
         """UPDATE businesses SET status='open', closed_tick=NULL,
                balance_cents=CASE WHEN ? THEN balance_cents ELSE 0 END,
-               ema_traffic=0, price_index=1.0, reopen_day=NULL
-           WHERE place_id=?""", (keep, b["place_id"]))
+               ema_traffic=0, ema_revenue=0, opened_tick=?, price_index=1.0,
+               reopen_day=NULL
+           WHERE place_id=?""", (keep, tick, b["place_id"]))
     owner = conn.execute("SELECT owner_id FROM businesses WHERE place_id=?",
                          (b["place_id"],)).fetchone()["owner_id"]
     text = (f"bought {b['name']} and reopened it" if keep

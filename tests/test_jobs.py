@@ -82,6 +82,25 @@ def test_venue_targets_cover_every_non_home_venue(conn):
     assert targets[place_id(conn, "Miniville Grocer")] >= 2
 
 
+def test_a_quiet_venue_cannot_carry_more_staff_than_its_takings_pay(conn):
+    from miniville import economy
+    economy.ensure_businesses(conn)
+    add_workers(conn, 400, CLERK, first_id=1000)        # plenty of posts to hand out
+    diner = place_id(conn, "Riverside Diner")
+    unbounded = jobs.venue_targets(conn)[diner]
+    # ~$300 a day of takings, well past the warm-up
+    conn.execute("UPDATE businesses SET ema_revenue=30000, opened_tick=0 WHERE place_id=?",
+                 (diner,))
+    db.set_meta(conn, "tick", str(60 * 48))
+    capped = jobs.venue_targets(conn)[diner]
+    assert capped < unbounded
+    assert capped <= int(30000 * jobs.AFFORD_SHARE / (15750 * 5 / 7)) + 1
+    # a public venue is never capped by takings
+    hall = place_id(conn, "Town Hall")
+    conn.execute("UPDATE businesses SET ema_revenue=1 WHERE place_id=?", (hall,))
+    assert jobs.venue_targets(conn)[hall] >= 2
+
+
 def test_targets_scale_with_the_working_population(conn):
     """A growing town gets more posts; the employment rate stays put."""
     before = sum(jobs.venue_targets(conn).values())

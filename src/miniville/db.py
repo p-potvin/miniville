@@ -454,6 +454,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
         bcols = {r["name"] for r in conn.execute("PRAGMA table_info(businesses)")}
         if "reopen_day" not in bcols:
             conn.execute("ALTER TABLE businesses ADD COLUMN reopen_day INTEGER")
+        if "ema_revenue" not in bcols:
+            # what customers actually pay a venue a day (14-day EMA); staffing
+            # is capped by it so a quiet venue cannot carry a crowd of staff
+            conn.execute("ALTER TABLE businesses ADD COLUMN ema_revenue "
+                         "REAL NOT NULL DEFAULT 0")
         # ownership: residents own, buy and found businesses (enterprise.py)
         from .enterprise import migrate as enterprise_migrate
         enterprise_migrate(conn)
