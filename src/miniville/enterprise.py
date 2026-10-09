@@ -17,8 +17,9 @@ So a commercial business has an **owner** — a resident:
   resident who can best afford it; their capital becomes its opening reserve.
   An original venue with no buyer reopens town-run as before (the town will
   not lose its grocer); a founded one stays dark until someone buys it;
-* **founders** — when a kind of custom is crowding the venues that serve it,
-  a resident with savings opens a new one in their own district, staffs it
+* **founders** — when the town can carry another venue, a resident with
+  savings answers the custom that presses hardest with a new one in their
+  own district, staffs it
   through the ordinary labour market, and lives or dies by the same books as
   everyone else. Their capital is at stake: a failed venture loses it;
 * **inheritance** — an owner's business passes with their estate to the
@@ -45,8 +46,12 @@ BUY_CENTS = 1_200_000            # $12k to take on a failed one
 CUSHION_AFTER_CENTS = 300_000    # a founder keeps $3k to live on
 DRAW_SHARE = 0.10                # weekly share of the reserve above the cushion
 CUSHION_WEEKS = 4                # weeks of payroll a business keeps in hand
-FOUND_P_WEEKLY = 0.35            # chance a week that a ready town sees a founding
-CROWDING_TO_FOUND = 6.0          # 14-day mean visitors per seat of capacity
+FOUND_P_WEEKLY = 0.10            # chance a week that a ready town sees a founding
+# A town carries one commercial venue per this many adults. Crowding alone
+# cannot bound foundings: residents pick uniformly among the venues that
+# match their tastes, so every new café draws its own custom and the crowding
+# never eases (the first soak opened six venues in 98 days).
+ADULTS_PER_COMMERCIAL = 45
 MAX_FOUNDED_OPEN = 6             # founded venues the town can carry at once
 MAX_FOUNDED_EVER = 14            # places rows are never deleted; bound the table
 FOUNDER_MIN_AGE, FOUNDER_MAX_AGE = 23, 64
@@ -326,8 +331,8 @@ def found(conn: sqlite3.Connection, founder: sqlite3.Row, concept: str,
 
 
 def founding_pass(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
-    """Weekly: if some kind of custom is crowding its venues and someone can
-    afford to answer it, a new venue opens."""
+    """Weekly: if the town can carry another venue and someone can afford to
+    open one, they answer whichever custom presses hardest."""
     if day_of(tick) % 7 != 3:          # mid-week, away from the levy day
         return {"founded": 0}
     founded_open = sum(1 for b in _commercial_rows(conn, "open")
@@ -336,11 +341,17 @@ def founding_pass(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         "SELECT COUNT(*) n FROM businesses WHERE founded_tick IS NOT NULL").fetchone()["n"]
     if founded_open >= MAX_FOUNDED_OPEN or founded_ever >= MAX_FOUNDED_EVER:
         return {"founded": 0}
+    adults = conn.execute("SELECT COUNT(*) n FROM agents WHERE alive=1 AND is_child=0"
+                          ).fetchone()["n"]
+    if len(_commercial_rows(conn, "open")) >= adults // ADULTS_PER_COMMERCIAL:
+        return {"founded": 0}
     r = rng_for(seed, "found", day_of(tick))
     if r.random() >= FOUND_P_WEEKLY:
         return {"founded": 0}
+    # answer the custom that presses hardest: concepts above the mean
     press = crowding(conn)
-    ready = {c: v for c, v in press.items() if v >= CROWDING_TO_FOUND}
+    mean = sum(press.values()) / max(1, len(press))
+    ready = {c: v for c, v in press.items() if v > 0 and v >= mean}
     if not ready:
         return {"founded": 0}
     pool = _candidates(conn, CAPITAL_CENTS)

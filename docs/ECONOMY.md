@@ -81,6 +81,63 @@ After the change, over 90 days on the same world: total money **+$108,944**
 instead of -$734,088, wallets flat ($9,147,529 → $9,168,716), purse bounded
 near its buffer, zero municipal deficit.
 
+## Estates, pensions and owners (v0.14)
+
+Three more places where money stopped moving, found by soaking a fresh
+synthetic town for a year (`scripts/synth_personas.py` → `init` → `soak.py`):
+
+- **Estates.** The dead kept their wallets, so every death took its savings
+  out of circulation — invisible to the money-supply series, which summed over
+  the dead too. `mortality._settle_estate` passes the money to the surviving
+  spouse, else the household (adults, then children, before orphans are
+  rehomed), else the town purse. `estates_v1` returns what the dead already
+  held to the purse.
+- **Pensions.** Retirement ended a resident's wage and nothing replaced it:
+  70 of the 105 broke households in the soak were entirely retired. Every
+  resident 65+ without a job now draws `pension_week()` from the purse each
+  week, before rent is due (`PENSION_BASE_WEEK_CENTS` × council policy
+  `pension`, default 0.50). The purse's buffer covers pensions as well as the
+  public payroll. A shortfall is a `town_deficit`, as with payroll.
+- **Downsizing.** A household already in The Flats was "downsized to The
+  Flats" again every fortnight (1,451 times in the soak year). There is
+  nowhere cheaper to go, so it now stays put (and stays in arrears).
+
+### Ownership and enterprise (`enterprise.py`)
+
+A commercial business has a resident **owner** (`businesses.owner_id`):
+
+- On first run, the senior hand (highest rank, then longest tenure) at each
+  commercial venue becomes its proprietor (`enterprise_v1`).
+- **Draws.** On the levy day each owner takes `DRAW_SHARE` (10%) of the
+  reserve above `CUSHION_WEEKS` (4) of the venue's payroll.
+- **Buyers.** A venue past its 21-day cooldown is bought by the resident who
+  can best afford `BUY_CENTS` ($12k, which becomes its opening reserve). An
+  original venue with no buyer reopens town-run as before. A founded venue
+  with no buyer stays closed.
+- **Founders.** Mid-week, while the town has fewer than one commercial venue
+  per `ADULTS_PER_COMMERCIAL` (45) adults, there is a 10% chance that a
+  resident with `CAPITAL_CENTS` ($20k) plus a cushion opens a venue in their
+  district. They pick the concept (bakery, kitchen, bar, café, boutique,
+  workshop, studio, stage) whose custom crowds its venues hardest, favouring
+  their own trade. Crowding alone cannot bound foundings, because residents
+  pick uniformly among matching venues, so a new café brings its own custom. The
+  founder quits their post and becomes the venue's head, and the labour
+  market staffs it. A founding fails like any other venue, and the owner
+  loses the capital.
+- An owner's business passes with their estate. Owning an open business is
+  +4 influence.
+
+Money only moves between wallet and till; nothing here mints it.
+
+### Housing (`housing.py`)
+
+The life lottery's move draw now asks what the household can afford. It
+moves **up** to the best district whose rent is at most 1/2.5 of its weekly
+income and 1/20 of its savings. It moves **one step down** when rent is over
+1/1.4 of income with under six weeks saved. Otherwise it mostly stays put.
+Before this, about 700 random moves a year ignored rent entirely.
+`district_profile()` feeds the Economy tab's district table.
+
 ## Reporting
 
 - `economy_days` is a daily time series: revenue, payroll, rent, spending,

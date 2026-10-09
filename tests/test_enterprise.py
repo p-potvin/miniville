@@ -90,6 +90,7 @@ def test_owners_draw_profit_above_a_payroll_cushion():
 def test_a_crowded_trade_and_a_saver_found_a_new_venue(monkeypatch):
     conn = _world()
     monkeypatch.setattr(enterprise, "FOUND_P_WEEKLY", 1.0)
+    monkeypatch.setattr(enterprise, "ADULTS_PER_COMMERCIAL", 0.01)
     # every food venue is packed
     conn.execute("""UPDATE businesses SET ema_traffic=1000 WHERE place_id IN
                     (SELECT id FROM places WHERE tags LIKE '%food%')""")
@@ -119,13 +120,25 @@ def test_a_crowded_trade_and_a_saver_found_a_new_venue(monkeypatch):
 def test_nothing_is_founded_when_nobody_is_crowded(monkeypatch):
     conn = _world()
     monkeypatch.setattr(enterprise, "FOUND_P_WEEKLY", 1.0)
+    monkeypatch.setattr(enterprise, "ADULTS_PER_COMMERCIAL", 0.01)
     _adult(conn, 1, 10 * enterprise.CAPITAL_CENTS)
+    assert enterprise.founding_pass(conn, 3 * DAY, "t")["founded"] == 0
+
+
+def test_a_small_town_cannot_carry_another_venue(monkeypatch):
+    conn = _world()
+    monkeypatch.setattr(enterprise, "FOUND_P_WEEKLY", 1.0)
+    conn.execute("""UPDATE businesses SET ema_traffic=1000 WHERE place_id IN
+                    (SELECT id FROM places WHERE tags LIKE '%food%')""")
+    _adult(conn, 1, 10 * enterprise.CAPITAL_CENTS, occupation="cook")
+    # one adult cannot support the town's existing shops, let alone a new one
     assert enterprise.founding_pass(conn, 3 * DAY, "t")["founded"] == 0
 
 
 def test_a_failed_founding_stays_dark_until_someone_buys_it(monkeypatch):
     conn = _world()
     monkeypatch.setattr(enterprise, "FOUND_P_WEEKLY", 1.0)
+    monkeypatch.setattr(enterprise, "ADULTS_PER_COMMERCIAL", 0.01)
     conn.execute("""UPDATE businesses SET ema_traffic=1000 WHERE place_id IN
                     (SELECT id FROM places WHERE tags LIKE '%food%')""")
     _adult(conn, 1, enterprise.CAPITAL_CENTS + enterprise.CUSHION_AFTER_CENTS, occupation="cook")

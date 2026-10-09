@@ -261,6 +261,12 @@ def populate(conn: sqlite3.Connection, dataset_dir: str, n_agents: int,
             (row["id"], row["home_place_id"],
              r.randint(economy.STARTING_MONEY_MIN, economy.STARTING_MONEY_MAX)))
 
+    # the town starts with the purse buffer it would otherwise take weeks of
+    # rent to build: without it a new town's first pensions and public payroll
+    # ran a deficit every week of its first month
+    economy.town_credit(conn, economy.PURSE_BUFFER_WEEKS * (
+        economy.public_payroll_week(conn) + economy.pension_bill_week(conn)))
+
     conn.commit()
     stats = {
         "agents": conn.execute("SELECT COUNT(*) c FROM agents").fetchone()["c"],
