@@ -138,6 +138,15 @@ income and 1/20 of its savings. It moves **one step down** when rent is over
 Before this, about 700 random moves a year ignored rent entirely.
 `district_profile()` feeds the Economy tab's district table.
 
+### Staffing a venue can afford (`jobs.venue_targets`)
+
+Targets follow seats and foot traffic, scaled so the town's posts are 92% of
+its working-age adults. Takings were never part of the calculation. Now a
+commercial venue that is **losing money** is capped at the staff 90% of its
+14-day average takings (`businesses.ema_revenue`) can pay, once past a
+28-day warm-up. The posts it sheds go to the public services, paid from the
+purse. See the v0.14 soak table in STATE.md for the alternatives measured.
+
 ## Reporting
 
 - `economy_days` is a daily time series: revenue, payroll, rent, spending,

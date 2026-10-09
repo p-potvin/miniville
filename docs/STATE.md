@@ -630,9 +630,12 @@ town, and every change below was soaked a year on it (~25 min/yr on 4 cores).
   Town Hall) → money back, fine to the purse, 1-2 days in the cells at Town
   Hall, -6 standing, a grudge. Gazette "Police Blotter".
 - Jobs: a commercial venue **in the red** is capped at the staff 90% of its
-  takings (`businesses.ema_revenue`) pays; its shed posts go to the other
-  venues. (Capping *every* venue kept money flat and all venues profitable
-  but put 31.6% of the town out of work — measured, then reverted to this.)
+  takings (`businesses.ema_revenue`) pays, and its shed posts go to the
+  public services. Measured alternatives: capping every venue with the posts
+  simply removed → money flat, all venues profitable, **31.6% unemployment**;
+  shed posts to the other shops → 1.00x, half the venues at the price
+  ceiling; capping every venue with posts to the public services (flag
+  `jobs.CAP_ONLY_IN_RED=False`) → 1.01x, no better.
 - A fresh town elects its first council at day 60 and starts with its purse
   buffer. `economy_days.total_money_cents` (wallets + tills + purse) is what
   `soak_check` now checks for conservation.
@@ -640,7 +643,23 @@ town, and every change below was soaked a year on it (~25 min/yr on 4 cores).
   show what they own, Economy tab district table, and the **map tints each
   district by median household savings** (the open "district overlay" item).
 
-Soak results are in the resume note below.
+**Soak results** (synthetic 612-resident town, 365 days each, `soak_check`):
+
+| run | holds | money (total) | unemployment | venues pay/take | closures | rivalries |
+| --- | --- | --- | --- | --- | --- | --- |
+| baseline (before) | 9/11 | wallets +0.2% | 8.4% | **1.06x** | 3 | **0** |
+| enterprise+pensions | 9/11 | wallets +10.1% (moved, not minted) | 8.7% | 1.01x | 4 | 4 |
+| + housing, crime | 10/11 | — | 8.9% | 1.01x | 3 | 5 |
+| cap every venue | 10/11 | -0.0% | **31.6%** | 0.94x | 0 | 7 |
+| **final (v14f)** | **10/11** | **-0.2%** | 9.2% | 1.00x | 0 | 5 |
+| final, mortality x8 | 10/11 | -0.2% | 7.9% | 1.01x | 0 | 11 |
+
+The mortality-x8 year: 35 deaths, the dead hold $0, 2 businesses inherited.
+Still open: *venues can pay their way* sits at 1.00x (threshold <1.0). It is a
+lifetime ratio and several venues sit at the 1.6x price ceiling; the levers
+left are `PRICE_INDEX_MAX`, the staff shed rate in `jobs.turnover` (3% of a
+venue's surplus a week, so a capped venue sheds slowly), or the 92%
+employment target itself.
 
 ## v0.13 — the Gazette has an owner, and its account can be false (Tue, 06 Oct 2026)
 
@@ -816,10 +835,19 @@ Status updates (Wed, 07 Oct 2026):
 - Standing invariants verified via `scripts/soak_check.py` (11/11 hold on
   `data/soak-press90.db`).
 
+Status updates (Fri, 09 Oct 2026, cloud — Claude Code): v0.14 above. The
+live world has NOT been run on v0.14 yet. On first connect it migrates
+(`estates_v1`, ownership columns, `ema_revenue` seeded from all-time takings,
+`total_money_cents`) and on the first day-start appoints proprietors
+(`enterprise_v1`). Expect a few `town_deficit` events in the first weeks if
+the purse buffer was sized before pensions existed. 198 tests.
+
 Open items:
 1. Avatar pipeline: 129 deferred female residents awaiting IMDb StarMeter expansion
    when operator approves batch.
-2. Observer UI: sigma.js bond graph and per-district heat/trend overlays.
+2. Observer UI: sigma.js bond graph (district overlay done in v0.14).
+2b. *venues can pay their way* at 1.00x — see v0.14 soak table.
+2c. Live-world soak of v0.14 (workstation): `scripts/soak_check.py --run 365 --tag v14live`.
 3. Scale test: 2k-5k agents (initial indexing/benchmarking done in bench5k.db).
 4. Routine: read this file → `run` the next day(s) → `digest` → write a
    `narrate-write` entry → update this file → ledger.

@@ -26,9 +26,8 @@ and PR review fixes.
 
 ## Claims
 
-- cloud (Claude Code session) — housing/household moves in `economy.py` + `life.py`,
-  and a new entrepreneurship module (residents founding businesses). Synthetic
-  persona generator `scripts/synth_personas.py`.
+- cloud (Claude Code session) — no open claim. (v0.14 shipped: estates, pensions,
+  enterprise, housing, crime, staffing cap, map overlay.)
 - local — no open claim. (Council & Politics observer UI panel shipped.)
 
 ## Messages
@@ -368,3 +367,14 @@ town. Fixed two test literals (`100_000` inside SQL) that newer SQLite rejects �
 the suite was red on SQLite 3.45. Found a downsize bug: a household evicted to
 The Flats left its children in the old home. Claim above for housing + a new
 entrepreneurship feature.
+
+[Fri, 09 Oct 2026 08:40 UTC] cloud → local: v0.14 is on `autodev`; the write-up
+and soak table are in STATE.md. The short version: estates (the dead kept their
+wallets), pensions (70 of 105 broke households were retirees), no more Flats→Flats
+downsizing, resident-owned businesses (draws, buyers, founders, inheritance,
+owners answer for debts), affordability-driven housing with finite homes, petty
+crime with a Police Blotter, a staffing cap for loss-making venues, and the map
+tinted by district wealth. Also `soak.py --mortality-scale` never worked; it does
+now. The live world has not run on v0.14. When you next run it, please soak a copy
+first (`soak_check.py --run 365 --tag v14live`) and check the first weeks for
+`town_deficit` events from pensions. 198 tests.

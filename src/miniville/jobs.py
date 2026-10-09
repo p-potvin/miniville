@@ -36,6 +36,7 @@ COMMERCIAL_TAGS = {"food", "drink", "retail", "coffee", "arts", "nightlife", "fi
 STAFF_MAX = 60
 AFFORD_SHARE = 0.9           # payroll a commercial venue's takings can carry
 AFFORD_WARMUP_DAYS = 28      # before then its revenue average means little
+CAP_ONLY_IN_RED = True       # cap a venue by its takings only while it loses money
 EMPLOYMENT_RATE = 0.92       # share of working-age adults the town can employ
 
 # market churn
@@ -107,7 +108,9 @@ def venue_targets(conn: sqlite3.Connection) -> dict[int, int]:
     capped: set[int] = set()
     for r in rows:
         tags = set(json.loads(r["tags"] or "[]"))
-        if not is_commercial(tags, r["kind"]) or r["revenue"] <= 0 or r["balance"] >= 0:
+        if not is_commercial(tags, r["kind"]) or r["revenue"] <= 0:
+            continue
+        if CAP_ONLY_IN_RED and r["balance"] >= 0:
             continue
         if now - r["opened"] < AFFORD_WARMUP_DAYS * TICKS_PER_DAY:
             continue                          # the revenue average is still warming up
