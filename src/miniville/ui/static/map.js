@@ -87,18 +87,21 @@ class TownMap {
     const g = new PIXI.Graphics();
     this.staticLayer.addChild(g);
 
-    // district tiles
+    // district tiles, tinted by how much the households living there have
+    // put by: as housing sorts the town by money, the map shows it
     const zones = {};
+    const savings = data.districts.filter(d => d.profile)
+      .map(d => d.profile.median_savings_cents);
+    const lo = Math.min(...savings), hi = Math.max(...savings);
     for (const d of data.districts) {
       zones[d.name] = d;
       g.lineStyle(1.5, MV_EDGE, 1).beginFill(MV_PANEL, 0.85)
         .drawRoundedRect(d.x, d.y, d.w, d.h, 14).endFill();
-      const name = new PIXI.Text(d.name.toUpperCase(), {
-        fontFamily: "Consolas, monospace", fontSize: 15,
-        fontWeight: "bold", fill: 0x7784a0,
-      });
-      name.position.set(d.x + 10, d.y + 8);
-      this.staticLayer.addChild(name);
+      if (d.profile && hi > lo) {
+        const t = (d.profile.median_savings_cents - lo) / (hi - lo);
+        g.lineStyle(0).beginFill(0xd4a72c, 0.04 + 0.16 * t)
+          .drawRoundedRect(d.x, d.y, d.w, d.h, 14).endFill();
+      }
       // homes block: bottom strip of the tile
       if (d.homes) {
         const hb = new PIXI.Graphics();
@@ -112,6 +115,22 @@ class TownMap {
         this.staticLayer.addChild(ht);
         d._homesRect = { x: d.x + 16, y: d.y + d.h - 70, w: d.w - 32, h: 44 };
       }
+      if (d.profile) {
+        const p = d.profile;
+        const info = new PIXI.Text(
+          `rent $${Math.round(p.rent_cents / 100)}/wk · ${p.residents} res · ` +
+          `median savings $${Math.round(p.median_savings_cents / 100).toLocaleString()}`, {
+            fontFamily: "Consolas, monospace", fontSize: 11, fill: 0xb8a65a,
+          });
+        info.position.set(d.x + 110, d.y + d.h - 24);   // beside "homes · N"
+        this.staticLayer.addChild(info);
+      }
+      const name = new PIXI.Text(d.name.toUpperCase(), {
+        fontFamily: "Consolas, monospace", fontSize: 15,
+        fontWeight: "bold", fill: 0x7784a0,
+      });
+      name.position.set(d.x + 10, d.y + 8);
+      this.staticLayer.addChild(name);
     }
 
     // venues

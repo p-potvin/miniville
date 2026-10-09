@@ -346,8 +346,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
             home_counts = {name: c.execute(
                 "SELECT COUNT(*) n FROM places WHERE kind='home' AND district=?",
                 (name,)).fetchone()["n"] for name in DISTRICT_TILES}
+            from ..housing import district_profile
+            profile = {d["district"]: d for d in district_profile(c)}
             return {
-                "districts": [dict(z, homes=home_counts.get(z["name"], 0))
+                "districts": [dict(z, homes=home_counts.get(z["name"], 0),
+                                   profile=profile.get(z["name"]))
                               for z in districts.values()],
                 "places": places,
                 "agents": agents,
