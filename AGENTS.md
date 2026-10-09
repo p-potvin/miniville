@@ -53,5 +53,5 @@ structure, the town having friction, people content, and the town staying
 eventful. A failure names the number that broke it; the probes in
 `scripts/_*.py` (untracked, ad hoc) are what you write next to attribute it.
 
-Use `--source` to soak a specific database, and `--mortality-scale` to
-accelerate generational turnover.
+Use `--source` to soak a specific database (both scripts). Pass
+`--mortality-scale` to `scripts/soak.py` to accelerate generational turnover.

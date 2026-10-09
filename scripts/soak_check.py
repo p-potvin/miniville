@@ -122,14 +122,18 @@ def run_checks(conn: sqlite3.Connection, r: Report) -> None:
     # days, so revenue/days understates the takings several-fold. (That
     # mistake had me briefly convinced the price fix had failed when every
     # venue was in fact profitable.)
-    agg = conn.execute(
-        """SELECT COALESCE(SUM(b.revenue_total),0) rev,
-                  COALESCE(SUM(b.payroll_total),0) pay
-           FROM businesses b JOIN places p ON p.id = b.place_id
-           WHERE p.tags NOT LIKE '%health%' AND p.tags NOT LIKE '%education%'
-             AND p.tags NOT LIKE '%civic%' AND p.tags NOT LIKE '%office%'
-             AND p.tags NOT LIKE '%media%' AND p.tags NOT LIKE '%worship%'
-             AND p.tags NOT LIKE '%community%'""").fetchone()
+    # Commercial means what the simulation itself means by it
+    # (enterprise.is_commercial, i.e. economy.PUBLIC_TAGS): a hand-kept tag
+    # list here missed the park, the marina and the library, whose town-funded
+    # payroll has no revenue against it, and that alone failed this check.
+    from miniville.enterprise import is_commercial
+    agg = {"rev": 0, "pay": 0}
+    for row in conn.execute(
+            """SELECT p.tags, p.kind, b.revenue_total, b.payroll_total
+               FROM businesses b JOIN places p ON p.id = b.place_id"""):
+        if is_commercial(set(json.loads(row["tags"] or "[]")), row["kind"]):
+            agg["rev"] += row["revenue_total"] or 0
+            agg["pay"] += row["payroll_total"] or 0
     ratio = agg["pay"] / max(1, agg["rev"])
     r.check(ratio < 1.0, "venues can pay their way",
             f"commercial venues have paid out {ratio:.2f}x what they took in "

@@ -635,9 +635,9 @@ town, and every change below was soaked a year on it (~25 min/yr on 4 cores).
   takings (`businesses.ema_revenue`) pays, and its shed posts go to the
   public services. Measured alternatives: capping every venue with the posts
   simply removed → money flat, all venues profitable, **31.6% unemployment**;
-  shed posts to the other shops → 1.00x, half the venues at the price
-  ceiling; capping every venue with posts to the public services (flag
-  `jobs.CAP_ONLY_IN_RED=False`) → 1.01x, no better.
+  shed posts to the other shops → 0.92x; capping every venue with posts to
+  the public services (flag `jobs.CAP_ONLY_IN_RED=False`) → 0.89x (corrected
+  check, see below).
 - A fresh town elects its first council at day 60 and starts with its purse
   buffer. `economy_days.total_money_cents` (wallets + tills + purse) is what
   `soak_check` now checks for conservation.
@@ -645,23 +645,27 @@ town, and every change below was soaked a year on it (~25 min/yr on 4 cores).
   show what they own, Economy tab district table, and the **map tints each
   district by median household savings** (the open "district overlay" item).
 
-**Soak results** (synthetic 612-resident town, 365 days each, `soak_check`):
+**Soak results** (synthetic 612-resident town, 365 days each, `soak_check`).
+The *venues pay their way* column is re-measured with the corrected check (see
+below); the "holds" column is with that correction:
 
 | run | holds | money (total) | unemployment | venues pay/take | closures | rivalries |
 | --- | --- | --- | --- | --- | --- | --- |
-| baseline (before) | 9/11 | wallets +0.2% | 8.4% | **1.06x** | 3 | **0** |
-| enterprise+pensions | 9/11 | wallets +10.1% (moved, not minted) | 8.7% | 1.01x | 4 | 4 |
-| + housing, crime | 10/11 | — | 8.9% | 1.01x | 3 | 5 |
-| cap every venue | 10/11 | -0.0% | **31.6%** | 0.94x | 0 | 7 |
-| **final (v14f)** | **10/11** | **-0.2%** | 9.2% | 1.00x | 0 | 5 |
-| final, mortality x8 | 10/11 | -0.2% | 7.9% | 1.01x | 0 | 11 |
+| baseline (before) | 10/11 | wallets +0.2% | 8.4% | 0.96x | 3 | **0** |
+| + housing, crime | 11/11 | — | 8.9% | 0.92x | 3 | 5 |
+| cap every venue, posts removed | 10/11 | -0.0% | **31.6%** | — | 0 | 7 |
+| **final (v14f)** | **11/11** | **-0.2%** | 9.2% | 0.91x | 0 | 5 |
+| final, mortality x8 | 11/11 | -0.2% | 7.9% | 0.91x | 0 | 11 |
 
 The mortality-x8 year: 35 deaths, the dead hold $0, 2 businesses inherited.
-Still open: *venues can pay their way* sits at 1.00x (threshold <1.0). It is a
-lifetime ratio and several venues sit at the 1.6x price ceiling; the levers
-left are `PRICE_INDEX_MAX`, the staff shed rate in `jobs.turnover` (3% of a
-venue's surplus a week, so a capped venue sheds slowly), or the 92%
-employment target itself.
+
+**Correction (PR review):** `soak_check`'s *venues can pay their way* kept its
+own list of public tags, which missed `outdoors`, `water`, `quiet` and
+`study`. The park, marina and library are town-funded (`economy.PUBLIC_TAGS`):
+they carry ~$1.25M/yr of payroll and no revenue, and the check counted them
+as commercial. That is what read as 1.00-1.06x and what I spent several soaks
+tuning against. The check now uses `enterprise.is_commercial`. The staffing
+cap stays: it was the direct fix for the Diner (15 staff on 11 visits a day).
 
 ## v0.13 — the Gazette has an owner, and its account can be false (Tue, 06 Oct 2026)
 
@@ -848,7 +852,6 @@ Open items:
 1. Avatar pipeline: 129 deferred female residents awaiting IMDb StarMeter expansion
    when operator approves batch.
 2. Observer UI: sigma.js bond graph (district overlay done in v0.14).
-2b. *venues can pay their way* at 1.00x — see v0.14 soak table.
 2c. Live-world soak of v0.14 (workstation): `scripts/soak_check.py --run 365 --tag v14live`.
 3. Scale test: 2k-5k agents (initial indexing/benchmarking done in bench5k.db).
 4. Routine: read this file → `run` the next day(s) → `digest` → write a
