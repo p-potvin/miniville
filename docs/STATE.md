@@ -393,10 +393,9 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   beat the loser by better than 2:1 and ambiguous identities stay unresolved.
   Validated on the 162 identities with both a cached label and usable crops:
   34 agree / 0 disagree / 6 refused. Nothing in the avatar path hits the network.
-- Ledger debt (Fri, 09 Oct 2026): the Claude Code cloud session (v0.14) had no
-  `record-agent-change.ps1`; the next workstation session should record it.
-- Ledger debt cleared: the cloud session's entry (owed because its VM had no
-  `record-agent-change.ps1`) is recorded on the workstation.
+- Ledger debt cleared (Fri, 09 Oct 2026): the Claude Code cloud session's v0.14
+  entry (owed because its VM had no `record-agent-change.ps1`) is recorded on
+  the workstation.
 - Celebrity gallery re-embedded (Thu, 01 Oct 2026, workstation). The operator
   suspected the sex mislabels came from a pre-smart-picker gallery with stale
   embeddings. Measured, the opposite is true: **the gallery is already
@@ -593,6 +592,7 @@ faith) → `init --dataset data/synth-personas --agents 500` gives a 612-residen
 town, and every change below was soaked a year on it (~25 min/yr on 4 cores).
 
 **What a year on a fresh town found** (baseline, before any change: 9/11):
+
 - **Retirees had no income.** Retirement ended the wage and nothing replaced
   it: 105 of 289 households broke, 70 of them all-retired.
 - **Downsizing from The Flats to The Flats**, every fortnight: 1,451
@@ -611,6 +611,7 @@ town, and every change below was soaked a year on it (~25 min/yr on 4 cores).
   `mortality` was imported.
 
 **What was built** (all deterministic, money only *moves* — see ECONOMY.md):
+
 - `mortality._settle_estate` — estate to spouse → household (adults, then
   children) → town purse; `estates_v1` returns what the dead hold to the purse.
 - **Pensions** — residents 65+ without a job draw `pension_week()` from the
@@ -817,14 +818,16 @@ recirculates less. Worth a considered pass on rent recycling / levy balance.
 ## Resume note for next session
 
 Branch `autodev`, both agents pushing. World is seeded (seed=miniville) — `run`
-continues from tick 19248 (Day 401 completed = **Feb 5, Year 2**, winter; next tick
-to advance is tick 19248 to 19296 for Day 402). Do NOT `init` again unless
-intentionally resetting the town. All economy migrations are applied.
+continues from tick 19680 (Day 410 completed = **Feb 14, Year 2**, winter; next tick
+to advance is tick 19680 to 19728 for Day 411). Do NOT `init` again unless
+intentionally resetting the town. All economy migrations are applied (v0.14's
+`estates_v1`, `enterprise_v1` and `economy_v2` ran on the first connect).
 
 **Read `docs/AGENT_SYNC.md` first** — claims and messages between the workstation
 and cloud sessions live there. Pull before starting work; push small commits.
 
 Status updates (Wed, 07 Oct 2026):
+
 - Live world advanced through Day 401: 937 interactions, Anthony Furness and
   Xavier Pacheco married, Aditya Yu and Jenni Miles moved in together, council
   dividend hike motion rejected 2-3.
@@ -848,11 +851,23 @@ live world has NOT been run on v0.14 yet. On first connect it migrates
 (`enterprise_v1`). Expect a few `town_deficit` events in the first weeks if
 the purse buffer was sized before pensions existed. 198 tests.
 
+Status updates (Fri, 09 Oct 2026, workstation): v0.14 verified on the real
+town, then run live. `soak_check.py --run 365 --tag v14live` (a copy, tick
+19248 onward) holds **11/11 invariants**: money conserved -0.2%/y, **0
+municipal deficits**, unemployment 12.5% → 6.6%, venues staffed, commercial
+venues paid out 0.84x takings, 4 closures (1.4/y), 60% of ties one-off, 110
+rivalries, 1.0% miserable/hungry, 250 events/day. The feared pension deficits
+never came: rent + levy inflow covers the ~87 pensioners. The live world then
+migrated on first connect (8 of 17 venues got resident owners; `ema_revenue`
+seeded from all-time takings) and ran Days 402-410: no deficits, purse
+$145.7k → $212.4k, 2 new estates, and the usual run of betrayals, marriages
+and separations. 198 tests.
+
 Open items:
+
 1. Avatar pipeline: 129 deferred female residents awaiting IMDb StarMeter expansion
    when operator approves batch.
 2. Observer UI: sigma.js bond graph (district overlay done in v0.14).
-2c. Live-world soak of v0.14 (workstation): `scripts/soak_check.py --run 365 --tag v14live`.
 3. Scale test: 2k-5k agents (initial indexing/benchmarking done in bench5k.db).
 4. Routine: read this file → `run` the next day(s) → `digest` → write a
    `narrate-write` entry → update this file → ledger.
