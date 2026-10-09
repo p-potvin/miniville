@@ -67,6 +67,13 @@ li.click:hover { background: var(--panel); }
 
 .policy-grid { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1rem; }
 .stat.active-policy { border-color: var(--accent); }
+.opinion-list { display: flex; flex-direction: column; gap: .3rem; margin-bottom: 1rem; }
+.op-row { display: grid; grid-template-columns: 9rem 1fr 12rem; align-items: center; gap: .6rem; }
+.op-label { color: var(--dim); font-size: .82rem; }
+.op-bar { position: relative; height: .5rem; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+.op-bar > span { position: absolute; left: 50%; top: 0; height: 100%; }
+.op-up { background: #6bd48e; }
+.op-down { background: #e06c75; left: auto; right: 50%; }
 .badge-pass { color: #6bd48e; font-weight: bold; }
 .badge-fail { color: #e06c75; font-weight: bold; }
 .click-link { color: var(--accent); cursor: pointer; text-decoration: underline; }

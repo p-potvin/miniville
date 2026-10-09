@@ -120,10 +120,14 @@ function showGazette(edition) {
   const line = edition.editorial_line || "community";
   const basis = edition.editorial_basis || "independent local paper";
   const credibility = Math.round((edition.credibility ?? 1) * 100);
+  const readers = edition.readers;
+  const reachNote = (readers == null) ? "" :
+    ` Read by ${readers.toLocaleString()} adults — its reach is what gives the ` +
+    `paper power over the town's opinion.`;
   $("#gaz-meta").textContent =
     `Owned by ${byline}; edited by ${editor}. ` +
     `Editorial line: ${line} — ${basis}. Credibility ${credibility}%. ` +
-    `This is a resident's account, not the neutral event record.`;
+    `This is a resident's account, not the neutral event record.` + reachNote;
   const claims = edition.claims || [];
   $("#gaz-claims").hidden = claims.length === 0;
   $("#gaz-claims-list").innerHTML = claims.map(c =>
@@ -220,7 +224,28 @@ async function council() {
     (daysLeft != null ? ` (${daysLeft} days away)` : "") +
     ` · 5 district seats · policy levers directly influence town books, rent, and wages.`;
 
+  const pressInfo = r.press || {};
+  if (pressInfo.readers != null) {
+    $("#council-press").textContent =
+      `The Gazette (${pressInfo.editorial_line || "no line"}) is read by ` +
+      `${pressInfo.readers.toLocaleString()} of ${pressInfo.adults.toLocaleString()} adults ` +
+      `(${Math.round((pressInfo.reach || 0) * 100)}% reach, credibility ` +
+      `${Math.round((pressInfo.credibility || 0) * 100)}%). Reach is how far the paper ` +
+      `can move the town's opinion — and a caught lie shrinks it.`;
+  }
+
   const polKeys = Object.keys(policies).sort();
+  const opinion = r.opinion || {};
+  $("#council-opinion").innerHTML = polKeys.map(k => {
+    const v = opinion[k] ?? 0;
+    const cls = v >= 0 ? "op-up" : "op-down";
+    return `<div class="op-row">
+      <span class="op-label">${k.replace(/_/g, " ")}</span>
+      <span class="op-bar"><span class="${cls}" style="width:${Math.abs(v) * 50}%"></span></span>
+      <span class="muted">${v >= 0 ? "+" : ""}${v.toFixed(2)} — wants to ${v >= 0 ? "raise" : "lower"}</span>
+    </div>`;
+  }).join("");
+
   $("#council-policies").innerHTML = polKeys.map(k => {
     const p = policies[k];
     const label = k.replace(/_/g, " ");
@@ -248,13 +273,15 @@ async function council() {
     const pass = m.passed === 1;
     const badge = pass ? `<span class="badge-pass">Passed</span>` : `<span class="badge-fail">Rejected</span>`;
     const dir = m.direction > 0 ? "▲ Raise" : "▼ Lower";
+    const swing = m.press_swing === 1
+      ? ` <span class="t">· opinion swung it (${(m.support ?? 0).toFixed(2)})</span>` : "";
     return `<tr>
       <td>Day ${m.day + 1}</td>
       <td><b>${esc(m.policy)}</b></td>
       <td>${formatPolicy(m.policy, m.value)}</td>
       <td>${dir}</td>
       <td>${m.votes_for} for / ${m.votes_against} against</td>
-      <td>${badge}</td>
+      <td>${badge}${swing}</td>
     </tr>`;
   }).join("") : `<tr><td colspan="6" class="muted">No motions debated yet</td></tr>`;
 

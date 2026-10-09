@@ -17,6 +17,7 @@ import sqlite3
 from .db import get_meta
 from .events import NOTABLE, describe, emit
 from .rng import rng_for
+from .press import POLICY_PREFERENCE, readers as _readers
 
 DAYS_PER_WEEK = 7
 
@@ -64,6 +65,7 @@ SECTIONS = {
     "motion_rejected": "The Town Council",
     "town_deficit": "The Town Council",
     "press_claim": "The Gazette's Own Account",
+    "press_influence": "The Town Council",
     "slander": "The Feud",
     "boycott": "The Feud",
     "dividend": "The Town Council",
@@ -99,14 +101,7 @@ LINE_BONUS = {
                    "favor_repaid": 2, "birth": 3, "death": 2},
 }
 
-POLICY_PREFERENCE = {
-    "business": {"levy_rate": -1, "dividend_share": -1,
-                 "rent_multiplier": -1, "min_wage": -1, "pension": -1},
-    "working": {"levy_rate": 1, "dividend_share": 1,
-                "rent_multiplier": -1, "min_wage": 1, "pension": 1},
-    "establishment": {},
-    "community": {},
-}
+POLICY_PREFERENCE = POLICY_PREFERENCE   # re-exported: the line's stance lives in press.py
 FALSE_CLAIM_BASE = 0.18       # when a council result directly hurts the owner
 
 
@@ -314,11 +309,16 @@ def publish_week(conn: sqlite3.Connection, week: int,
     issue_profile = {**profile, "credibility": issue_credibility}
     headline = _headline(conn, rows, issue_profile)
 
+    from .press import eligible_adults, reach
+    reach_n = _readers(conn)
+    adults = eligible_adults(conn)
     lines = [f"THE MINIVILLE GAZETTE — Week {week + 1}",
              f"Owned by {profile['publisher'] or 'the Gazette staff'}; "
              f"by {profile['editor'] or 'the Gazette staff'}.",
              f"Editorial line: {line} — {profile['editorial_basis']}. "
-             f"Credibility: {profile['credibility']:.0%}.", ""]
+             f"Credibility: {profile['credibility']:.0%}.",
+             f"Read by {reach_n:,} of {adults:,} adults "
+             f"({reach(conn):.0%} of town).", ""]
     lines.append(f"**{headline}**")
     lines.append("")
 
@@ -369,17 +369,19 @@ def publish_week(conn: sqlite3.Connection, week: int,
     text = "\n".join(lines)
     conn.execute(
         """INSERT INTO newspapers(week,text,created_tick,publisher_id,editor_id,
-               editorial_line,editorial_basis,credibility,claims_json)
-           VALUES(?,?,?,?,?,?,?,?,?)
+               editorial_line,editorial_basis,credibility,claims_json,readers)
+           VALUES(?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(week) DO UPDATE SET text=excluded.text,
                created_tick=excluded.created_tick,
                publisher_id=excluded.publisher_id, editor_id=excluded.editor_id,
                editorial_line=excluded.editorial_line,
                editorial_basis=excluded.editorial_basis,
-               credibility=excluded.credibility, claims_json=excluded.claims_json""",
+               credibility=excluded.credibility, claims_json=excluded.claims_json,
+               readers=excluded.readers""",
         (week, text, int(get_meta(conn, "tick", "0") or 0),
          profile["publisher_id"], profile["editor_id"], line,
-         profile["editorial_basis"], issue_credibility, json.dumps(claims)))
+         profile["editorial_basis"], issue_credibility, json.dumps(claims),
+         reach_n))
     # The edition row now exists for the claim foreign key. Re-publishing a
     # week replaces its claims idempotently alongside the text.
     conn.execute("DELETE FROM newspaper_claims WHERE week=?", (week,))

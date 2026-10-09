@@ -291,7 +291,18 @@ CREATE TABLE IF NOT EXISTS motions (
     value REAL NOT NULL,                    -- the value it would set
     passed INTEGER NOT NULL,
     votes_for INTEGER NOT NULL,
-    votes_against INTEGER NOT NULL
+    votes_against INTEGER NOT NULL,
+    support REAL NOT NULL DEFAULT 0,        -- town opinion when the vote was held
+    press_swing INTEGER NOT NULL DEFAULT 0  -- 1 if opinion changed the outcome
+);
+
+-- The town's opinion on each lever the council can pull, in [-1, 1]: support
+-- for raising it. Moved weekly by press.update from the town's own conditions
+-- and by what the Gazette prints (see press.py). Opinion is what a councillor
+-- weighs against their own district's interest.
+CREATE TABLE IF NOT EXISTS opinion (
+    policy TEXT PRIMARY KEY,
+    support REAL NOT NULL DEFAULT 0
 );
 
 -- Organized conflict: a group withdrawing its custom from a venue. The
@@ -427,12 +438,24 @@ def _migrate(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE newspapers ADD COLUMN credibility REAL NOT NULL DEFAULT 1.0")
         if "claims_json" not in ncols:
             conn.execute("ALTER TABLE newspapers ADD COLUMN claims_json TEXT NOT NULL DEFAULT '[]'")
+        if "readers" not in ncols:
+            # how many adults this edition reached (press.readers)
+            conn.execute("ALTER TABLE newspapers ADD COLUMN readers INTEGER NOT NULL DEFAULT 0")
     if _has_table(conn, "newspaper_profile"):
         pcols = {r["name"] for r in conn.execute("PRAGMA table_info(newspaper_profile)")}
         if "editorial_basis" not in pcols:
             conn.execute("ALTER TABLE newspaper_profile ADD COLUMN editorial_basis TEXT NOT NULL DEFAULT 'independent local paper'")
         if "credibility" not in pcols:
             conn.execute("ALTER TABLE newspaper_profile ADD COLUMN credibility REAL NOT NULL DEFAULT 1.0")
+
+    # motions remember the opinion they were decided against, and whether that
+    # opinion changed the outcome (a paper with reach can carry a close vote)
+    if _has_table(conn, "motions"):
+        mcols = {r["name"] for r in conn.execute("PRAGMA table_info(motions)")}
+        if "support" not in mcols:
+            conn.execute("ALTER TABLE motions ADD COLUMN support REAL NOT NULL DEFAULT 0")
+        if "press_swing" not in mcols:
+            conn.execute("ALTER TABLE motions ADD COLUMN press_swing INTEGER NOT NULL DEFAULT 0")
 
     # careers: tenure and rank on the post. Existing worlds start accruing
     # tenure from now rather than instantly promoting everyone.

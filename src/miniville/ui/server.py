@@ -270,7 +270,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     raise HTTPException(404, "no edition for that week")
                 return edition(row)
             rows = _rows(c, "SELECT week, created_tick, publisher_id, editor_id, "
-                            "editorial_line, editorial_basis, credibility "
+                            "editorial_line, editorial_basis, credibility, readers "
                             "FROM newspapers ORDER BY week DESC LIMIT 20")
             for r in rows:
                 r["week"] += 1
@@ -435,6 +435,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
         """Who governs, what they last decided, and what they have changed."""
         from ..conflict import most_influential
         from ..politics import POLICIES, council, next_election_day, policy
+        from .. import press
         c = conn()
         try:
             boycotts = _rows(c, """SELECT b.*, g.name group_name, p.name place_name
@@ -443,11 +444,20 @@ def create_app(db_path: str | None = None) -> FastAPI:
                                    JOIN places p ON p.id=b.place_id
                                    ORDER BY b.started_day DESC""")
             elections = _rows(c, "SELECT * FROM elections ORDER BY id DESC LIMIT 5")
+            profile = c.execute("SELECT * FROM newspaper_profile WHERE id=1").fetchone()
             return {
                 "seats": council(c),
                 "policies": {name: {"now": policy(c, name), "default": POLICIES[name][0],
                                     "low": POLICIES[name][1], "high": POLICIES[name][2]}
                              for name in sorted(POLICIES)},
+                "opinion": press.all_opinion(c),
+                "press": {
+                    "readers": press.readers(c),
+                    "adults": press.eligible_adults(c),
+                    "reach": round(press.reach(c), 4),
+                    "credibility": round(press.credibility(c), 4),
+                    "editorial_line": profile["editorial_line"] if profile else None,
+                },
                 "next_election_day": next_election_day(c),
                 "motions": _rows(c, "SELECT * FROM motions ORDER BY id DESC LIMIT 20"),
                 "boycotts": boycotts,

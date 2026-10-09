@@ -190,5 +190,9 @@ def test_council_endpoint(client, tmp_path):
     assert body["boycotts"][0]["group_name"] == "Art Guild"
     assert "influential" in body
     assert len(body["influential"]) > 0
+    # the press's reach and the town's opinion travel with the council
+    assert "opinion" in body
+    assert "levy_rate" in body["opinion"]
+    assert "press" in body and "readers" in body["press"]
 
 

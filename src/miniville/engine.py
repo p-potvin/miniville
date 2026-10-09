@@ -14,10 +14,11 @@ from . import (
     growth,
     jobs,
     memory,
-    politics,
-    reputation,
     mortality,
     newspaper,
+    politics,
+    press,
+    reputation,
     seasons,
     shocks,
 )
@@ -102,6 +103,9 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         stats["hiring"] = jobs.hiring_pass(conn, tick, seed)["hired"]
         stats["careers"] = jobs.careers(conn, tick, seed)
         stats["groups"] = groups.refresh_standing(conn)
+        # public opinion moves weekly, before any motion reads it: the town's
+        # own conditions and the Gazette's reach pull it in different directions
+        stats["opinion"] = press.update(conn, tick)
 
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)
