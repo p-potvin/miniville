@@ -29,6 +29,12 @@ replying, no git worktrees.
 
 Env: `MINIVILLE_DB` overrides `data/miniville.db`. Dataset: `E:\Nemotron-Personas-USA`.
 
+To store an agent-written narrative, pipe the prose in rather than leaving a
+scratch file behind: `... narrate-write --day N --source agent` reads stdin
+(`--file` also works, but a loose `.md` under `data/` is gitignored yet still
+trips markdownlint's MD041). The prose belongs in the `narratives` table, not
+on disk.
+
 ## Long runs are how this project finds its bugs
 
 Every real defect so far was **cross-system** and invisible to unit tests:
