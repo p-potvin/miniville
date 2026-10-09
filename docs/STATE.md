@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Wed, 07 Oct 2026 07:45
+Last updated: Fri, 09 Oct 2026 08:30
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -581,6 +581,66 @@ the receipt. Current live issue had no false claim, so the misreport path is
 tested with a deliberately opposed council vote. A 90-day press soak is
 running to see whether routine politics produces claims and how credibility
 moves.
+
+## v0.14 — estates, pensions, owners, housing, crime (Fri, 09 Oct 2026, cloud: Claude Code)
+
+A Claude Code cloud session took the cloud seat at the operator's request. No
+dataset or live DB in the container, so: `scripts/synth_personas.py` writes
+dataset-shaped parquet shards (same columns, rough US marginals, ~28% naming a
+faith) → `init --dataset data/synth-personas --agents 500` gives a 612-resident
+town, and every change below was soaked a year on it (~25 min/yr on 4 cores).
+
+**What a year on a fresh town found** (baseline, before any change: 9/11):
+- **Retirees had no income.** Retirement ended the wage and nothing replaced
+  it: 105 of 289 households broke, 70 of them all-retired.
+- **Downsizing from The Flats to The Flats**, every fortnight: 1,451
+  "downsizings" in a year, most of them already in the cheapest district.
+- **The dead kept their wallets** — savings frozen out of circulation for
+  good; invisible because the money-supply series summed over the dead too.
+- **A downsized household left its children** in the old home.
+- **Random moves**: ~700 a year, to anywhere, ignoring rent entirely.
+- **No council for two years** in a fresh town (first election at day 730),
+  hence no motions and no losers' grudges — the "0 rivalries" failure.
+- **Venues overstaffed for their takings** (pre-existing, 1.06x): the Diner
+  on 15+ staff for ~11 visits a day.
+- **Failed businesses minted money**: closing ~$60k in the red zeroed the
+  debt (most of the ~3%/yr growth in total money).
+- `soak.py --mortality-scale` **never worked**: it set the env var after
+  `mortality` was imported.
+
+**What was built** (all deterministic, money only *moves* — see ECONOMY.md):
+- `mortality._settle_estate` — estate to spouse → household (adults, then
+  children) → town purse; `estates_v1` returns what the dead hold to the purse.
+- **Pensions** — residents 65+ without a job draw `pension_week()` from the
+  purse weekly, before rent. New council policy `pension` (default 0.50 of a
+  median working week); the purse buffer covers pensions as well as payroll.
+- `enterprise.py` — commercial businesses have resident **owners**
+  (proprietors appointed once; `enterprise_v1`), who draw 10% of the reserve
+  above a 4-week payroll cushion weekly; a closed venue is **bought** after
+  its cooldown by whoever can best afford $12k (an original venue with no
+  buyer reopens town-run; a founded one stays dark); residents **found** new
+  venues (8 concepts) while the town has < 1 commercial venue per 45 adults;
+  a failed owner answers for the debt from savings; businesses pass with
+  estates; owning one is +4 influence.
+- `housing.py` — the lottery's move draw asks what the household can afford:
+  up / one step down / mostly stay. Homes are finite (capacity), so a full
+  district turns movers away.
+- `crime.py` — working-age, jobless, under a fortnight's groceries → may
+  steal from a till or an acquaintance; caught (more likely with a staffed
+  Town Hall) → money back, fine to the purse, 1-2 days in the cells at Town
+  Hall, -6 standing, a grudge. Gazette "Police Blotter".
+- Jobs: a commercial venue **in the red** is capped at the staff 90% of its
+  takings (`businesses.ema_revenue`) pays; its shed posts go to the other
+  venues. (Capping *every* venue kept money flat and all venues profitable
+  but put 31.6% of the town out of work — measured, then reverted to this.)
+- A fresh town elects its first council at day 60 and starts with its purse
+  buffer. `economy_days.total_money_cents` (wallets + tills + purse) is what
+  `soak_check` now checks for conservation.
+- UI: business owners (click-through), "(new bakery)" tags, resident cards
+  show what they own, Economy tab district table, and the **map tints each
+  district by median household savings** (the open "district overlay" item).
+
+Soak results are in the resume note below.
 
 ## v0.13 — the Gazette has an owner, and its account can be false (Tue, 06 Oct 2026)
 

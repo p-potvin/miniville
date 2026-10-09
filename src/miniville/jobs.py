@@ -95,8 +95,12 @@ def venue_targets(conn: sqlite3.Connection) -> dict[int, int]:
     # coffee houses 24 staff selling $9 coffees, each paying out more than it
     # took in. Capping every commercial venue by its takings threw a third of
     # the town out of work instead, so only a venue that is losing money is
-    # capped, and the posts it sheds go to the venues that are not: labour
-    # leaves the failing business for the thriving one.
+    # capped, and the posts it sheds go to the town's public services — the
+    # hospital, the school, the hall. Giving them to the other shops instead
+    # kept the whole commercial sector at 1.0x payroll to takings with half
+    # the venues pinned at the price ceiling: the town's spending cannot carry
+    # 92% employment in shops. The purse already hands its surplus back as the
+    # dividend; this turns part of that dividend into public wages.
     from .enterprise import is_commercial
     now = int(get_meta(conn, "tick", "0") or 0)
     freed = 0
@@ -113,8 +117,10 @@ def venue_targets(conn: sqlite3.Connection) -> dict[int, int]:
         freed += targets[r["id"]] - cap
         targets[r["id"]] = cap
         capped.add(r["id"])
-    if freed:
-        rest = {pid: w for pid, w in weights.items() if pid not in capped}
+    public = {r["id"] for r in rows
+              if not is_commercial(set(json.loads(r["tags"] or "[]")), r["kind"])}
+    if freed and public:
+        rest = {pid: w for pid, w in weights.items() if pid in public}
         rest_w = sum(rest.values()) or 1.0
         for pid, w in rest.items():
             targets[pid] = min(STAFF_MAX, targets[pid] + round(freed * w / rest_w))
