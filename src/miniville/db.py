@@ -459,6 +459,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
             # is capped by it so a quiet venue cannot carry a crowd of staff
             conn.execute("ALTER TABLE businesses ADD COLUMN ema_revenue "
                          "REAL NOT NULL DEFAULT 0")
+            # an existing world starts from each venue's all-time daily mean,
+            # or the cap would read a zero average and gut every payroll
+            if _has_table(conn, "economy_days"):
+                days = conn.execute("SELECT COUNT(*) n FROM economy_days").fetchone()["n"]
+                if days:
+                    conn.execute("UPDATE businesses SET ema_revenue = "
+                                 "CAST(revenue_total AS REAL) / ?", (days,))
         # ownership: residents own, buy and found businesses (enterprise.py)
         from .enterprise import migrate as enterprise_migrate
         enterprise_migrate(conn)
