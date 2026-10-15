@@ -12,6 +12,7 @@ from . import (
     events,
     groups,
     growth,
+    individual,
     jobs,
     memory,
     mortality,
@@ -28,7 +29,7 @@ from .encounters import run_encounters
 from .events import MINOR, emit
 from .favors import spouse_discovery
 from .life import apply_conditions, daily_life_lottery
-from .needs import apply_needs
+from .needs import apply_all_needs, apply_needs
 from .rng import rng_for
 from .schedules import rebuild_day_plans
 from .timekeeper import TICKS_PER_DAY, day_of, tick_of_day
@@ -60,10 +61,7 @@ def _move_agents(conn: sqlite3.Connection, tick: int) -> int:
 def _ambient_town_event(conn: sqlite3.Connection, tick: int, seed: str) -> None:
     r = rng_for(seed, "town", tick)
     if r.random() < 0.012:
-        weather = [("weather", text) for text in seasons.SEASON_WEATHER[
-            seasons.season_of(day_of(tick))]]
-        kind, text = r.choice(TOWN_EVENTS + weather)
-        events.emit(conn, tick, "town_event", importance=2, text=text, tag=kind)
+        individual.grounded_town_event(conn, tick, seed, r)
 
 
 def _pay_and_spend(conn: sqlite3.Connection, tick: int) -> dict:
@@ -78,6 +76,7 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     # birthdays run before the plan rebuild so a child who comes of age today
     # is planned as an adult
     stats: dict = {"birthdays": seasons.birthdays(conn, tick, seed)}
+    individual.ensure_profiles(conn, seed)
 
     # record_day must run before settle_businesses zeroes the daily counters,
     # and settlement must run before plans are rebuilt so a business that
@@ -110,6 +109,7 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)
     stats["life_events"] = daily_life_lottery(conn, tick, seed)
+    stats["individual"] = individual.daily_happenings(conn, tick, seed)
     stats["crime"] = crime.daily_crime(conn, tick, seed)
     stats["betrayals"] = spouse_discovery(conn, tick, seed)
     # deaths settle before births: a widow is no longer a spouse, so the
@@ -140,12 +140,9 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
     crime.apply_jail(conn)                    # ...and the jailed sit at Town Hall
     apply_deviations(conn, tick, seed)        # mood can push agents off-plan
 
-    st = conn.execute(
-        "SELECT agent_id, activity FROM agent_state s JOIN agents a ON a.id=s.agent_id WHERE a.alive=1"
-    ).fetchall()
-    for row in st:
-        apply_needs(conn, row["agent_id"], row["activity"])
+    apply_all_needs(conn)
     stats["interactions"] = run_encounters(conn, tick, seed)
+    stats["personal_events"] = individual.tick_happenings(conn, tick, seed)
     _pay_and_spend(conn, tick)
     _ambient_town_event(conn, tick, seed)
 
@@ -153,6 +150,7 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
     conn.commit()
 
     if tick_of_day(tick) == TICKS_PER_DAY - 1:
+        individual.update_favorite_places(conn, day_of(tick))
         text = chronicle.write_day(conn, day_of(tick), seed)
         stats["chronicle"] = len(text)
         # fold the day's events into each participant's memory stream, then

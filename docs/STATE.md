@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Fri, 09 Oct 2026 08:30
+Last updated: Wed, 14 Oct 2026 20:30
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -965,6 +965,21 @@ on the rent day *fell* from 18-19 households (days 385/392/399 at rent 1.00)
 to 11-15 (days 406/413 at rent 1.10), one household downsized, and moods are
 healthy (628 content). Lesson stands: probes must run on a copy, never the
 live DB.
+
+Status updates (Wed, 14 Oct 2026, workstation): **v0.15 expansion — Individualism & Personal Happenings**.
+Integrated Gemini 4's individualism feature set and implemented the Observer UI panel:
+- `src/miniville/individual.py`: derives 5 temperament axes (`sociability`, `industriousness`,
+  `curiosity`, `resilience`, `thrift`), 5 chronotypes (`early_bird`, `morning`, `day_walker`,
+  `evening`, `night_owl` with wake/sleep offsets), and signature knacks from persona and skills.
+- Modulates needs decay/recovery by temperament and batches updates via `apply_all_needs`.
+- Shifts schedule wake/sleep ticks, pulls leisure toward favorite places, and avoids rival workplaces.
+- Lonely/bored deviations seek out friends or favorite places across 2 ticks.
+- Standing accrues for personal deeds (`good_turn`, `caregiven`, `craft_breakthrough`, `hobby_triumph`).
+- Personal tags mapped into Gazette sections.
+- CLI: `traits`, `fate <who> <kind>`, `monologue <who> --provider raw|ollama|vw|hf`, enriched `inspect`.
+- Observer UI: new "Individualism" panel visualizing town-wide chronotypes, top archetypes, favorite places,
+  and personal event counts; resident cards updated with visual temperament bars (5 axes) and chronotype badges.
+- Tests: 218 passed (0 failed). Zero console errors verified via headless browser (patchright).
 
 Open items:
 

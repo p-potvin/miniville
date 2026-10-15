@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS agents (
     -- what the town thinks of them, accrued from the ledger (reputation.py)
     standing INTEGER NOT NULL DEFAULT 0,
     -- tradition parsed from the persona's cultural background (groups.py)
-    faith TEXT
+    faith TEXT,
+    favorite_place_id INTEGER
 );
 
 -- Mutable per-agent state, updated every tick
@@ -421,6 +422,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "faith" not in cols:
         # derived from the persona's own cultural background (groups.py)
         conn.execute("ALTER TABLE agents ADD COLUMN faith TEXT")
+    if "favorite_place_id" not in cols:
+        conn.execute("ALTER TABLE agents ADD COLUMN favorite_place_id INTEGER")
 
     # Gazette authorship is in-world: historical editions get null bylines,
     # and the first new edition appoints an actual publisher/editor.

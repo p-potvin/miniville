@@ -204,6 +204,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             from ..groups import memberships_of
             from ..conflict import influence_of
             from ..enterprise import owned_by
+            from ..individual import resident_summary
             a = dict(a)
             a["influence"] = influence_of(c, agent_id)
             return {"agent": a, "state": dict(st) if st else {},
@@ -211,7 +212,17 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     "debts": {"owes": owed_by, "owed": owed_to},
                     "relationships": rels, "recent": recent, "memories": mems,
                     "groups": memberships_of(c, agent_id),
-                    "owns": [dict(b) for b in owned_by(c, agent_id)]}
+                    "owns": [dict(b) for b in owned_by(c, agent_id)],
+                    "individual": resident_summary(c, agent_id)}
+        finally:
+            c.close()
+
+    @app.get("/api/individual")
+    def individual_view():
+        c = conn()
+        try:
+            from ..individual import town_individualism_stats
+            return town_individualism_stats(c)
         finally:
             c.close()
 

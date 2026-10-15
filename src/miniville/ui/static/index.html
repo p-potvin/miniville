@@ -23,6 +23,7 @@
   <button data-tab="gazette">Gazette</button>
   <button data-tab="economy">Economy</button>
   <button data-tab="council">Council</button>
+  <button data-tab="individual">Individualism</button>
 </nav>
 <main>
   <section id="feed" class="panel on">
@@ -123,6 +124,34 @@
         <ul id="council-influential"></ul>
       </div>
     </div>
+  </section>
+  <section id="individual" class="panel">
+    <h2>Individualism &amp; Personal Happenings</h2>
+    <p class="muted">Every resident derives a unique temperament across five psychological axes, a distinct chronotype shifting their daily schedule, and a signature knack from their persona.</p>
+    
+    <h3>Chronotype Distribution</h3>
+    <div id="ind-chronotypes" class="chrono-grid"></div>
+
+    <div id="ind-extra" class="ind-columns">
+      <div>
+        <h3>Top Temperament Archetypes</h3>
+        <table>
+          <thead><tr><th>Archetype</th><th>Residents</th></tr></thead>
+          <tbody id="ind-archetypes"></tbody>
+        </table>
+      </div>
+      <div>
+        <h3>Favorite Third Places</h3>
+        <table>
+          <thead><tr><th>Venue</th><th>Regulars</th></tr></thead>
+          <tbody id="ind-favorites"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <h3>Personal Happenings on Record</h3>
+    <p class="muted">Situated events grounded in residents' knacks: DIY fixes, craft breakthroughs, repair bills, and deeds of caregiving.</p>
+    <div id="ind-events-summary" class="trait-grid"></div>
   </section>
 </main>
 <script src="/vendor/pixi.min.js"></script>

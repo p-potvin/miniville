@@ -57,6 +57,28 @@ async function residentCard(id) {
        · stress ${Math.round(s.stress ?? 0)} · mood <b>${esc(s.mood)}</b>
        · $${((s.money_cents ?? 0) / 100).toFixed(2)}</p>
     <p class="persona">${esc((a.persona || "").slice(0, 400))}</p>
+    ${r.individual ? `
+    <h4>Temperament &amp; Habits</h4>
+    <p class="state"><b>${esc(r.individual.archetype)}</b> ·
+       Chronotype: <b>${esc(r.individual.chronotype.replace('_', ' '))}</b> (${r.individual.wake_offset >= 0 ? '+' : ''}${r.individual.wake_offset}h) ·
+       Knack: <b>${esc(r.individual.knack)}</b>
+       ${r.individual.favorite_place ? `· Favorite hangout: <b>${esc(r.individual.favorite_place)}</b>` : ""}</p>
+    <div class="trait-bars">
+      ${Object.entries(r.individual.axes || {}).map(([axis, val]) => `
+        <div class="trait-bar-row">
+          <span class="trait-label">${axis}</span>
+          <div class="trait-bar-track">
+            <span class="trait-bar-fill ${val >= 0 ? 'pos' : 'neg'}"
+                  style="width: ${Math.min(50, Math.abs(val) * 50)}%; ${val >= 0 ? 'left: 50%;' : 'right: 50%;'}"></span>
+          </div>
+          <span class="trait-val">${val > 0 ? '+' : ''}${Number(val).toFixed(2)}</span>
+        </div>
+      `).join('')}
+    </div>
+    ${r.individual.personal_events && r.individual.personal_events.length ? `
+    <h4>Personal Happenings</h4>
+    <ul>${r.individual.personal_events.map(pe => `<li><span class="t">day ${pe.day}</span> ${esc(pe.text)}</li>`).join('')}</ul>` : ''}
+    ` : ''}
     ${r.debts && (r.debts.owes.length || r.debts.owed.length) ? `
     <h4>IOUs</h4>
     <ul>${r.debts.owes.map(d => `<li>owes ${esc(d.creditor)} — ${esc(d.kind)}</li>`).join("")}
@@ -306,7 +328,58 @@ async function council() {
   ).join("") : `<li class="muted">No influence data</li>`;
 }
 
-const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts, gazette, economy, council,
+const CHRONO_META = {
+  early_bird: { icon: "🌅", desc: "wakes 5:00, sleeps 21:00" },
+  morning: { icon: "☀️", desc: "wakes 5:30, sleeps 21:30" },
+  day_walker: { icon: "🚶", desc: "wakes 6:00, sleeps 22:00" },
+  evening: { icon: "🌇", desc: "wakes 6:30, sleeps 22:30" },
+  night_owl: { icon: "🦉", desc: "wakes 7:00, sleeps 23:00" },
+};
+
+const EVENT_LABELS = {
+  caregiven: "Caregiving Visits",
+  diy_fix: "Household DIY Fixes",
+  craft_breakthrough: "Workplace Breakthroughs",
+  repair_bill: "Hardware Shop Bills",
+  hobby_triumph: "Hobby Triumphs",
+  good_turn: "Spontaneous Good Turns",
+  work_mishap: "Workplace Mishaps",
+  epiphany: "Personal Epiphanies",
+};
+
+async function individual() {
+  const r = await api("/api/individual");
+  const chronos = r.chronotypes || {};
+  const totalChrono = Object.values(chronos).reduce((a, b) => a + b, 0) || 1;
+  $("#ind-chronotypes").innerHTML = Object.entries(chronos).map(([k, count]) => {
+    const meta = CHRONO_META[k] || { icon: "⏱️", desc: "standard schedule" };
+    const pct = Math.round((count / totalChrono) * 100);
+    return `<div class="chrono-card">
+      <div class="chrono-icon">${meta.icon}</div>
+      <b>${count}</b>
+      <div class="chrono-name">${esc(k.replace('_', ' '))}</div>
+      <div class="chrono-desc">${pct}% · ${meta.desc}</div>
+    </div>`;
+  }).join("");
+
+  const archetypes = r.top_archetypes || {};
+  $("#ind-archetypes").innerHTML = Object.entries(archetypes).map(([arch, n]) =>
+    `<tr><td>${esc(arch)}</td><td>${n}</td></tr>`
+  ).join("") || `<tr><td colspan="2" class="muted">No archetype data</td></tr>`;
+
+  const favs = r.favorite_places || [];
+  $("#ind-favorites").innerHTML = favs.map(fp =>
+    `<tr><td>${esc(fp.venue)}</td><td>${fp.regulars}</td></tr>`
+  ).join("") || `<tr><td colspan="2" class="muted">No favorite places established yet</td></tr>`;
+
+  const counts = r.personal_event_counts || {};
+  $("#ind-events-summary").innerHTML = Object.entries(counts).map(([tag, n]) => {
+    const label = EVENT_LABELS[tag] || tag.replace('_', ' ');
+    return `<div class="stat"><b>${n}</b><span>${esc(label)}</span></div>`;
+  }).join("") || `<div class="muted">No personal happenings recorded yet</div>`;
+}
+
+const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts, gazette, economy, council, individual,
   map: () => renderMap($("#map-host")) };
 for (const b of document.querySelectorAll("#tabs button"))
   b.onclick = () => {

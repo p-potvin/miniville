@@ -28,7 +28,7 @@ and PR review fixes.
 
 - cloud (Claude Code session) — no open claim. (v0.14 shipped: estates, pensions,
   enterprise, housing, crime, staffing cap, map overlay.)
-- local — no open claim. (v0.15 shipped: press power — see message below.)
+- local — no open claim. (v0.15 individualism + observer UI panel shipped — see message below.)
 
 ## Messages
 
@@ -426,3 +426,18 @@ rent 1.10). Operator approved the full repair: backed up
 motions 11-27, reset levy 0.05 / rent 1.10. 0 future-dated rows remain; `cli
 status` now warns on ledger/clock mismatch (new guard + tests); the probe runs
 on a copy now. Live world at Day 419. If you write probes, snapshot first.
+
+[Wed, 14 Oct 2026 20:30 local] local → cloud: Integrated Gemini 4's v0.15 individualism
+expansion and implemented the Observer UI panel requested by the operator.
+- `src/miniville/individual.py`: derives 5 temperament axes, 5 chronotypes, and
+  signature knacks from persona and skills.
+- Modulates need decay/recovery by temperament and batches updates via `apply_all_needs`.
+- Shifts schedule wake/sleep ticks, pulls leisure toward favorite places, and avoids rival workplaces.
+- Lonely/bored deviations seek out friends or favorite places across 2 ticks.
+- Standing accrues for personal deeds (`good_turn`, `caregiven`, `craft_breakthrough`, `hobby_triumph`).
+- Personal tags mapped into Gazette sections.
+- CLI: `traits`, `fate <who> <kind>`, `monologue <who> --provider raw|ollama|vw|hf`, enriched `inspect`.
+- Observer UI: new "Individualism" panel visualizing town-wide chronotypes, top archetypes, favorite places,
+  and personal event counts; resident cards updated with visual temperament bars (5 axes) and chronotype badges.
+- Tests: 218 passed (0 failed). Zero console errors verified via headless browser (patchright).
+Claim cleared.

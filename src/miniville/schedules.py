@@ -57,10 +57,24 @@ def _plan_ctx(conn: sqlite3.Connection) -> dict:
             continue              # a shut business is not a destination
         venues.append(v)
     ids_by_name = {v["name"]: v["id"] for v in venues}
+    venues_by_id = {v["id"]: v for v in venues}
+    rival_places: dict[int, set[int]] = {}
+    for r in conn.execute(
+            """SELECT r.a_id, r.b_id, ja.place_id AS pa, jb.place_id AS pb
+               FROM relationships r
+               LEFT JOIN jobs ja ON ja.agent_id = r.a_id
+               LEFT JOIN jobs jb ON jb.agent_id = r.b_id
+               WHERE r.affinity <= -20""").fetchall():
+        if r["pb"] is not None:
+            rival_places.setdefault(r["a_id"], set()).add(r["pb"])
+        if r["pa"] is not None:
+            rival_places.setdefault(r["b_id"], set()).add(r["pa"])
     return {
         "venues": venues,
+        "venues_by_id": venues_by_id,
         "ids_by_name": ids_by_name,
         "school_id": ids_by_name.get("Miniville School"),
+        "rival_places": rival_places,
     }
 
 
@@ -81,6 +95,77 @@ def _hobby_tags(hobbies: list[str]) -> list[str]:
         if kw in h:
             tags.append(tag)
     return tags or LEISURE_TAGS
+
+
+def _apply_personal_habits(agent: sqlite3.Row, day: int, seed: str,
+                           plan: dict[int, tuple[int, str]], ctx: dict,
+                           leisure_venues: list[dict], season: str) -> None:
+    """Apply individual chronotype offsets, favorite third-place pull, and
+    rival workplace avoidance on a separate RNG stream so the base `plan`
+    stream stays invariant."""
+    keys = agent.keys() if hasattr(agent, "keys") else ()
+    raw_traits = agent["traits_json"] if "traits_json" in keys else None
+    if not raw_traits:
+        return
+    try:
+        traits = json.loads(raw_traits)
+    except Exception:
+        return
+    if not isinstance(traits, dict) or "chronotype" not in traits:
+        return
+
+    aid = int(agent["id"])
+    home = agent["home_place_id"]
+    hr = rng_for(seed, "habit", aid, day)
+    wake_off = int(traits.get("wake_offset", 0))
+    sleep_off = int(traits.get("sleep_offset", 0))
+
+    if not agent["is_child"]:
+        if wake_off < 0:
+            for t in range(max(0, WAKE_TICK + wake_off), WAKE_TICK):
+                if plan.get(t) == (home, "sleep"):
+                    plan[t] = (home, "home")
+        elif wake_off > 0:
+            for t in range(WAKE_TICK, min(TICKS_PER_DAY, WAKE_TICK + wake_off)):
+                if plan.get(t) == (home, "home"):
+                    plan[t] = (home, "sleep")
+
+        if sleep_off < 0:
+            for t in range(max(0, SLEEP_TICK + sleep_off), SLEEP_TICK):
+                if plan.get(t) == (home, "home"):
+                    plan[t] = (home, "sleep")
+        elif sleep_off > 0:
+            for t in range(SLEEP_TICK, min(TICKS_PER_DAY, SLEEP_TICK + sleep_off)):
+                if plan.get(t) == (home, "sleep"):
+                    plan[t] = (home, "home")
+
+    fav_id = agent["favorite_place_id"] if "favorite_place_id" in keys else None
+    venues_by_id = ctx.get("venues_by_id") or {v["id"]: v for v in ctx["venues"]}
+    fav_venue = venues_by_id.get(fav_id) if fav_id else None
+    avoid_ids = (ctx.get("rival_places") or {}).get(aid, set())
+
+    if not fav_venue and not avoid_ids:
+        return
+
+    for t, (pid, act) in list(plan.items()):
+        if act != "leisure":
+            continue
+        if pid in avoid_ids and leisure_venues:
+            safe = [v for v in leisure_venues
+                    if v["id"] not in avoid_ids and v["open_tick"] <= t <= v["close_tick"]]
+            if safe:
+                v = hr.choice(safe)
+                if not (v["tags"] & OUTDOOR_TAGS and season == "winter"):
+                    plan[t] = (v["id"], "leisure")
+                    pid = v["id"]
+        if fav_venue and pid != fav_venue["id"]:
+            if fav_venue["open_tick"] <= t <= fav_venue["close_tick"]:
+                if fav_venue["tags"] & OUTDOOR_TAGS and hr.random() >= OUTDOOR_APPEAL[season]:
+                    continue
+                curiosity = float(traits.get("curiosity", 0.0))
+                p_fav = max(0.15, min(0.55, 0.35 - 0.15 * curiosity))
+                if hr.random() < p_fav:
+                    plan[t] = (fav_venue["id"], "leisure")
 
 
 def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str,
@@ -189,6 +274,8 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
                 plan[t] = (v["id"], "leisure")
                 continue
         plan[t] = (home, "home")
+
+    _apply_personal_habits(agent, day, seed, plan, ctx, leisure_venues, season)
 
     # A gathering outranks whatever else was planned for that hour, and it
     # lasts GATHERING_TICKS: one tick of co-presence is a single encounter and

@@ -34,6 +34,8 @@ def cmd_init(args) -> int:
     dbmod.set_meta(conn, "seed", args.seed)
     dbmod.set_meta(conn, "tick", "0")
     economy.ensure_businesses(conn)
+    from . import individual
+    individual.ensure_profiles(conn, args.seed)
     conn.commit()
     # a town comes with its congregations and clubs already in it
     from .groups import assign_faith, form_groups, refresh_standing
@@ -156,7 +158,11 @@ def cmd_inspect(args) -> int:
         return 1
     st = conn.execute("SELECT * FROM agent_state WHERE agent_id=?", (a["id"],)).fetchone()
     print(f"{a['name']} — {a['age']} {a['sex']}, {a['occupation']}")
+    from .individual import resident_summary
+    ind = resident_summary(conn, a["id"])
     print(f"  from {a['origin_city']}, {a['origin_state']}; status={a['marital_status']}")
+    print(f"  temperament: {ind['archetype']} (chronotype={ind['chronotype']}, knack={ind['knack']}"
+          + (f", favorite={ind['favorite_place']}" if ind.get("favorite_place") else "") + ")")
     print(f"  persona: {(a['persona'] or '')[:240]}")
     print(f"  hobbies: {a['hobbies_json']}")
     print(f"  state: energy={st['energy']:.0f} hunger={st['hunger']:.0f} "
@@ -178,6 +184,44 @@ def cmd_inspect(args) -> int:
     from .memory import memory_digest
     print("  memories:")
     print(memory_digest(conn, a["id"]))
+    return 0
+
+
+def cmd_fate(args) -> int:
+    from . import individual
+    conn = _conn(args)
+    seed = dbmod.get_meta(conn, "seed", "miniville") or "miniville"
+    out = individual.inject_fate(conn, args.who, args.kind, seed=seed)
+    print(out["message"])
+    return 0 if out["ok"] else 1
+
+
+def cmd_traits(args) -> int:
+    from . import individual
+    conn = _conn(args)
+    stats = individual.town_individualism_stats(conn)
+    print("chronotypes:", stats["chronotypes"])
+    print("top archetypes:", stats["top_archetypes"])
+    if stats["favorite_places"]:
+        print("favorite third places:")
+        for fp in stats["favorite_places"]:
+            print(f"  {fp['venue']:<28} {fp['regulars']} regulars")
+    if stats["personal_event_counts"]:
+        print("personal happenings on record:", stats["personal_event_counts"])
+    return 0
+
+
+def cmd_monologue(args) -> int:
+    from .narrator import narrate_resident
+    conn = _conn(args)
+    a = conn.execute(
+        "SELECT id FROM agents WHERE name LIKE ? OR id=?",
+        (f"%{args.who}%", args.who if str(args.who).isdigit() else -1),
+    ).fetchone()
+    if not a:
+        print("no such agent")
+        return 1
+    print(narrate_resident(conn, a["id"], provider=args.provider))
     return 0
 
 
@@ -560,6 +604,16 @@ def main(argv=None) -> int:
 
     ps = sub.add_parser("status"); ps.set_defaults(fn=cmd_status)
     pj = sub.add_parser("inspect"); pj.add_argument("who"); pj.set_defaults(fn=cmd_inspect)
+    pft = sub.add_parser("fate", help="trigger a personal event on an individual resident")
+    pft.add_argument("who", help="resident name (substring) or id")
+    pft.add_argument("kind", choices=["breakthrough", "mishap", "triumph", "repair", "care", "epiphany"])
+    pft.set_defaults(fn=cmd_fate)
+    ptr = sub.add_parser("traits", help="summary of town chronotypes, archetypes, and personal events")
+    ptr.set_defaults(fn=cmd_traits)
+    pmn = sub.add_parser("monologue", help="single-resident inner monologue (bounded 1-call LLM or raw)")
+    pmn.add_argument("who", help="resident name (substring) or id")
+    pmn.add_argument("--provider", choices=["vw", "hf", "ollama", "raw"], default="vw")
+    pmn.set_defaults(fn=cmd_monologue)
     pc = sub.add_parser("chronicle"); pc.add_argument("day", type=int); pc.set_defaults(fn=cmd_chronicle)
     pd = sub.add_parser("digest")
     pd.add_argument("--day", type=int, required=True)

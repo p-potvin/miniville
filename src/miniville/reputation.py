@@ -31,6 +31,10 @@ from .timekeeper import day_of
 WEIGHTS = {
     "favor": 2,            # did somebody a good turn
     "favor_repaid": 1,
+    "good_turn": 2,
+    "caregiven": 2,
+    "craft_breakthrough": 1,
+    "hobby_triumph": 1,
     "marriage": 3,
     "birth": 2,
     "coming_of_age": 1,
@@ -91,7 +95,8 @@ def accrue(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
             continue
         # the subject of the event gets the full weight; the other party to a
         # betrayal or a split gets the sympathy of the wronged
-        for aid, delta in ((r["a_id"], weight), (r["b_id"], -weight)):
+        pairs = ((r["a_id"], weight),) if tag in ("good_turn", "caregiven") else ((r["a_id"], weight), (r["b_id"], -weight))
+        for aid, delta in pairs:
             if not aid:
                 continue
             before = standing_of(conn, aid)
