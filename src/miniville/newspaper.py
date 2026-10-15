@@ -44,6 +44,7 @@ SECTIONS = {
     "diy_fix": "Town Life",
     "repair_bill": "Town Life",
     "epiphany": "Town Life",
+    "ambition_achieved": "Town Life",
     "work_buddy": "Working Life",
     "holiday": "Town Life",
     "festival": "Town Life",

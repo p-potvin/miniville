@@ -172,6 +172,11 @@ CREATE INDEX IF NOT EXISTS idx_memories_day ON memories(day);
 -- adoption): at thousands of households each unindexed lookup is a full
 -- agents scan, which made weekly rent the slowest tick in the engine
 CREATE INDEX IF NOT EXISTS idx_agents_household ON agents(household_id);
+CREATE INDEX IF NOT EXISTS idx_agents_home ON agents(home_place_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_place ON jobs(place_id);
+CREATE INDEX IF NOT EXISTS idx_places_kind_district ON places(kind, district);
+CREATE INDEX IF NOT EXISTS idx_agent_state_place ON agent_state(place_id);
+CREATE INDEX IF NOT EXISTS idx_relationships_b ON relationships(b_id);
 
 -- Weekly newspaper front pages, distilled from the chronicle
 CREATE TABLE IF NOT EXISTS newspapers (
@@ -349,6 +354,19 @@ CREATE TABLE IF NOT EXISTS rent_arrears (
     missed_payments INTEGER NOT NULL DEFAULT 0,
     last_missed_day INTEGER NOT NULL DEFAULT -1
 );
+
+-- Personal ambitions: forward-looking life goals pursued by adults (ambitions.py)
+CREATE TABLE IF NOT EXISTS ambitions (
+    agent_id INTEGER PRIMARY KEY REFERENCES agents(id),
+    kind TEXT NOT NULL,
+    started_tick INTEGER NOT NULL DEFAULT 0,
+    baseline_value INTEGER NOT NULL DEFAULT 0,
+    target_value INTEGER NOT NULL DEFAULT 1,
+    progress REAL NOT NULL DEFAULT 0.0,
+    status TEXT NOT NULL DEFAULT 'active',
+    completed_tick INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_ambitions_status ON ambitions(status, kind);
 
 -- Operator-injected shocks (god mode). A row is written when the shock is
 -- injected; applied flips once it has landed. detail holds per-kind payload
@@ -547,6 +565,26 @@ def _migrate(conn: sqlite3.Connection) -> None:
                     """UPDATE agent_state SET money_cents=0 WHERE money_cents>0
                        AND agent_id IN (SELECT id FROM agents WHERE alive=0)""")
         set_meta(conn, "estates_v1", "1")
+
+    if _has_table(conn, "agents"):
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS ambitions (
+                agent_id INTEGER PRIMARY KEY REFERENCES agents(id),
+                kind TEXT NOT NULL,
+                started_tick INTEGER NOT NULL DEFAULT 0,
+                baseline_value INTEGER NOT NULL DEFAULT 0,
+                target_value INTEGER NOT NULL DEFAULT 1,
+                progress REAL NOT NULL DEFAULT 0.0,
+                status TEXT NOT NULL DEFAULT 'active',
+                completed_tick INTEGER
+            )"""
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ambitions_status ON ambitions(status, kind)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_agents_home ON agents(home_place_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_place ON jobs(place_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_places_kind_district ON places(kind, district)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_state_place ON agent_state(place_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relationships_b ON relationships(b_id)")
 
 
 def get_meta(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:

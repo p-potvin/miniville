@@ -69,12 +69,28 @@ def _plan_ctx(conn: sqlite3.Connection) -> dict:
             rival_places.setdefault(r["a_id"], set()).add(r["pb"])
         if r["pa"] is not None:
             rival_places.setdefault(r["b_id"], set()).add(r["pa"])
+    jobs_by_agent = {
+        r["agent_id"]: r
+        for r in conn.execute("SELECT * FROM jobs").fetchall()
+    }
+    savers = {
+        r["agent_id"]
+        for r in conn.execute(
+            "SELECT agent_id FROM ambitions WHERE status='active' AND kind='save_nest_egg'"
+        ).fetchall()
+    }
     return {
         "venues": venues,
         "venues_by_id": venues_by_id,
         "ids_by_name": ids_by_name,
         "school_id": ids_by_name.get("Miniville School"),
         "rival_places": rival_places,
+        "jobs_by_agent": jobs_by_agent,
+        "savers": savers,
+        "food_venues": _by_tags(venues, ["food"], DINING_KINDS),
+        "shop_venues": _by_tags(venues, SHOP_TAGS, SHOP_KINDS),
+        "default_leisure": _by_tags(venues, LEISURE_TAGS),
+        "leisure_cache": {},
     }
 
 
@@ -144,6 +160,15 @@ def _apply_personal_habits(agent: sqlite3.Row, day: int, seed: str,
     fav_venue = venues_by_id.get(fav_id) if fav_id else None
     avoid_ids = (ctx.get("rival_places") or {}).get(aid, set())
 
+    is_saver = aid in (ctx.get("savers") or set())
+    if is_saver:
+        for t in MEAL_TICKS:
+            if plan.get(t, (None, None))[1] == "eat_out" and hr.random() < 0.5:
+                plan[t] = (home, "eat")
+        for t in SHOPPING_WINDOWS:
+            if plan.get(t, (None, None))[1] == "shopping" and hr.random() < 0.5:
+                plan[t] = (home, "home")
+
     if not fav_venue and not avoid_ids:
         return
 
@@ -179,11 +204,12 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
     wknd = is_weekend(day * TICKS_PER_DAY)
     hobbies = json.loads(agent["hobbies_json"] or "[]")
     season = season_of(day)
-    holiday = holiday_for(conn, day)
+    holiday = ctx["holiday"] if "holiday" in ctx else holiday_for(conn, day)
 
-    job = conn.execute("SELECT * FROM jobs WHERE agent_id=?", (agent["id"],)).fetchone()
-    job_venue = next((v for v in ctx["venues"]
-                      if job and v["id"] == job["place_id"]), None)
+    jobs_map = ctx.get("jobs_by_agent")
+    job = jobs_map.get(agent["id"]) if jobs_map is not None else conn.execute("SELECT * FROM jobs WHERE agent_id=?", (agent["id"],)).fetchone()
+    venues_by_id = ctx.get("venues_by_id") or {v["id"]: v for v in ctx["venues"]}
+    job_venue = venues_by_id.get(job["place_id"]) if job else None
     works_today = bool(job) and not wknd and not agent["is_child"]
     if holiday and holiday.day_off and not (job_venue and "health" in job_venue["tags"]):
         works_today = False
@@ -191,11 +217,17 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
         holiday.adults_only and agent["is_child"]
     ) and rng_for(seed, "holiday", agent["id"], day).random() < holiday.p_attend
 
-    leisure_venues = _by_tags(ctx["venues"], _hobby_tags(hobbies))
-    if not leisure_venues:
-        leisure_venues = _by_tags(ctx["venues"], LEISURE_TAGS)
-    food_venues = _by_tags(ctx["venues"], ["food"], DINING_KINDS)
-    shop_venues = _by_tags(ctx["venues"], SHOP_TAGS, SHOP_KINDS)
+    htags = tuple(_hobby_tags(hobbies))
+    lcache = ctx.get("leisure_cache")
+    if lcache is not None:
+        leisure_venues = lcache.get(htags)
+        if leisure_venues is None:
+            leisure_venues = _by_tags(ctx["venues"], list(htags)) or ctx.get("default_leisure") or _by_tags(ctx["venues"], LEISURE_TAGS)
+            lcache[htags] = leisure_venues
+    else:
+        leisure_venues = _by_tags(ctx["venues"], list(htags)) or _by_tags(ctx["venues"], LEISURE_TAGS)
+    food_venues = ctx.get("food_venues") if "food_venues" in ctx else _by_tags(ctx["venues"], ["food"], DINING_KINDS)
+    shop_venues = ctx.get("shop_venues") if "shop_venues" in ctx else _by_tags(ctx["venues"], SHOP_TAGS, SHOP_KINDS)
     school_id = ctx["school_id"]
 
     for t in range(TICKS_PER_DAY):
@@ -309,6 +341,7 @@ def rebuild_day_plans(conn: sqlite3.Connection, day: int, seed: str) -> int:
     conn.execute("DELETE FROM plans")
     agents = conn.execute("SELECT * FROM agents WHERE alive=1").fetchall()
     ctx = _plan_ctx(conn)
+    ctx["holiday"] = holiday_for(conn, day)
     # today's gatherings, one query for the whole town: a group is just an
     # arrangement of who is in the room, and encounters do the rest
     from .groups import meetings_today

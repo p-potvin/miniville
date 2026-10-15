@@ -35,6 +35,7 @@ WEIGHTS = {
     "caregiven": 2,
     "craft_breakthrough": 1,
     "hobby_triumph": 1,
+    "ambition_achieved": 2,
     "marriage": 3,
     "birth": 2,
     "coming_of_age": 1,

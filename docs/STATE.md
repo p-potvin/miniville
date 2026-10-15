@@ -981,6 +981,16 @@ Integrated Gemini 4's individualism feature set and implemented the Observer UI 
   and personal event counts; resident cards updated with visual temperament bars (5 axes) and chronotype badges.
 - Tests: 218 passed (0 failed). Zero console errors verified via headless browser (patchright).
 
+Status updates (Thu, 15 Oct 2026, workstation): **v0.16–v0.17 expansion — Ambitions, 5k Scale Optimizations & Sync Queue**.
+Integrated Gemini 4's v0.16–v0.17 expansion bundled onto autodev:
+- `src/miniville/ambitions.py` & `tests/test_ambitions.py`: Adult residents adopt and pursue long-term ambitions (`find_a_job`, `save_nest_egg`, `climb_the_ladder`, `find_true_love`, `pillar_of_the_community`, `make_peace`) based on temperament and circumstances. Daily progress checks track milestones and emit `ambition_achieved` events with reputation gains.
+- Ambition-steered mechanics: hiring pass gives edge to `find_a_job`; promotions boosted for `climb_the_ladder`; romantics pair up faster in `encounters.py`; favor acceptance rate boosted for `pillar_of_the_community`; `save_nest_egg` savers reduce dining out and luxury shopping trips.
+- Scale & 5k performance optimizations: Added 5 targeted DB indexes (`idx_agents_home`, `idx_jobs_place`, `idx_places_kind_district`, `idx_agent_state_place`, `idx_relationships_b`), bulk pre-fetching in `economy.collect_rent`, and cached lookup tables (`jobs_by_agent`, `savers`, `leisure_cache`) in `schedules._plan_ctx`.
+- CLI: new `ambitions` subcommand (`--status active|completed|all`, `--limit N`), `sync` subcommand (prints structured claims and operator queue from `AGENT_SYNC.md`), and enriched `inspect` displaying active ambition progress.
+- Observer UI: added "Active Personal Ambitions" table with click-to-focus links (`mvPick`) and progress bars to the Individualism panel, plus dedicated ambition progress display on resident profile cards.
+- Live world advanced from tick 25920 to tick 26112 (Day 545, summer) — ambitions actively progressing across 631 living residents.
+- Tests: 223 passed (0 failed). Headless browser verified zero console errors and clean rendering.
+
 Open items:
 
 1. Avatar pipeline: 129 deferred female residents awaiting IMDb StarMeter expansion

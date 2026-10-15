@@ -922,8 +922,10 @@ def resident_summary(conn: sqlite3.Connection, agent_id: int) -> dict[str, Any]:
            ORDER BY id DESC LIMIT 8""",
         (agent_id, agent_id),
     ).fetchall()
+    from .ambitions import ambition_of
     from .events import describe
     return {
+        "ambition": ambition_of(conn, agent_id),
         "archetype": prof.get("archetype", "balanced regular"),
         "chronotype": prof.get("chronotype", "day_walker"),
         "wake_offset": prof.get("wake_offset", 0),
@@ -961,7 +963,8 @@ def town_individualism_stats(conn: sqlite3.Connection) -> dict[str, Any]:
            WHERE a.alive = 1 GROUP BY p.id ORDER BY n DESC LIMIT 6"""
     ).fetchall()
     personal_tags = ("craft_breakthrough", "work_mishap", "hobby_triumph",
-                     "diy_fix", "repair_bill", "good_turn", "caregiven", "epiphany")
+                     "diy_fix", "repair_bill", "good_turn", "caregiven", "epiphany",
+                     "ambition_achieved")
     tag_counts: dict[str, int] = {}
     for t in personal_tags:
         c = conn.execute(
@@ -970,8 +973,22 @@ def town_individualism_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         ).fetchone()["n"]
         if c:
             tag_counts[t] = c
+    from .ambitions import AMBITION_LABELS, list_ambitions
+    amb_counts = {
+        AMBITION_LABELS.get(r["kind"], r["kind"]): r["n"]
+        for r in conn.execute(
+            "SELECT am.kind, COUNT(*) n FROM ambitions am JOIN agents a ON a.id=am.agent_id "
+            "WHERE a.alive=1 AND am.status='active' GROUP BY am.kind ORDER BY n DESC"
+        ).fetchall()
+    }
+    completed_amb = conn.execute(
+        "SELECT COUNT(*) n FROM events WHERE data LIKE ?", ("%\"ambition_achieved\"%",)
+    ).fetchone()["n"]
     return {
         "chronotypes": chronos,
+        "ambition_counts": amb_counts,
+        "ambitions_completed": completed_amb,
+        "active_ambitions": list_ambitions(conn, "active", limit=25),
         "top_archetypes": dict(sorted(archetypes.items(), key=lambda kv: -kv[1])[:8]),
         "favorite_places": [{"venue": r["name"], "regulars": r["n"]} for r in favs],
         "personal_event_counts": tag_counts,

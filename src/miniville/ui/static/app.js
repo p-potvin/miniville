@@ -75,6 +75,12 @@ async function residentCard(id) {
         </div>
       `).join('')}
     </div>
+    ${r.individual.ambition ? `
+    <div class="amb-row">
+      <b>Ambition:</b> ${esc(r.individual.ambition.label)}
+      <span class="muted">(${esc(r.individual.ambition.status)} · ${Math.round((r.individual.ambition.progress || 0) * 100)}%)</span>
+      <div class="prog-bar"><div class="prog-fill" style="width:${Math.round((r.individual.ambition.progress || 0) * 100)}%"></div></div>
+    </div>` : ""}
     ${r.individual.personal_events && r.individual.personal_events.length ? `
     <h4>Personal Happenings</h4>
     <ul>${r.individual.personal_events.map(pe => `<li><span class="t">day ${pe.day}</span> ${esc(pe.text)}</li>`).join('')}</ul>` : ''}
@@ -360,7 +366,12 @@ async function individual() {
       <div class="chrono-name">${esc(k.replace('_', ' '))}</div>
       <div class="chrono-desc">${pct}% · ${meta.desc}</div>
     </div>`;
-  }).join("");
+  }).join("") + `<div class="chrono-card">
+    <div class="chrono-icon">🎯</div>
+    <b>${r.ambitions_completed ?? 0}</b>
+    <div class="chrono-name">Ambitions Fulfilled</div>
+    <div class="chrono-desc">Life goals achieved</div>
+  </div>`;
 
   const archetypes = r.top_archetypes || {};
   $("#ind-archetypes").innerHTML = Object.entries(archetypes).map(([arch, n]) =>
@@ -377,6 +388,18 @@ async function individual() {
     const label = EVENT_LABELS[tag] || tag.replace('_', ' ');
     return `<div class="stat"><b>${n}</b><span>${esc(label)}</span></div>`;
   }).join("") || `<div class="muted">No personal happenings recorded yet</div>`;
+
+  const ambs = r.active_ambitions || [];
+  $("#ind-ambitions").innerHTML = ambs.length ? ambs.map(am => {
+    const pct = Math.round((am.progress || 0) * 100);
+    return `<tr>
+      <td><a class="click-link" onclick="mvPick({id: ${am.agent_id}})"><b>${esc(am.name)}</b></a></td>
+      <td>${esc(am.occupation || "—")}</td>
+      <td>${esc(am.label)}</td>
+      <td><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div> <span class="muted">${pct}%</span></td>
+      <td>${esc(am.place_name || "home")}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="5" class="muted">No active ambitions</td></tr>`;
 }
 
 const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts, gazette, economy, council, individual,

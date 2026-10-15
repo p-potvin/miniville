@@ -35,7 +35,9 @@ def cmd_init(args) -> int:
     dbmod.set_meta(conn, "tick", "0")
     economy.ensure_businesses(conn)
     from . import individual
+    from . import ambitions
     individual.ensure_profiles(conn, args.seed)
+    ambitions.assign_ambitions(conn, 0, args.seed)
     conn.commit()
     # a town comes with its congregations and clubs already in it
     from .groups import assign_faith, form_groups, refresh_standing
@@ -53,7 +55,11 @@ def cmd_init(args) -> int:
 def cmd_economy(args) -> int:
     from . import economy
     conn = _conn(args)
+    from . import individual
+    from . import ambitions
     economy.ensure_businesses(conn)
+    individual.ensure_profiles(conn, args.seed)
+    ambitions.assign_ambitions(conn, 0, args.seed)
     conn.commit()
     s = economy.economy_stats(conn)
     print(f"money supply:    ${s['money_supply_cents'] / 100:,.0f}")
@@ -163,6 +169,9 @@ def cmd_inspect(args) -> int:
     print(f"  from {a['origin_city']}, {a['origin_state']}; status={a['marital_status']}")
     print(f"  temperament: {ind['archetype']} (chronotype={ind['chronotype']}, knack={ind['knack']}"
           + (f", favorite={ind['favorite_place']}" if ind.get("favorite_place") else "") + ")")
+    if ind.get("ambition"):
+        am = ind["ambition"]
+        print(f"  ambition: {am['label']} ({am['status']}, {am['progress']*100:.0f}%)")
     print(f"  persona: {(a['persona'] or '')[:240]}")
     print(f"  hobbies: {a['hobbies_json']}")
     print(f"  state: energy={st['energy']:.0f} hunger={st['hunger']:.0f} "
@@ -222,6 +231,34 @@ def cmd_monologue(args) -> int:
         print("no such agent")
         return 1
     print(narrate_resident(conn, a["id"], provider=args.provider))
+    return 0
+
+
+def cmd_ambitions(args) -> int:
+    from .ambitions import list_ambitions
+    conn = _conn(args)
+    rows = list_ambitions(conn, status=args.status, limit=args.limit)
+    if not rows:
+        print("no ambitions matching filter")
+        return 0
+    print(f"{'resident':<24} {'ambition':<38} {'status':<10} {'progress':>8}")
+    for r in rows:
+        print(f"  {r['name'][:22]:<22} {r['label'][:36]:<36} {r['status']:<10} {r['progress']*100:7.0f}%")
+    return 0
+
+
+def cmd_sync(args) -> int:
+    """Print structured inter-agent claims and operator priority queue."""
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    sync_file = repo_root / "docs" / "AGENT_SYNC.md"
+    if not sync_file.is_file():
+        print("no docs/AGENT_SYNC.md found")
+        return 1
+    text = sync_file.read_text(encoding="utf-8")
+    for section in ("## Operator Priority Queue", "## Claims"):
+        if section in text:
+            block = text.split(section, 1)[1].split("\n## ", 1)[0].strip()
+            print(section); print(block); print()
     return 0
 
 
@@ -610,6 +647,12 @@ def main(argv=None) -> int:
     pft.set_defaults(fn=cmd_fate)
     ptr = sub.add_parser("traits", help="summary of town chronotypes, archetypes, and personal events")
     ptr.set_defaults(fn=cmd_traits)
+    pam = sub.add_parser("ambitions", help="list residents' active or completed personal ambitions")
+    pam.add_argument("--status", choices=["active", "completed", "all"], default="active")
+    pam.add_argument("--limit", type=int, default=30)
+    pam.set_defaults(fn=cmd_ambitions)
+    psy = sub.add_parser("sync", help="print agent claims and operator priority queue from AGENT_SYNC.md")
+    psy.set_defaults(fn=cmd_sync)
     pmn = sub.add_parser("monologue", help="single-resident inner monologue (bounded 1-call LLM or raw)")
     pmn.add_argument("who", help="resident name (substring) or id")
     pmn.add_argument("--provider", choices=["vw", "hf", "ollama", "raw"], default="vw")

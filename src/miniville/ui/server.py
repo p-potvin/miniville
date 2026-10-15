@@ -217,6 +217,15 @@ def create_app(db_path: str | None = None) -> FastAPI:
         finally:
             c.close()
 
+    @app.get("/api/ambitions")
+    def ambitions_view(status: str = "active", limit: int = Query(50, le=200)):
+        c = conn()
+        try:
+            from ..ambitions import list_ambitions
+            return list_ambitions(c, status=status, limit=limit)
+        finally:
+            c.close()
+
     @app.get("/api/individual")
     def individual_view():
         c = conn()

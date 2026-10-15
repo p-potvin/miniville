@@ -196,12 +196,16 @@ def test_council_endpoint(client, tmp_path):
     assert "press" in body and "readers" in body["press"]
 
 
-def test_individual_endpoints(client):
+def test_individual_and_ambitions_endpoints(client):
     body = client.get("/api/individual").json()
     assert "chronotypes" in body
     assert "top_archetypes" in body
     assert "favorite_places" in body
     assert "personal_event_counts" in body
+    assert "active_ambitions" in body
+
+    ambs = client.get("/api/ambitions").json()
+    assert isinstance(ambs, list)
 
     # resident details includes individual profile
     rows = client.get("/api/residents").json()

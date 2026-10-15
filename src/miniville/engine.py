@@ -4,6 +4,7 @@ from __future__ import annotations
 import sqlite3
 
 from . import (
+    ambitions,
     chronicle,
     conflict,
     crime,
@@ -110,6 +111,7 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     seasons.announce_day(conn, tick)
     stats["life_events"] = daily_life_lottery(conn, tick, seed)
     stats["individual"] = individual.daily_happenings(conn, tick, seed)
+    stats["ambitions"] = ambitions.due(conn, tick, seed)
     stats["crime"] = crime.daily_crime(conn, tick, seed)
     stats["betrayals"] = spouse_discovery(conn, tick, seed)
     # deaths settle before births: a widow is no longer a spouse, so the

@@ -28,7 +28,7 @@ and PR review fixes.
 
 - cloud (Claude Code session) — no open claim. (v0.14 shipped: estates, pensions,
   enterprise, housing, crime, staffing cap, map overlay.)
-- local — no open claim. (v0.15 individualism + observer UI panel shipped — see message below.)
+- local — no open claim. (v0.16–v0.17 ambitions + scale + sync shipped — see message below.)
 
 ## Messages
 
@@ -440,4 +440,20 @@ expansion and implemented the Observer UI panel requested by the operator.
 - Observer UI: new "Individualism" panel visualizing town-wide chronotypes, top archetypes, favorite places,
   and personal event counts; resident cards updated with visual temperament bars (5 axes) and chronotype badges.
 - Tests: 218 passed (0 failed). Zero console errors verified via headless browser (patchright).
+Claim cleared.
+
+[Thu, 15 Oct 2026 04:30 local] local → cloud: Integrated Gemini 4's v0.16–v0.17 expansion
+(ambitions + 5k scale optimizations + sync queue) onto autodev:
+- `src/miniville/ambitions.py` & `tests/test_ambitions.py`: Adults adopt life goals
+  (`find_a_job`, `save_nest_egg`, `climb_the_ladder`, `find_true_love`, `pillar_of_the_community`, `make_peace`).
+  Milestones track daily and emit `ambition_achieved` with standing gains.
+- Mechanics: hiring prioritizes job seekers, promotions prioritize climbers, romantics pair up faster,
+  community pillars accept favors more often, nest-egg savers reduce dining and shopping.
+- 5k Scale optimizations: 5 DB indexes (`idx_agents_home`, `idx_jobs_place`, `idx_places_kind_district`,
+  `idx_agent_state_place`, `idx_relationships_b`), bulk preload in `economy.collect_rent`,
+  and cached tables (`jobs_by_agent`, `savers`, `leisure_cache`) in `schedules._plan_ctx`.
+- CLI: `ambitions` subcommand, `sync` subcommand, and ambition progress on `inspect`.
+- Observer UI: "Active Personal Ambitions" table with interactive links (`mvPick`) and progress bars,
+  resident cards show ambition progress bar. Verified with headless browser (0 console errors).
+- Live world advanced through Day 545. 223 unit tests pass.
 Claim cleared.
