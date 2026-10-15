@@ -219,3 +219,46 @@ def test_individual_and_ambitions_endpoints(client):
     assert "sociability" in ind["axes"]
 
 
+def test_mentorships_and_network_endpoints(tmp_path):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    from miniville import db, economy, individual, mentorship, world
+    from miniville.ui.server import create_app
+
+    db_file = tmp_path / "ui_ment.db"
+    c = db.connect(db_file)
+    world.create_world(c)
+    economy.ensure_businesses(c)
+    c.execute("INSERT INTO places(name,kind,district,capacity) VALUES('H1','home','Downtown',6)")
+    home = c.execute("SELECT id FROM places WHERE name='H1'").fetchone()["id"]
+    c.execute("INSERT INTO households(name,home_place_id) VALUES('Miller household',?)", (home,))
+    diner = c.execute("SELECT id FROM places WHERE name='Riverside Diner'").fetchone()["id"]
+    c.execute(
+        """INSERT INTO agents(uuid,name,sex,age,marital_status,occupation,hobbies_json,skills_json,household_id,home_place_id,work_place_id,standing)
+           VALUES('u1','Martha','Female',48,'married_present','cook','["baking"]','["woodworking"]',1,?,?,12),
+                 ('u2','Leo','Male',21,'never_married','cook','["running"]','[]',1,?,?,0)""",
+        (home, diner, home, diner),
+    )
+    for i in (1, 2):
+        c.execute("INSERT INTO agent_state(agent_id,place_id,money_cents) VALUES(?,?,500000)", (i, home))
+    individual.ensure_profiles(c, "test")
+    mentorship.ensure_traditions(c, "test")
+    mentorship.pair_mentors(c, 0, "test")
+    c.commit()
+    c.close()
+
+    client = TestClient(create_app(str(db_file)))
+    r_ment = client.get("/api/mentorships")
+    assert r_ment.status_code == 200
+    data_m = r_ment.json()
+    assert len(data_m["mentorships"]) == 1
+    assert len(data_m["traditions"]) == 1
+
+    r_net = client.get("/api/network?filter_kind=mentorship")
+    assert r_net.status_code == 200
+    data_n = r_net.json()
+    assert len(data_n["edges"]) == 1
+    assert data_n["edges"][0]["label"] == "mentorship"
+
+
+

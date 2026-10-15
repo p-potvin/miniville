@@ -77,7 +77,13 @@ li.click:hover { background: var(--panel); }
 .badge-pass { color: #6bd48e; font-weight: bold; }
 .badge-fail { color: #e06c75; font-weight: bold; }
 .click-link { color: var(--accent); cursor: pointer; text-decoration: underline; }
+.click-link:hover { color: var(--fg); }
 #council-extra { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1rem; }
+
+.ind-box { background: #131820; border: 1px solid var(--line); border-radius: 6px; padding: .65rem .85rem; margin: .6rem 0; font-size: .9rem; }
+.axes-row { margin-top: .4rem; display: flex; flex-wrap: wrap; gap: .4rem; }
+.axis-pill { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: .1rem .45rem; font-size: .78rem; color: var(--dim); }
+#ind-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.2rem; margin-bottom: 1.4rem; }
 
 /* Individualism Panel & Resident Traits */
 .chrono-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .8rem; margin: .8rem 0 1.4rem; }

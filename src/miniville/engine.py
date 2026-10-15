@@ -14,6 +14,7 @@ from . import (
     groups,
     growth,
     individual,
+    mentorship,
     jobs,
     memory,
     mortality,
@@ -111,6 +112,7 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     seasons.announce_day(conn, tick)
     stats["life_events"] = daily_life_lottery(conn, tick, seed)
     stats["individual"] = individual.daily_happenings(conn, tick, seed)
+    stats["mentorship"] = mentorship.due(conn, tick, seed)
     stats["ambitions"] = ambitions.due(conn, tick, seed)
     stats["crime"] = crime.daily_crime(conn, tick, seed)
     stats["betrayals"] = spouse_discovery(conn, tick, seed)

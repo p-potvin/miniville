@@ -235,6 +235,78 @@ def create_app(db_path: str | None = None) -> FastAPI:
         finally:
             c.close()
 
+    @app.get("/api/mentorships")
+    def mentorships_view(status: str = "all", limit: int = Query(50, le=200)):
+        c = conn()
+        try:
+            from ..mentorship import list_mentorships, tradition_stats
+            return {
+                "mentorships": list_mentorships(c, status=status, limit=limit),
+                "traditions": tradition_stats(c),
+            }
+        finally:
+            c.close()
+
+    @app.get("/api/network")
+    def network_view(filter_kind: str = "all", limit_edges: int = Query(200, le=400)):
+        """Town-wide social network graph: district-clustered nodes and
+        strongest non-stranger + mentorship edges."""
+        c = conn()
+        try:
+            rel_edges = _rows(c,
+                """SELECT r.a_id, r.b_id, r.label, r.affinity, r.familiarity, r.romance
+                   FROM relationships r
+                   JOIN agents a ON a.id = r.a_id
+                   JOIN agents b ON b.id = r.b_id
+                   WHERE a.alive = 1 AND b.alive = 1 AND r.label != 'stranger'
+                   ORDER BY ABS(r.affinity) + r.familiarity DESC
+                   LIMIT ?""", (limit_edges * 2,))
+            ment_edges = _rows(c,
+                """SELECT m.mentor_id AS a_id, m.apprentice_id AS b_id,
+                          'mentorship' AS label, 45.0 AS affinity, 55.0 AS familiarity,
+                          0.0 AS romance, m.craft, m.status
+                   FROM mentorships m
+                   JOIN agents a ON a.id = m.mentor_id
+                   JOIN agents b ON b.id = m.apprentice_id
+                   WHERE a.alive = 1 AND b.alive = 1""")
+            all_edges = ment_edges + rel_edges
+            if filter_kind == "romance":
+                all_edges = [e for e in all_edges if e["label"] in ("spouse", "partner", "sweetheart", "kin")]
+            elif filter_kind == "mentorship":
+                all_edges = [e for e in all_edges if e["label"] == "mentorship"]
+            elif filter_kind == "rivalry":
+                all_edges = [e for e in all_edges if e["label"] in ("rival", "estranged") or (e.get("affinity") or 0) <= -15]
+
+            all_edges = all_edges[:limit_edges]
+            node_ids = sorted({int(e["a_id"]) for e in all_edges} | {int(e["b_id"]) for e in all_edges})
+            if not node_ids:
+                top_agents = _rows(c,
+                    """SELECT a.id, a.name, a.sex, COALESCE(a.standing, 0) AS standing,
+                              COALESCE(p.district, 'Downtown') AS district
+                       FROM agents a
+                       LEFT JOIN places p ON p.id = a.home_place_id
+                       WHERE a.alive = 1 ORDER BY a.id LIMIT 60""")
+                return {"nodes": top_agents, "edges": []}
+
+            ph = ",".join("?" * len(node_ids))
+            nodes = _rows(c,
+                f"""SELECT a.id, a.name, a.sex, a.occupation,
+                           COALESCE(a.standing, 0) AS standing,
+                           COALESCE(p.district, 'Downtown') AS district
+                    FROM agents a
+                    LEFT JOIN places p ON p.id = a.home_place_id
+                    WHERE a.id IN ({ph})
+                    ORDER BY a.id""", tuple(node_ids))
+            deg: dict[int, int] = {}
+            for e in all_edges:
+                deg[int(e["a_id"])] = deg.get(int(e["a_id"]), 0) + 1
+                deg[int(e["b_id"])] = deg.get(int(e["b_id"]), 0) + 1
+            for n in nodes:
+                n["degree"] = deg.get(int(n["id"]), 0)
+            return {"nodes": nodes, "edges": all_edges}
+        finally:
+            c.close()
+
     @app.get("/api/memories/{agent_id}")
     def memories(agent_id: int, k: int = Query(10, le=50)):
         c = conn()

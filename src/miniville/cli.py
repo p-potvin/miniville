@@ -36,7 +36,9 @@ def cmd_init(args) -> int:
     economy.ensure_businesses(conn)
     from . import individual
     from . import ambitions
+    from . import mentorship
     individual.ensure_profiles(conn, args.seed)
+    mentorship.ensure_traditions(conn, args.seed)
     ambitions.assign_ambitions(conn, 0, args.seed)
     conn.commit()
     # a town comes with its congregations and clubs already in it
@@ -44,6 +46,7 @@ def cmd_init(args) -> int:
     faith = assign_faith(conn)
     founded = form_groups(conn, 0, args.seed)
     refresh_standing(conn)
+    mentorship.pair_mentors(conn, 0, args.seed)
     conn.commit()
     print(f"Miniville populated: {stats}")
     print(f"  faith parsed from personas: {faith['named']} named, "
@@ -172,6 +175,14 @@ def cmd_inspect(args) -> int:
     if ind.get("ambition"):
         am = ind["ambition"]
         print(f"  ambition: {am['label']} ({am['status']}, {am['progress']*100:.0f}%)")
+    if ind.get("household_tradition"):
+        print(f"  household tradition: {ind['household_tradition']}")
+    if ind.get("mentor"):
+        m = ind["mentor"]
+        print(f"  mentor: {m['name']} in {m['craft']} ({m['status']}, {m['lessons']}/{m['target_lessons']} lessons)")
+    if ind.get("apprentices"):
+        apps = ", ".join(f"{ap['name']} ({ap['craft']}, {ap['status']})" for ap in ind["apprentices"])
+        print(f"  apprentices: {apps}")
     print(f"  persona: {(a['persona'] or '')[:240]}")
     print(f"  hobbies: {a['hobbies_json']}")
     print(f"  state: energy={st['energy']:.0f} hunger={st['hunger']:.0f} "
@@ -231,6 +242,26 @@ def cmd_monologue(args) -> int:
         print("no such agent")
         return 1
     print(narrate_resident(conn, a["id"], provider=args.provider))
+    return 0
+
+
+def cmd_mentorships(args) -> int:
+    from .mentorship import list_mentorships, tradition_stats
+    conn = _conn(args)
+    rows = list_mentorships(conn, status=args.status, limit=args.limit)
+    if not rows:
+        print("no mentorships matching filter")
+    else:
+        print(f"{'mentor':<22} {'apprentice':<22} {'craft':<20} {'status':<10} {'lessons':>7}")
+        for r in rows:
+            prog = f"{r['lessons']}/{r['target_lessons']}"
+            print(f"  {r['mentor_name'][:20]:<20} {r['apprentice_name'][:20]:<20} "
+                  f"{r['craft'][:18]:<18} {r['status']:<10} {prog:>7}")
+    trads = tradition_stats(conn)[:6]
+    if trads:
+        print("\nhousehold traditions:")
+        for t in trads:
+            print(f"  {t['tradition']:<38} {t['households']} households ({t['residents']} residents)")
     return 0
 
 
@@ -651,6 +682,10 @@ def main(argv=None) -> int:
     pam.add_argument("--status", choices=["active", "completed", "all"], default="active")
     pam.add_argument("--limit", type=int, default=30)
     pam.set_defaults(fn=cmd_ambitions)
+    pmt = sub.add_parser("mentorships", help="list intergenerational mentorships and household traditions")
+    pmt.add_argument("--status", choices=["active", "graduated", "all"], default="all")
+    pmt.add_argument("--limit", type=int, default=30)
+    pmt.set_defaults(fn=cmd_mentorships)
     psy = sub.add_parser("sync", help="print agent claims and operator priority queue from AGENT_SYNC.md")
     psy.set_defaults(fn=cmd_sync)
     pmn = sub.add_parser("monologue", help="single-resident inner monologue (bounded 1-call LLM or raw)")

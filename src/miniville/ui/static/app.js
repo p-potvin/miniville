@@ -58,29 +58,26 @@ async function residentCard(id) {
        · $${((s.money_cents ?? 0) / 100).toFixed(2)}</p>
     <p class="persona">${esc((a.persona || "").slice(0, 400))}</p>
     ${r.individual ? `
-    <h4>Temperament &amp; Habits</h4>
-    <p class="state"><b>${esc(r.individual.archetype)}</b> ·
-       Chronotype: <b>${esc(r.individual.chronotype.replace('_', ' '))}</b> (${r.individual.wake_offset >= 0 ? '+' : ''}${r.individual.wake_offset}h) ·
-       Knack: <b>${esc(r.individual.knack)}</b>
-       ${r.individual.favorite_place ? `· Favorite hangout: <b>${esc(r.individual.favorite_place)}</b>` : ""}</p>
-    <div class="trait-bars">
-      ${Object.entries(r.individual.axes || {}).map(([axis, val]) => `
-        <div class="trait-bar-row">
-          <span class="trait-label">${axis}</span>
-          <div class="trait-bar-track">
-            <span class="trait-bar-fill ${val >= 0 ? 'pos' : 'neg'}"
-                  style="width: ${Math.min(50, Math.abs(val) * 50)}%; ${val >= 0 ? 'left: 50%;' : 'right: 50%;'}"></span>
-          </div>
-          <span class="trait-val">${val > 0 ? '+' : ''}${Number(val).toFixed(2)}</span>
-        </div>
-      `).join('')}
+    <div class="ind-box">
+      <div><b>Temperament:</b> <span class="badge-pass">${esc(r.individual.archetype)}</span>
+        · <b>Chronotype:</b> ${esc(r.individual.chronotype)}
+        · <b>Signature knack:</b> ${esc(r.individual.knack)}
+        ${r.individual.favorite_place ? `· <b>Favorite spot:</b> ${esc(r.individual.favorite_place)}` : ""}</div>
+      <div class="axes-row">
+        ${Object.entries(r.individual.axes || {}).map(([k, v]) =>
+          `<span class="axis-pill">${esc(k)}: <b>${v >= 0 ? "+" : ""}${Number(v).toFixed(2)}</b></span>`
+        ).join(" ")}
+      </div>
+      ${r.individual.household_tradition ? `<div class="amb-row"><b>Household tradition:</b> ${esc(r.individual.household_tradition)}</div>` : ""}
+      ${r.individual.mentor ? `<div class="amb-row"><b>Mentor:</b> ${esc(r.individual.mentor.name)} in <b>${esc(r.individual.mentor.craft)}</b> (${esc(r.individual.mentor.status)} · ${r.individual.mentor.lessons}/${r.individual.mentor.target_lessons} lessons)</div>` : ""}
+      ${r.individual.apprentices && r.individual.apprentices.length ? `<div class="amb-row"><b>Apprentices:</b> ${r.individual.apprentices.map(ap => `${esc(ap.name)} (${esc(ap.craft)} · ${esc(ap.status)})`).join(", ")}</div>` : ""}
+      ${r.individual.ambition ? `
+      <div class="amb-row">
+        <b>Ambition:</b> ${esc(r.individual.ambition.label)}
+        <span class="muted">(${esc(r.individual.ambition.status)} · ${Math.round((r.individual.ambition.progress || 0) * 100)}%)</span>
+        <div class="prog-bar"><div class="prog-fill" style="width:${Math.round((r.individual.ambition.progress || 0) * 100)}%"></div></div>
+      </div>` : ""}
     </div>
-    ${r.individual.ambition ? `
-    <div class="amb-row">
-      <b>Ambition:</b> ${esc(r.individual.ambition.label)}
-      <span class="muted">(${esc(r.individual.ambition.status)} · ${Math.round((r.individual.ambition.progress || 0) * 100)}%)</span>
-      <div class="prog-bar"><div class="prog-fill" style="width:${Math.round((r.individual.ambition.progress || 0) * 100)}%"></div></div>
-    </div>` : ""}
     ${r.individual.personal_events && r.individual.personal_events.length ? `
     <h4>Personal Happenings</h4>
     <ul>${r.individual.personal_events.map(pe => `<li><span class="t">day ${pe.day}</span> ${esc(pe.text)}</li>`).join('')}</ul>` : ''}
@@ -127,6 +124,7 @@ async function debts() {
 }
 
 async function rels() {
+  if (!window._bond) renderTownNetwork($("#bond-host"), "all");
   const rows = await api("/api/relationships?label=" + $("#rel-filter").value);
   $("#rels-list").innerHTML = rows.map(r =>
     `<li class="click" onclick="mvBond(${r.a_id})"><b>${r.label}</b>
@@ -134,6 +132,10 @@ async function rels() {
      <span class="t">fam ${Math.round(r.familiarity)} aff ${Math.round(r.affinity)}
      rom ${Math.round(r.romance)}</span></li>`).join("");
 }
+
+window.mvTownNet = (filterKind) => {
+  renderTownNetwork($("#bond-host"), filterKind || "all");
+};
 
 // open a resident's ego network on the Bonds tab
 window.mvBond = (id) => {
@@ -334,60 +336,35 @@ async function council() {
   ).join("") : `<li class="muted">No influence data</li>`;
 }
 
-const CHRONO_META = {
-  early_bird: { icon: "🌅", desc: "wakes 5:00, sleeps 21:00" },
-  morning: { icon: "☀️", desc: "wakes 5:30, sleeps 21:30" },
-  day_walker: { icon: "🚶", desc: "wakes 6:00, sleeps 22:00" },
-  evening: { icon: "🌇", desc: "wakes 6:30, sleeps 22:30" },
-  night_owl: { icon: "🦉", desc: "wakes 7:00, sleeps 23:00" },
-};
-
-const EVENT_LABELS = {
-  caregiven: "Caregiving Visits",
-  diy_fix: "Household DIY Fixes",
-  craft_breakthrough: "Workplace Breakthroughs",
-  repair_bill: "Hardware Shop Bills",
-  hobby_triumph: "Hobby Triumphs",
-  good_turn: "Spontaneous Good Turns",
-  work_mishap: "Workplace Mishaps",
-  epiphany: "Personal Epiphanies",
-};
-
 async function individual() {
   const r = await api("/api/individual");
   const chronos = r.chronotypes || {};
-  const totalChrono = Object.values(chronos).reduce((a, b) => a + b, 0) || 1;
-  $("#ind-chronotypes").innerHTML = Object.entries(chronos).map(([k, count]) => {
-    const meta = CHRONO_META[k] || { icon: "⏱️", desc: "standard schedule" };
-    const pct = Math.round((count / totalChrono) * 100);
-    return `<div class="chrono-card">
-      <div class="chrono-icon">${meta.icon}</div>
-      <b>${count}</b>
-      <div class="chrono-name">${esc(k.replace('_', ' '))}</div>
-      <div class="chrono-desc">${pct}% · ${meta.desc}</div>
-    </div>`;
-  }).join("") + `<div class="chrono-card">
-    <div class="chrono-icon">🎯</div>
-    <b>${r.ambitions_completed ?? 0}</b>
-    <div class="chrono-name">Ambitions Fulfilled</div>
-    <div class="chrono-desc">Life goals achieved</div>
-  </div>`;
-
-  const archetypes = r.top_archetypes || {};
-  $("#ind-archetypes").innerHTML = Object.entries(archetypes).map(([arch, n]) =>
-    `<tr><td>${esc(arch)}</td><td>${n}</td></tr>`
-  ).join("") || `<tr><td colspan="2" class="muted">No archetype data</td></tr>`;
+  const order = ["early_bird", "morning", "day_walker", "evening", "night_owl"];
+  const labels = {
+    early_bird: "Early Birds (-1h)",
+    morning: "Morning Risers (-30m)",
+    day_walker: "Day Walkers",
+    evening: "Evening Strollers (+30m)",
+    night_owl: "Night Owls (+1h)"
+  };
+  $("#ind-chronos").innerHTML = order.map(k =>
+    `<div class="stat"><b>${chronos[k] ?? 0}</b><span>${labels[k] || k}</span></div>`
+  ).join("") + `<div class="stat active-policy"><b>${r.ambitions_completed ?? 0}</b><span>ambitions fulfilled</span></div>` + `<div class="stat active-policy"><b>${r.mentorships_graduated ?? 0}</b><span>apprentices graduated</span></div>`;
 
   const favs = r.favorite_places || [];
-  $("#ind-favorites").innerHTML = favs.map(fp =>
-    `<tr><td>${esc(fp.venue)}</td><td>${fp.regulars}</td></tr>`
-  ).join("") || `<tr><td colspan="2" class="muted">No favorite places established yet</td></tr>`;
+  $("#ind-favs").innerHTML = favs.length ? favs.map(f =>
+    `<tr><td><b>${esc(f.venue)}</b></td><td>${f.regulars}</td></tr>`
+  ).join("") : `<tr><td colspan="2" class="muted">Regulars form after warm encounters</td></tr>`;
 
-  const counts = r.personal_event_counts || {};
-  $("#ind-events-summary").innerHTML = Object.entries(counts).map(([tag, n]) => {
-    const label = EVENT_LABELS[tag] || tag.replace('_', ' ');
-    return `<div class="stat"><b>${n}</b><span>${esc(label)}</span></div>`;
-  }).join("") || `<div class="muted">No personal happenings recorded yet</div>`;
+  const archs = Object.entries(r.top_archetypes || {});
+  $("#ind-archetypes").innerHTML = archs.map(([k, n]) =>
+    `<tr><td>${esc(k)}</td><td>${n}</td></tr>`
+  ).join("");
+
+  const evs = Object.entries(r.personal_event_counts || {});
+  $("#ind-events").innerHTML = evs.length ? evs.map(([k, n]) =>
+    `<tr><td><b>${esc(k.replace(/_/g, " "))}</b></td><td>${n}</td></tr>`
+  ).join("") : `<tr><td colspan="2" class="muted">No personal happenings recorded yet</td></tr>`;
 
   const ambs = r.active_ambitions || [];
   $("#ind-ambitions").innerHTML = ambs.length ? ambs.map(am => {
@@ -400,9 +377,30 @@ async function individual() {
       <td>${esc(am.place_name || "home")}</td>
     </tr>`;
   }).join("") : `<tr><td colspan="5" class="muted">No active ambitions</td></tr>`;
+
+  const ments = r.mentorships || [];
+  $("#ind-mentorships").innerHTML = ments.length ? ments.map(m => {
+    const pct = Math.round(((m.lessons || 0) / Math.max(1, m.target_lessons || 5)) * 100);
+    const badge = m.status === "graduated"
+      ? `<span class="badge-pass">Graduated</span>`
+      : `<span class="muted">${m.lessons}/${m.target_lessons} lessons</span>`;
+    return `<tr>
+      <td><a class="click-link" onclick="mvPick({id: ${m.mentor_id}})"><b>${esc(m.mentor_name)}</b></a></td>
+      <td><a class="click-link" onclick="mvPick({id: ${m.apprentice_id}})"><b>${esc(m.apprentice_name)}</b></a></td>
+      <td><b>${esc(m.craft)}</b></td>
+      <td>${esc(m.venue_name || "town")}</td>
+      <td><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div></td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="6" class="muted">No mentorships formed yet</td></tr>`;
+
+  const trads = r.household_traditions || [];
+  $("#ind-traditions").innerHTML = trads.length ? trads.map(t =>
+    `<tr><td><b>${esc(t.tradition)}</b></td><td>${t.households}</td><td>${t.residents}</td></tr>`
+  ).join("") : `<tr><td colspan="3" class="muted">No household traditions yet</td></tr>`;
 }
 
-const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts, gazette, economy, council, individual,
+const loaders = { feed, venues, residents: () => residents($("#q").value), individual, chronicle, rels, debts, gazette, economy, council,
   map: () => renderMap($("#map-host")) };
 for (const b of document.querySelectorAll("#tabs button"))
   b.onclick = () => {

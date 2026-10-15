@@ -924,8 +924,13 @@ def resident_summary(conn: sqlite3.Connection, agent_id: int) -> dict[str, Any]:
     ).fetchall()
     from .ambitions import ambition_of
     from .events import describe
+    from .mentorship import mentorship_for_resident
+    minfo = mentorship_for_resident(conn, agent_id)
     return {
         "ambition": ambition_of(conn, agent_id),
+        "mentor": minfo["mentor"],
+        "apprentices": minfo["apprentices"],
+        "household_tradition": minfo["household_tradition"],
         "archetype": prof.get("archetype", "balanced regular"),
         "chronotype": prof.get("chronotype", "day_walker"),
         "wake_offset": prof.get("wake_offset", 0),
@@ -964,7 +969,8 @@ def town_individualism_stats(conn: sqlite3.Connection) -> dict[str, Any]:
     ).fetchall()
     personal_tags = ("craft_breakthrough", "work_mishap", "hobby_triumph",
                      "diy_fix", "repair_bill", "good_turn", "caregiven", "epiphany",
-                     "ambition_achieved")
+                     "ambition_achieved", "mentorship_started", "apprenticeship_completed",
+                     "family_tradition")
     tag_counts: dict[str, int] = {}
     for t in personal_tags:
         c = conn.execute(
@@ -984,11 +990,18 @@ def town_individualism_stats(conn: sqlite3.Connection) -> dict[str, Any]:
     completed_amb = conn.execute(
         "SELECT COUNT(*) n FROM events WHERE data LIKE ?", ("%\"ambition_achieved\"%",)
     ).fetchone()["n"]
+    from .mentorship import list_mentorships, tradition_stats
+    ment_done = conn.execute(
+        "SELECT COUNT(*) n FROM mentorships WHERE status='graduated'"
+    ).fetchone()["n"]
     return {
         "chronotypes": chronos,
         "ambition_counts": amb_counts,
         "ambitions_completed": completed_amb,
+        "mentorships_graduated": ment_done,
         "active_ambitions": list_ambitions(conn, "active", limit=25),
+        "mentorships": list_mentorships(conn, status="all", limit=25),
+        "household_traditions": tradition_stats(conn)[:8],
         "top_archetypes": dict(sorted(archetypes.items(), key=lambda kv: -kv[1])[:8]),
         "favorite_places": [{"venue": r["name"], "regulars": r["n"]} for r in favs],
         "personal_event_counts": tag_counts,

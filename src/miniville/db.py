@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS agent_state (
 CREATE TABLE IF NOT EXISTS households (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
-    home_place_id INTEGER
+    home_place_id INTEGER,
+    tradition TEXT
 );
 
 CREATE TABLE IF NOT EXISTS places (
@@ -368,6 +369,20 @@ CREATE TABLE IF NOT EXISTS ambitions (
 );
 CREATE INDEX IF NOT EXISTS idx_ambitions_status ON ambitions(status, kind);
 
+-- Intergenerational mentorships & craft apprenticeships (mentorship.py)
+CREATE TABLE IF NOT EXISTS mentorships (
+    apprentice_id INTEGER PRIMARY KEY REFERENCES agents(id),
+    mentor_id INTEGER NOT NULL REFERENCES agents(id),
+    craft TEXT NOT NULL,
+    venue_id INTEGER REFERENCES places(id),
+    started_tick INTEGER NOT NULL DEFAULT 0,
+    lessons INTEGER NOT NULL DEFAULT 0,
+    target_lessons INTEGER NOT NULL DEFAULT 5,
+    status TEXT NOT NULL DEFAULT 'active',
+    graduated_tick INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_mentorships_mentor ON mentorships(mentor_id, status);
+
 -- Operator-injected shocks (god mode). A row is written when the shock is
 -- injected; applied flips once it has landed. detail holds per-kind payload
 -- (festival window, reopen day for disasters).
@@ -442,6 +457,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE agents ADD COLUMN faith TEXT")
     if "favorite_place_id" not in cols:
         conn.execute("ALTER TABLE agents ADD COLUMN favorite_place_id INTEGER")
+
+    if _has_table(conn, "households"):
+        hcols = {r["name"] for r in conn.execute("PRAGMA table_info(households)")}
+        if "tradition" not in hcols:
+            conn.execute("ALTER TABLE households ADD COLUMN tradition TEXT")
 
     # Gazette authorship is in-world: historical editions get null bylines,
     # and the first new edition appoints an actual publisher/editor.
@@ -585,6 +605,20 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_places_kind_district ON places(kind, district)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_state_place ON agent_state(place_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relationships_b ON relationships(b_id)")
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS mentorships (
+                apprentice_id INTEGER PRIMARY KEY REFERENCES agents(id),
+                mentor_id INTEGER NOT NULL REFERENCES agents(id),
+                craft TEXT NOT NULL,
+                venue_id INTEGER REFERENCES places(id),
+                started_tick INTEGER NOT NULL DEFAULT 0,
+                lessons INTEGER NOT NULL DEFAULT 0,
+                target_lessons INTEGER NOT NULL DEFAULT 5,
+                status TEXT NOT NULL DEFAULT 'active',
+                graduated_tick INTEGER
+            )"""
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_mentorships_mentor ON mentorships(mentor_id, status)")
 
 
 def get_meta(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:

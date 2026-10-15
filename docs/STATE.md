@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Wed, 14 Oct 2026 20:30
+Last updated: Thu, 15 Oct 2026 05:15
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -990,6 +990,19 @@ Integrated Gemini 4's v0.16–v0.17 expansion bundled onto autodev:
 - Observer UI: added "Active Personal Ambitions" table with click-to-focus links (`mvPick`) and progress bars to the Individualism panel, plus dedicated ambition progress display on resident profile cards.
 - Live world advanced from tick 25920 to tick 26112 (Day 545, summer) — ambitions actively progressing across 631 living residents.
 - Tests: 223 passed (0 failed). Headless browser verified zero console errors and clean rendering.
+
+Status updates (Thu, 15 Oct 2026, workstation): **v0.18–v0.19 expansion — Mentorships, Traditions & Town Social Network Graph**.
+Integrated Gemini 4's v0.18–v0.19 expansion bundled onto autodev:
+- `src/miniville/mentorship.py` & `tests/test_mentorship.py`: Seasoned residents (age 40+, senior rank, or standing 8+) mentor young adults (18-35) at shared venues, clubs, or congregations. Across 5 coaching lessons they warm bonds, boost morale, and upon graduation pass their craft to the apprentice's skills, conferring a 5% wage bump and reflection memories.
+- `households.tradition`: Every household derives a signature custom (e.g. Sunday potluck dinners, lake fishing, front-porch music). Celebrated on Sundays with household morale boosts and affinity gains.
+- 7th Personal Ambition: `mentor_a_protege` ("Pass on their craft to a protégé") added to `ambitions.py`, tracked via `mentorships` status.
+- Reputation: Standing awarded for `apprenticeship_completed` (+2) and `mentorship_started` (+1).
+- CLI: `mentorships` subcommand (`cli mentorships`), and `household tradition`, `mentor`, `apprentices` printed in `inspect`.
+- Observer UI & Town Network:
+  - Pixi-based town-wide social network graph (`/api/network`) clustered into districts (Lakeshore, Downtown, Old Mill Quarter, Greenhill, The Flats) with filter buttons for `Town Network`, `Mentorships`, `Romance & Kin`, `Rivalries`.
+  - Individualism panel includes "Intergenerational Mentorships & Apprenticeships" and "Household Family Traditions" tables.
+  - Resident cards display temperament badge, chronotype, knack, axes pills, household tradition, mentor, and apprentices.
+- Live world advanced to tick 26256 (Day 547). 226 unit tests pass. 0 console errors verified via patchright.
 
 Open items:
 

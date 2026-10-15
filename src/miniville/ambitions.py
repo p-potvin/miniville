@@ -22,6 +22,7 @@ AMBITION_LABELS = {
     "find_true_love": "Find a sweetheart",
     "pillar_of_the_community": "Become a pillar of the community",
     "make_peace": "Bury an old grudge",
+    "mentor_a_protege": "Pass on their craft to a protégé",
 }
 
 
@@ -47,6 +48,10 @@ def _choose_ambition(agent: sqlite3.Row, prof: dict[str, Any],
     if ms in ("never_married", "divorced", "widowed") and aid not in coupled:
         if r.random() < 0.45:
             return ("find_true_love", 0, 1)
+
+    if (age >= 40 or rank >= 1) and float(prof.get("sociability", 0.0)) >= -0.2:
+        if r.random() < 0.35:
+            return ("mentor_a_protege", 0, 1)
 
     if has_job and rank < 2 and float(prof.get("industriousness", 0.0)) >= -0.1:
         if r.random() < 0.50:
@@ -146,6 +151,17 @@ def evaluate_ambitions(conn: sqlite3.Connection, tick: int,
         r["id"]: r["name"]
         for r in conn.execute("SELECT id, name FROM agents WHERE alive=1").fetchall()
     }
+    mentor_prog: dict[int, tuple[str, float, str]] = {}
+    for m in conn.execute(
+        """SELECT m.mentor_id, m.status, m.lessons, m.target_lessons, a.name AS app_name
+           FROM mentorships m JOIN agents a ON a.id = m.apprentice_id"""
+    ).fetchall():
+        mid = int(m["mentor_id"])
+        ratio = min(1.0, float(m["lessons"] or 0) / max(1, int(m["target_lessons"] or 5)))
+        cur = mentor_prog.get(mid)
+        if cur is None or m["status"] == "graduated" or ratio > cur[1]:
+            mentor_prog[mid] = (m["status"], ratio, m["app_name"])
+
     bt_ticks: dict[int, list[int]] = {}
     for ev in conn.execute(
         "SELECT a_id, tick FROM events WHERE kind='life_event' AND data LIKE ?", ('%"craft_breakthrough"%',)
@@ -238,6 +254,17 @@ def evaluate_ambitions(conn: sqlite3.Connection, tick: int,
                 summary_txt = f"made peace with {oname} and let go of an old grudge"
             else:
                 prog = max(0.0, min(0.9, (aff + 40.0) / 35.0))
+
+        elif kind == "mentor_a_protege":
+            mp = mentor_prog.get(aid)
+            if mp and mp[0] == "graduated":
+                prog = 1.0
+                done = True
+                summary_txt = f"passed on their craft and graduated protégé {mp[2]}"
+            elif mp:
+                prog = max(0.15, min(0.95, mp[1]))
+            else:
+                prog = 0.1
 
         if done:
             conn.execute(
