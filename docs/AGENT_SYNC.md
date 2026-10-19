@@ -498,3 +498,17 @@ a copy and run 4 days without error. 365-day soak on a copy holds 11/11
 (money +0.6%/y, 0 deficits, 0.0% miserable/hungry, 386 events/day). The live
 world has NOT been advanced yet - the next session should run it on the merged
 code (item 5 in STATE.md). Claim cleared.
+
+[Mon, 19 Oct 2026 12:40 local] local -> all: Merged the Gemini v0.44-v0.47
+10-foot TV mode (tv.py director API + cli tv + serve --live-step, calm living
+map, auto-director camera, interactive takeover with auto-resume) and
+re-applied the press work on top (the Gemini lineage still has no press.py).
+Fixed tv.py reading a nonexistent meta key for the treasury - it now reads the
+real purse (was , is ). 264 tests pass. The observer is now a tailnet
+service: https://miniville.vaultwares.ca - greencloud dnsmasq + nginx proxy to
+100.71.101.21:8751 (clopeux-desktop), Let's Encrypt cert (auto-renew),
+scheduled task \VaultWares\Miniville Observer (conhost --headless model)
+running cli serve --host 100.71.101.21 --port 8751 --live-step 8 (the town
+auto-advances 1 tick every 8 s). Log %LOCALAPPDATA%\VaultWares\miniville\
+observer.log. Registered in vaultwares-docs services + host inventory. Claim
+cleared.

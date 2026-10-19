@@ -428,8 +428,8 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   | face crops | 2,015 | **4,826** |
   | exemplars | 949 | **1,535** |
   | residents on a wrong-sex identity | 171 | **125** |
-  47 residents re-cast onto a correct-sex identity (John Cleese, James Cameron,
-  Kirk Douglas, Robert Mitchum, Henry Mancini joined the pool). Identity-level
+  
+  47 residents re-cast onto a correct-sex identity (John Cleese, James Cameron, Kirk Douglas, Robert Mitchum, Henry Mancini joined the pool). Identity-level
   sex vote 251/254 correct vs the TMDB labels. Pipeline documented in
   `docs/AVATARS.md`.
   **Remaining 125 need people not in the gallery yet** — every folder with >=6
@@ -1077,6 +1077,21 @@ verified on a copy and run 4 days without error. The 365-day soak on a copy
 0 deficits, 0.0% miserable/hungry, 386 events/day); details in the v0.16-v0.43
 section above. The live world has NOT yet run on the merged code (item 5
 below).
+
+Status updates (Mon, 19 Oct 2026, workstation): **v0.44-v0.47 TV mode merged,
+and the observer is now a tailnet service.** Integrated the Gemini TV
+expansion (`tv.py`, `tv.js`, `cli tv`, `serve --live-step`, the calm living
+map, the auto-director camera and the interactive takeover), re-applying the
+press work on top as before; fixed tv.py's treasury read (was a nonexistent
+meta key, now the real purse). 264 tests pass. The observer now runs as
+**`https://miniville.vaultwares.ca`** (tailnet-only): greencloud dnsmasq +
+nginx proxy -> `100.71.101.21:8751` (clopeux-desktop), Let's Encrypt cert
+(expires 2027-01-17, auto-renew), Windows scheduled task
+`\VaultWares\Miniville Observer` (conhost --headless model) running
+`cli serve --host 100.71.101.21 --port 8751 --live-step 8` — the town
+auto-advances 1 tick every 8 s while the TV display is up. Log:
+`%LOCALAPPDATA%\VaultWares\miniville\observer.log`. Registered in
+vaultwares-docs services + host inventory.
 
 Open items:
 
