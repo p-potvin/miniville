@@ -28,6 +28,7 @@ from .db import get_meta, set_meta
 from .events import HISTORIC, NOTABLE, emit
 from .rng import rng_for
 from .timekeeper import day_of
+from . import press
 
 SEATS = 5
 TERM_DAYS = 730                     # a two-year term
@@ -252,7 +253,8 @@ def council(conn: sqlite3.Connection) -> list[dict]:
 
 
 def _votes_yes(motion_policy: str, direction: int, member: dict,
-               median_wallet: int, town_unemployment: float) -> bool:
+               median_wallet: int, town_unemployment: float,
+               support: float = 0.0) -> bool:
     """How a councillor votes, given the district that sent them.
 
     One axis, and it falls out of the town's own books: rent and the business
@@ -264,21 +266,22 @@ def _votes_yes(motion_policy: str, direction: int, member: dict,
     (The first version of this said "whoever is not poor wants rent up",
     which is perverse — it had the comfortable districts voting themselves a
     rent rise. Rent is not a price here, it is a tax base.)
+
+    Town opinion is the second term. A councillor whose district leans one way
+    still answers to a town that has been persuaded the other way — but only
+    when opinion is strong: `direction * support * OPINION_WEIGHT` has to beat
+    the district's own lean, so a paper needs reach to move a seat.
     """
     poor = member["backers_wallet"] < median_wallet
     dependent = member["backers_unemployed"] > town_unemployment
-    if motion_policy == "rent_multiplier":
-        return (direction > 0) == dependent
-    if motion_policy == "dividend_share":
-        return (direction > 0) == dependent
-    if motion_policy == "levy_rate":
-        return (direction > 0) == dependent
     if motion_policy == "min_wage":
-        return (direction > 0) == poor
-    if motion_policy == "pension":
-        # the pension is paid out of the purse, like the dividend
-        return (direction > 0) == dependent
-    return False
+        wants = (direction > 0) == poor
+    elif motion_policy in ("rent_multiplier", "dividend_share", "levy_rate", "pension"):
+        wants = (direction > 0) == dependent
+    else:
+        return False
+    lean = 1 if wants else -1
+    return lean + direction * support * press.OPINION_WEIGHT > 0
 
 
 def consider_motion(conn: sqlite3.Connection, tick: int, seed: str) -> dict | None:
@@ -305,10 +308,16 @@ def consider_motion(conn: sqlite3.Connection, tick: int, seed: str) -> dict | No
     ).fetchone()["n"]
     employed = conn.execute("SELECT COUNT(*) n FROM jobs").fetchone()["n"]
     town_unemployment = max(0.0, (total - employed) / max(1, total))
+    support = press.opinion(conn, name)
 
     yes = [m for m in members
-           if _votes_yes(name, direction, m, median_wallet, town_unemployment)]
+           if _votes_yes(name, direction, m, median_wallet, town_unemployment, support)]
+    # the same council with the town indifferent: if the outcome differs, the
+    # opinion the paper helped build is what carried (or killed) the motion
+    without = [m for m in members
+               if _votes_yes(name, direction, m, median_wallet, town_unemployment, 0.0)]
     passed = len(yes) * 2 > len(members)
+    swing = passed != (len(without) * 2 > len(members))
     if passed:
         set_meta(conn, f"policy_{name}", f"{value:.4f}")
     verb = "raised" if direction > 0 else "lowered"
@@ -322,14 +331,34 @@ def consider_motion(conn: sqlite3.Connection, tick: int, seed: str) -> dict | No
                else f"the council rejected a motion to {verb[:-1]} {text}"),
          tag="motion_passed" if passed else "motion_rejected",
          policy=name, direction=direction, passed=passed, value=value, votes_for=len(yes),
-         votes_against=len(members) - len(yes))
+         votes_against=len(members) - len(yes),
+         support=round(support, 4), press_swing=swing)
+    if swing:
+        # the paper's line, if it had one, is the likely author of the opinion
+        profile = conn.execute(
+            "SELECT editorial_line FROM newspaper_profile WHERE id=1").fetchone()
+        line = profile["editorial_line"] if profile else "community"
+        stance = press.line_stance(line, name)
+        backer = ("the Gazette's campaign" if stance and stance == direction
+                  else "public opinion")
+        emit(conn, tick, "town_event", importance=NOTABLE,
+             text=(f"{backer} swung the council's vote to "
+                   f"{'raise' if direction > 0 else 'lower'} "
+                   f"{name.replace('_', ' ')}: it "
+                   f"{'carried' if passed else 'failed'} on opinion, not on the "
+                   f"districts' own interest"),
+             tag="press_influence", policy=name, direction=direction,
+             passed=passed, support=round(support, 4),
+             editorial_line=line, paper_backed=bool(stance and stance == direction))
     conn.execute(
         """INSERT INTO motions(tick,day,policy,direction,value,passed,
-               votes_for,votes_against) VALUES(?,?,?,?,?,?,?,?)""",
+               votes_for,votes_against,support,press_swing)
+           VALUES(?,?,?,?,?,?,?,?,?,?)""",
         (tick, day, name, direction, value, int(passed), len(yes),
-         len(members) - len(yes)))
+         len(members) - len(yes), round(support, 4), int(swing)))
     return {"policy": name, "direction": direction, "value": value,
-            "passed": passed, "for": len(yes), "against": len(members) - len(yes)}
+            "passed": passed, "for": len(yes), "against": len(members) - len(yes),
+            "support": round(support, 4), "press_swing": swing}
 
 
 def due(conn: sqlite3.Connection, tick: int) -> dict:

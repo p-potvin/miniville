@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Fri, 09 Oct 2026 08:30
+Last updated: Thu, 15 Oct 2026 05:15
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -393,10 +393,9 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   beat the loser by better than 2:1 and ambiguous identities stay unresolved.
   Validated on the 162 identities with both a cached label and usable crops:
   34 agree / 0 disagree / 6 refused. Nothing in the avatar path hits the network.
-- Ledger debt (Fri, 09 Oct 2026): the Claude Code cloud session (v0.14) had no
-  `record-agent-change.ps1`; the next workstation session should record it.
-- Ledger debt cleared: the cloud session's entry (owed because its VM had no
-  `record-agent-change.ps1`) is recorded on the workstation.
+- Ledger debt cleared (Fri, 09 Oct 2026): the Claude Code cloud session's v0.14
+  entry (owed because its VM had no `record-agent-change.ps1`) is recorded on
+  the workstation.
 - Celebrity gallery re-embedded (Thu, 01 Oct 2026, workstation). The operator
   suspected the sex mislabels came from a pre-smart-picker gallery with stale
   embeddings. Measured, the opposite is true: **the gallery is already
@@ -429,8 +428,8 @@ to 2k-5k is a roadmap item (perf indexes + batch upserts first).
   | face crops | 2,015 | **4,826** |
   | exemplars | 949 | **1,535** |
   | residents on a wrong-sex identity | 171 | **125** |
-  47 residents re-cast onto a correct-sex identity (John Cleese, James Cameron,
-  Kirk Douglas, Robert Mitchum, Henry Mancini joined the pool). Identity-level
+  
+  47 residents re-cast onto a correct-sex identity (John Cleese, James Cameron, Kirk Douglas, Robert Mitchum, Henry Mancini joined the pool). Identity-level
   sex vote 251/254 correct vs the TMDB labels. Pipeline documented in
   `docs/AVATARS.md`.
   **Remaining 125 need people not in the gallery yet** — every folder with >=6
@@ -584,6 +583,157 @@ tested with a deliberately opposed council vote. A 90-day press soak is
 running to see whether routine politics produces claims and how credibility
 moves.
 
+## v0.48 — the TV director tells stories (Mon, 19 Oct 2026, cloud: Claude Code)
+
+The operator asked for TV mode to play passively while the world runs, show
+the activity and the important things, and let the viewer focus on something
+before going back to auto-direction.
+
+**What was wrong with the v0.44 director.** It rotated mechanically: a new
+"spotlight" every tick drawn from whoever last appeared in the ledger (often
+asleep), the busiest venue even at 3am with nobody in it, and nothing that
+let the town's news reach the screen. Importance alone can't pick the news:
+in a 600-resident town ~56 events a day are importance 3, almost all of them
+a relationship label drifting ("acquaintance", "familiar"), while a wedding,
+a death or a shop opening is a handful. Also a real bug: `_curated_movers`
+looked `plans` up by absolute tick, but plans are keyed by tick-of-day, so
+after day one nobody ever read as having just moved.
+
+**`tv.newsworthiness(event)`** = 10 x importance + tag/kind bonuses
+(`NEWS_BONUS`, `KIND_BONUS`; relationships count only when they become a
+romance or a feud). `STORY_MIN` 35 makes a story, `BREAKING_MIN` 60 cuts in.
+Measured: ~2.6 breaking cuts per game day in a year-old town (betrayals,
+move-ins, weddings, separations, deaths, arrests), ~8 stories a day; a fresh
+town has far fewer. With the observer's `--live-step 8` a game day is ~6.4
+min, so roughly one cut every 2-3 minutes.
+
+**The broadcast** (`/api/tv` gains `stories`, `breaking`, `latest_event_id`,
+`hotspots`, `recap`, `followed`, `followed_venue`; params `since`, `follow`,
+`follow_place`):
+- the camera playlist leads with the day's two best stories (captioned),
+  then a resident from the cast of current storylines (awake first, held two
+  game hours), a venue with people in it, and the panorama;
+- **breaking news**: unseen stories past the threshold cut in for 10 s with
+  a banner and a "Follow this story" button, then the director resumes (at
+  most one per 20 s; a first look gets no backlog);
+- **follow-cam**: follow a resident or venue (from the banner, a card's 📌,
+  the inspector, the ticker, the recap, or F for whatever is on screen). The
+  camera tracks them tick after tick; a card shows where they are, their next
+  stops from today's plan and today's events. Lasts 2/5/15 min or "until I
+  return"; news meanwhile arrives as toasts with a Watch button;
+- **recap**: "previously in Miniville" at each new day (R any time);
+- **hotspots**: ripples on the map where stories happened in the last 3 game
+  hours, red for breaking-grade ones;
+- a scene keeps its subject for its whole shot; pace (brisk/calm/slow),
+  follow length and auto-step persist per browser (localStorage).
+Keys: T toggle · F follow · A/Esc back to auto · N next · R recap · Space pause.
+`cli tv` lists the day's stories and the recap.
+
+Verified headless (Playwright): 2-minute passive run on a year-old synthetic
+town with 3 s auto-step, 0 console errors, ~20-34 MB heap; breaking cut,
+follow from the banner, back to auto, recap and story captions all driven;
+the follow-cam tracked a resident from home to the marina at 07:00. Snapshot
+cost ~33 ms. 269 tests.
+
+## v0.16-v0.43 — the Gemini 4 expansion: a town with keepsakes, pets, radio and jubilees (merged Tue, 20 Oct 2026, workstation)
+
+The cloud seat ran autonomously as **gemini-lead** (Gemini 4 / Argon) and
+shipped milestones past v0.15, exporting snapshots
+(`miniville_v0XX_autonomous.zip`) up to **v0.43** in
+`C:\Users\Administrator\Desktop\gemini4-miniville`. The workstation integrated
+v0.16-v0.19 on 14-15 Oct (ambitions + 5k scale + sync queue; mentorship +
+traditions + network graph). **This session merged the rest: v0.20-v0.43,
+24 new modules**, each with its own table, CLI subcommand, API route, Gazette
+section, tests and deterministic RNG stream:
+
+| version | module | what the town gained |
+| --- | --- | --- |
+| v0.20 | `keepsakes.py` | crafted keepsakes with provenance, gifting, heirloom inheritance across generations |
+| v0.21 | `neighborhood.py` | district watch, mutual-aid transfers, block parties, porch swaps |
+| v0.22 | `milestones.py` | coming-of-age gifts, decade birthdays, anniversaries, retirement send-offs |
+| v0.23 | `culture.py` | library shelves, community gallery, recipe exchange, exhibitions |
+| v0.24 | `correspondence.py` | letters home, care packages, shared-roots bonding, personal diaries |
+| v0.25 | `competitions.py` | seasonal craft fairs and blue-ribbon honours |
+| v0.26 | `civic_projects.py` | donor- and purse-funded landmark projects |
+| v0.27 | `health.py` | athletic vitality curve, medical rounds at the hospital |
+| v0.28 | `pets.py` | household pets and dog-walking encounters |
+| v0.29 | `flea_market.py` | weekend secondhand trade |
+| v0.30 | `youth.py` | school discovery and conserved civic scholarships |
+| v0.31 | `history.py` | archives, cultural eras, hall of fame |
+| v0.32-v0.35 | `guilds.py`, `harvest.py`, `sports.py`, `radio.py` | trade guilds, harvest co-ops, sports matches, town radio |
+| v0.36 | `fire_brigade.py` | volunteer brigade, inspections, rebuild drives |
+| v0.37 | `book_club.py` | reading circles and author signings |
+| v0.38 | `renovations.py` | home additions and heirloom gardens |
+| v0.39 | `jubilee.py` | founders' jubilee, time capsules, Key to Miniville |
+| v0.40 | `theater.py` | theater troupe and playbills |
+| v0.41 | `commons_library.py` | tool library, seed bank, community orchard |
+| v0.42 | `plaques.py` | heritage plaques and walking tours |
+| v0.43 | `sabbaticals.py` | sabbaticals, memoirs, town masterclasses |
+
+The Gemini lineage **split before `press.py` existed** (it never had the
+workstation's Gazette readers/opinion work), so this merge re-applied the
+press power on top of the v0.43 base: `press.py`, the `opinion` table,
+opinion-aware council votes, `press_influence`, `newspapers.readers`, the
+ledger/clock guard and the Council-tab opinion bars are all back and tested.
+
+Verification: **261 tests pass** (257 on the v0.43 base + the 4 restored
+press/CLI tests). The live world's database migrates cleanly on first connect
+(24 new tables + `opinion` + `newspapers.readers` + `motions.support`/
+`press_swing`) — verified on a copy, then run 4 days (548-551) without error.
+A 365-day soak on a copy (`soak_check --run 365 --tag v043`) holds **11/11
+invariants**: money conserved **+0.6%/y**, 0 municipal deficits, unemployment
+9.8% → 5.6%, venues staffed, commercial pay/take 0.86x, 4 closures (1.6/y),
+54% one-off ties, 183 rivalries, **0.0% miserable or hungry**, 386 events/day.
+Every new module lived on the real town's data (keepsakes gifted, mutual aid,
+pet events, radio broadcasts, jubilees, plaques, sabbaticals, civic projects,
+competitions, heirlooms, watch patrols).
+
+## v0.15 — the Gazette has readers, and public opinion moves the council (Fri, 09 Oct 2026, workstation)
+
+The paper could always print a false claim; the only cost was its own
+credibility number. Nothing it printed changed a vote. Now it does.
+
+`press.py` gives the Gazette **readers** — 55% of adults scaled by its
+credibility, so a caught lie shrinks the audience — and gives the town an
+**opinion** on each lever the council can pull, in [-1, 1] (support for raising
+it). Opinion moves weekly from two directions:
+
+- **The town's own conditions** pull it toward its material interest:
+  unemployment wants the wage floor and the dividend up, pensioners want the
+  pension up, an empty purse wants the levy up, rent arrears want rent down.
+- **The Gazette's line** pushes it toward the owner's interest, scaled by the
+  paper's reach (readers/adults). A business paper wants every lever down; a
+  working paper wants the levy, dividend, wage floor and pension up and rent
+  down. Reach is `PENETRATION * credibility`, so credibility *is* influence.
+
+A councillor now weighs **opinion against their district's own interest**. The
+district's lean is ±1; opinion contributes up to ±1.5, so opinion carries a
+seat only when it is strong — a paper needs reach, not just a line. When
+opinion changes the outcome the motion records `press_swing` and the ledger
+emits **`press_influence`**: *"the Gazette's campaign swung the council's vote
+to lower rent multiplier: it carried on opinion, not on the districts' own
+interest."*
+
+**Seen on a year of the real town** (`soak_check --run 365 --tag v15`, a copy
+from tick 19680): 11/11 invariants hold, money −0.1%/y, 0 deficits. The
+business-owned Gazette (Jose Duque by year's end; Laverne Miller earlier)
+drove rent opinion to **−1.00**, and the council's rent motions tracked it:
+rises failed **0-5** on opinion (days 450, 570, 660, 720, 750) and the paper's
+campaign carried rent **cuts** 5-0 (days 480, 690). **8 `press_influence`
+events** in the year, all on rent and the levy. Readership 212 of 398 adults
+(53% reach, credibility 97%).
+
+Observer UI: the Council tab shows the paper's reach/credibility/line and the
+opinion bars; motions flag the ones opinion swung. The Gazette masthead now
+prints its readership.
+
+Files: `src/miniville/press.py` (new), `politics.py` (`_votes_yes` weighs
+opinion; `consider_motion` detects the swing and emits `press_influence`),
+`newspaper.py` (readers in the masthead; `POLICY_PREFERENCE` moved to press),
+`engine.py` (weekly `press.update`), `db.py` (`opinion` table;
+`newspapers.readers`, `motions.support`, `motions.press_swing`), `ui/server.py`,
+`ui/static/*`, `tests/test_press.py`. 205 tests.
+
 ## v0.14 — estates, pensions, owners, housing, crime (Fri, 09 Oct 2026, cloud: Claude Code)
 
 A Claude Code cloud session took the cloud seat at the operator's request. No
@@ -593,6 +743,7 @@ faith) → `init --dataset data/synth-personas --agents 500` gives a 612-residen
 town, and every change below was soaked a year on it (~25 min/yr on 4 cores).
 
 **What a year on a fresh town found** (baseline, before any change: 9/11):
+
 - **Retirees had no income.** Retirement ended the wage and nothing replaced
   it: 105 of 289 households broke, 70 of them all-retired.
 - **Downsizing from The Flats to The Flats**, every fortnight: 1,451
@@ -611,6 +762,7 @@ town, and every change below was soaked a year on it (~25 min/yr on 4 cores).
   `mortality` was imported.
 
 **What was built** (all deterministic, money only *moves* — see ECONOMY.md):
+
 - `mortality._settle_estate` — estate to spouse → household (adults, then
   children) → town purse; `estates_v1` returns what the dead hold to the purse.
 - **Pensions** — residents 65+ without a job draw `pension_week()` from the
@@ -817,14 +969,17 @@ recirculates less. Worth a considered pass on rent recycling / levy balance.
 ## Resume note for next session
 
 Branch `autodev`, both agents pushing. World is seeded (seed=miniville) — `run`
-continues from tick 19248 (Day 401 completed = **Feb 5, Year 2**, winter; next tick
-to advance is tick 19248 to 19296 for Day 402). Do NOT `init` again unless
-intentionally resetting the town. All economy migrations are applied.
+continues from tick 25872 (Day 539 completed = **Jun 23, Year 2**, summer; next tick
+to advance is tick 25872 to 25920 for Day 540). Do NOT `init` again unless
+intentionally resetting the town. All economy migrations are applied (v0.14's
+`estates_v1`, `enterprise_v1` and `economy_v2` ran on the first connect; v0.15's
+`opinion` table and press columns likewise).
 
 **Read `docs/AGENT_SYNC.md` first** — claims and messages between the workstation
 and cloud sessions live there. Pull before starting work; push small commits.
 
 Status updates (Wed, 07 Oct 2026):
+
 - Live world advanced through Day 401: 937 interactions, Anthony Furness and
   Xavier Pacheco married, Aditya Yu and Jenni Miles moved in together, council
   dividend hike motion rejected 2-3.
@@ -848,11 +1003,161 @@ live world has NOT been run on v0.14 yet. On first connect it migrates
 (`enterprise_v1`). Expect a few `town_deficit` events in the first weeks if
 the purse buffer was sized before pensions existed. 198 tests.
 
+Status updates (Fri, 09 Oct 2026, workstation): v0.14 verified on the real
+town, then run live. `soak_check.py --run 365 --tag v14live` (a copy, tick
+19248 onward) holds **11/11 invariants**: money conserved -0.2%/y, **0
+municipal deficits**, unemployment 12.5% → 6.6%, venues staffed, commercial
+venues paid out 0.84x takings, 4 closures (1.4/y), 60% of ties one-off, 110
+rivalries, 1.0% miserable/hungry, 250 events/day. The feared pension deficits
+never came: rent + levy inflow covers the ~87 pensioners. The live world then
+migrated on first connect (8 of 17 venues got resident owners; `ema_revenue`
+seeded from all-time takings) and ran Days 402-410: no deficits, purse
+$145.7k → $212.4k, 2 new estates, and the usual run of betrayals, marriages
+and separations. 198 tests.
+
+Status updates (Fri, 09 Oct 2026, workstation, later): v0.15 above — the press
+got power. `soak_check --run 365 --tag v15` on a copy from tick 19680 holds
+11/11 with **8 `press_influence` swings** (the business-owned Gazette kept rent
+down: rises failed 0-5, cuts carried 5-0). 205 tests. UI verified with
+Patchright (Council opinion bars + press reach, Gazette readership, 0 console
+errors).
+
+**The live world then ran on v0.15** (Days 411-539, after the repair above).
+The same arc played out for real: the council carried rent to **1.15** on Day
+420 (a legitimate motion), then opinion turned and the Gazette's campaign
+killed the next rise **0-5** on Day 450 (`press_influence`), and on Day 480
+**carried a rent cut back to 1.10 5-0** (`press_influence`, the paper backing
+its own line). Opinion at Day 539: rent -0.76, levy -0.43, min_wage -0.29,
+dividend -0.07, pension +0.33 — the pension is the one lever where the town's
+material interest (its seniors) still beats the business line. Readership 215,
+credibility 1.0, 51 editions. Moods healthy (627 content, 4 miserable), 0
+future-dated rows. In-session prose narrative for Day 451 stored in
+`narratives` (source=agent, 1,865 chars).
+
+**Data anomaly found (Fri, 09 Oct 2026, workstation).** The live ledger
+contains **17 stray future-dated rows** — motion events and `motions` rows at
+ticks 22080-50880 (days 460-1060) while the world's clock was at tick 19680
+(day 410). They are contiguous (event ids 70802-70818, motion ids 11-27).
+
+**Root cause (confirmed from the agent-ledger).** The ledger entry for the
+v0.11 politics session (`20261005-065506-349-miniville-28d3fcfc`, 2026-10-05
+06:55, head `41c9ce1`) lists `scripts/_motion_sweep.py` among its commands.
+That probe opened `data/miniville.db` **directly** and swept 24 months of
+motions into it, then committed. Two consequences:
+
+1. 17 motion events + 17 `motions` rows dated after the clock (ledger/clock
+   incoherence; they surface as future-dated rows in the Council UI).
+2. **The probe also set the policy levers** (`set_meta` on every motion that
+   passed). The live world now runs on `levy_rate 0.03` and
+   `rent_multiplier 1.00`, but the town's *own* surviving motions imply
+   `levy_rate 0.05` (day 370 raise rejected) and `rent_multiplier 1.10`
+   (day 220 and day 250 raises carried; day 310/390 raises rejected).
+   `dividend_share 0.20` is explained by the real day-360 motion. So the
+   current levy and rent were chosen by a probe, not by the council.
+
+Guard added: `cli status` now prints a `ledger/clock mismatch` warning when any
+event is dated after the clock, and `scripts/_motion_sweep.py` runs on a copy.
+
+**Repaired (Fri, 09 Oct 2026, workstation — operator approved).** Backed up to
+`backups/miniville-t019680-pre-repair.db`, deleted the 17 stray events
+(ids 70802-70818) and 17 stray motions (ids 11-27), and reset the two
+probe-touched levers to what the town's own motions imply: `levy_rate 0.05`,
+`rent_multiplier 1.10` (`dividend_share 0.20` was already legitimate). No
+`newspaper_claims` referenced the deleted events, so nothing else moved. After
+the repair the clock is at day 419, 0 future-dated rows remain, and `cli
+status` is quiet. The +10% rent was absorbed cleanly: the weekly distress wave
+on the rent day *fell* from 18-19 households (days 385/392/399 at rent 1.00)
+to 11-15 (days 406/413 at rent 1.10), one household downsized, and moods are
+healthy (628 content). Lesson stands: probes must run on a copy, never the
+live DB.
+
+Status updates (Wed, 14 Oct 2026, workstation): **v0.15 expansion — Individualism & Personal Happenings**.
+Integrated Gemini 4's individualism feature set and implemented the Observer UI panel:
+
+- `src/miniville/individual.py`: derives 5 temperament axes (`sociability`, `industriousness`,
+  `curiosity`, `resilience`, `thrift`), 5 chronotypes (`early_bird`, `morning`, `day_walker`,
+  `evening`, `night_owl` with wake/sleep offsets), and signature knacks from persona and skills.
+- Modulates needs decay/recovery by temperament and batches updates via `apply_all_needs`.
+- Shifts schedule wake/sleep ticks, pulls leisure toward favorite places, and avoids rival workplaces.
+- Lonely/bored deviations seek out friends or favorite places across 2 ticks.
+- Standing accrues for personal deeds (`good_turn`, `caregiven`, `craft_breakthrough`, `hobby_triumph`).
+- Personal tags mapped into Gazette sections.
+- CLI: `traits`, `fate <who> <kind>`, `monologue <who> --provider raw|ollama|vw|hf`, enriched `inspect`.
+- Observer UI: new "Individualism" panel visualizing town-wide chronotypes, top archetypes, favorite places,
+  and personal event counts; resident cards updated with visual temperament bars (5 axes) and chronotype badges.
+- Tests: 218 passed (0 failed). Zero console errors verified via headless browser (patchright).
+
+Status updates (Thu, 15 Oct 2026, workstation): **v0.16–v0.17 expansion — Ambitions, 5k Scale Optimizations & Sync Queue**.
+Integrated Gemini 4's v0.16–v0.17 expansion bundled onto autodev:
+
+- `src/miniville/ambitions.py` & `tests/test_ambitions.py`: Adult residents adopt and pursue long-term ambitions (`find_a_job`, `save_nest_egg`, `climb_the_ladder`, `find_true_love`, `pillar_of_the_community`, `make_peace`) based on temperament and circumstances. Daily progress checks track milestones and emit `ambition_achieved` events with reputation gains.
+- Ambition-steered mechanics: hiring pass gives edge to `find_a_job`; promotions boosted for `climb_the_ladder`; romantics pair up faster in `encounters.py`; favor acceptance rate boosted for `pillar_of_the_community`; `save_nest_egg` savers reduce dining out and luxury shopping trips.
+- Scale & 5k performance optimizations: Added 5 targeted DB indexes (`idx_agents_home`, `idx_jobs_place`, `idx_places_kind_district`, `idx_agent_state_place`, `idx_relationships_b`), bulk pre-fetching in `economy.collect_rent`, and cached lookup tables (`jobs_by_agent`, `savers`, `leisure_cache`) in `schedules._plan_ctx`.
+- CLI: new `ambitions` subcommand (`--status active|completed|all`, `--limit N`), `sync` subcommand (prints structured claims and operator queue from `AGENT_SYNC.md`), and enriched `inspect` displaying active ambition progress.
+- Observer UI: added "Active Personal Ambitions" table with click-to-focus links (`mvPick`) and progress bars to the Individualism panel, plus dedicated ambition progress display on resident profile cards.
+- Live world advanced from tick 25920 to tick 26112 (Day 545, summer) — ambitions actively progressing across 631 living residents.
+- Tests: 223 passed (0 failed). Headless browser verified zero console errors and clean rendering.
+
+Status updates (Thu, 15 Oct 2026, workstation): **v0.18–v0.19 expansion — Mentorships, Traditions & Town Social Network Graph**.
+Integrated Gemini 4's v0.18–v0.19 expansion bundled onto autodev:
+
+- `src/miniville/mentorship.py` & `tests/test_mentorship.py`: Seasoned residents (age 40+, senior rank, or standing 8+) mentor young adults (18-35) at shared venues, clubs, or congregations. Across 5 coaching lessons they warm bonds, boost morale, and upon graduation pass their craft to the apprentice's skills, conferring a 5% wage bump and reflection memories.
+- `households.tradition`: Every household derives a signature custom (e.g. Sunday potluck dinners, lake fishing, front-porch music). Celebrated on Sundays with household morale boosts and affinity gains.
+- 7th Personal Ambition: `mentor_a_protege` ("Pass on their craft to a protégé") added to `ambitions.py`, tracked via `mentorships` status.
+- Reputation: Standing awarded for `apprenticeship_completed` (+2) and `mentorship_started` (+1).
+- CLI: `mentorships` subcommand (`cli mentorships`), and `household tradition`, `mentor`, `apprentices` printed in `inspect`.
+- Observer UI & Town Network:
+  - Pixi-based town-wide social network graph (`/api/network`) clustered into districts (Lakeshore, Downtown, Old Mill Quarter, Greenhill, The Flats) with filter buttons for `Town Network`, `Mentorships`, `Romance & Kin`, `Rivalries`.
+  - Individualism panel includes "Intergenerational Mentorships & Apprenticeships" and "Household Family Traditions" tables.
+  - Resident cards display temperament badge, chronotype, knack, axes pills, household tradition, mentor, and apprentices.
+- Live world advanced to tick 26256 (Day 547). 226 unit tests pass. 0 console errors verified via patchright.
+
+Status updates (Tue, 20 Oct 2026, workstation): **merged the Gemini 4
+v0.20-v0.43 expansion** onto autodev from the snapshots in
+`C:\Users\Administrator\Desktop\gemini4-miniville`. 24 new modules (keepsakes,
+neighborhood, milestones, culture, correspondence, competitions, civic
+projects, health, pets, flea market, youth, history, guilds, harvest, sports,
+radio, fire brigade, book club, renovations, jubilee, theater, tool library,
+plaques, sabbaticals) each with a table, CLI, API, Gazette section and tests.
+The Gemini lineage had split before the workstation's press work, so the
+Gazette's readers/opinion power (`press.py`, `opinion`, `press_influence`,
+ledger/clock guard, Council opinion bars) was re-applied on top of the v0.43
+base. **261 tests pass.** The live DB migrates cleanly on first connect
+(24 new tables + opinion + newspapers.readers + motions.support/press_swing) —
+verified on a copy and run 4 days without error. The 365-day soak on a copy
+(`soak_check --run 365 --tag v043`) holds **11/11 invariants** (money +0.6%/y,
+0 deficits, 0.0% miserable/hungry, 386 events/day); details in the v0.16-v0.43
+section above. The live world has NOT yet run on the merged code (item 5
+below).
+
+Status updates (Mon, 19 Oct 2026, workstation): **v0.44-v0.47 TV mode merged,
+and the observer is now a tailnet service.** Integrated the Gemini TV
+expansion (`tv.py`, `tv.js`, `cli tv`, `serve --live-step`, the calm living
+map, the auto-director camera and the interactive takeover), re-applying the
+press work on top as before; fixed tv.py's treasury read (was a nonexistent
+meta key, now the real purse). 264 tests pass. The observer now runs as
+**`https://miniville.vaultwares.ca`** (tailnet-only): greencloud dnsmasq +
+nginx proxy -> `100.71.101.21:8751` (clopeux-desktop), Let's Encrypt cert
+(expires 2027-01-17, auto-renew), Windows scheduled task
+`\VaultWares\Miniville Observer` (conhost --headless model) running
+`cli serve --host 100.71.101.21 --port 8751 --live-step 8` — the town
+auto-advances 1 tick every 8 s while the TV display is up. Log:
+`%LOCALAPPDATA%\VaultWares\miniville\observer.log`. Registered in
+vaultwares-docs services + host inventory.
+
+Status updates (Mon, 19 Oct 2026, cloud): v0.48 TV story director shipped (see
+the v0.48 section). The tailnet observer picks it up on its next restart; no
+migration needed.
+
 Open items:
+
 1. Avatar pipeline: 129 deferred female residents awaiting IMDb StarMeter expansion
    when operator approves batch.
 2. Observer UI: sigma.js bond graph (district overlay done in v0.14).
-2c. Live-world soak of v0.14 (workstation): `scripts/soak_check.py --run 365 --tag v14live`.
 3. Scale test: 2k-5k agents (initial indexing/benchmarking done in bench5k.db).
-4. Routine: read this file → `run` the next day(s) → `digest` → write a
+4. The council's next election is Day 1100 — the press has not yet been tested
+   on an election (endorsements are not modelled; the line only moves opinion).
+5. Advance the live world on the merged v0.43 code (once the v043 soak passes):
+   it migrates on first connect and the 24 new modules start living.
+6. Routine: read this file → `run` the next day(s) → `digest` → write a
    `narrate-write` entry → update this file → ledger.

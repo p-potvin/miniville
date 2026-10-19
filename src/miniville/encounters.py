@@ -200,13 +200,15 @@ CANDIDATES = 14
 
 def _affinity_ctx(conn: sqlite3.Connection) -> dict:
     """Who belongs to what — one pass, so pairing needs no per-pair queries."""
-    ctx: dict = {"groups": {}, "faith": {}, "hobbies": {}, "age": {}}
+    romantics = {r["agent_id"] for r in conn.execute("SELECT agent_id FROM ambitions WHERE status='active' AND kind='find_true_love'")}
+    ctx: dict = {"groups": {}, "faith": {}, "hobbies": {}, "age": {}, "origin_state": {}, "romantics": romantics}
     for r in conn.execute("SELECT agent_id, group_id FROM memberships"):
         ctx["groups"].setdefault(r["agent_id"], set()).add(r["group_id"])
-    for r in conn.execute("SELECT id, faith, age, hobbies_json FROM agents "
+    for r in conn.execute("SELECT id, faith, age, hobbies_json, origin_state FROM agents "
                           "WHERE alive=1"):
         ctx["faith"][r["id"]] = r["faith"]
         ctx["age"][r["id"]] = r["age"]
+        ctx["origin_state"][r["id"]] = r["origin_state"]
         try:
             ctx["hobbies"][r["id"]] = set(json.loads(r["hobbies_json"] or "[]"))
         except (TypeError, ValueError):
@@ -240,6 +242,11 @@ def _pair_score(ctx: dict, known: set[tuple[int, int]], a: int, b: int,
         score += 0.75
     if ctx["hobbies"].get(a, set()) & ctx["hobbies"].get(b, set()):
         score += 0.5
+    sa, sb = ctx.get("origin_state", {}).get(a), ctx.get("origin_state", {}).get(b)
+    if sa and sa == sb:
+        score += 0.6
+    if a in ctx.get("romantics", set()) and b in ctx.get("romantics", set()):
+        score += 1.25
     return score
 
 

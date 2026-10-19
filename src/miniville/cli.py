@@ -28,18 +28,29 @@ def _conn(args) -> sqlite3.Connection:
 def cmd_init(args) -> int:
     from . import economy
     from .ingest import populate
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     dbmod.init_db(conn)
     stats = populate(conn, args.dataset, args.agents, seed=args.seed)
     dbmod.set_meta(conn, "seed", args.seed)
     dbmod.set_meta(conn, "tick", "0")
+    from . import individual
+    from . import ambitions
+    from . import civic_projects
+    from . import mentorship
+    from . import neighborhood
     economy.ensure_businesses(conn)
+    individual.ensure_profiles(conn, args.seed)
+    mentorship.ensure_traditions(conn, args.seed)
+    neighborhood.ensure_districts(conn)
+    civic_projects.ensure_projects(conn)
+    ambitions.assign_ambitions(conn, 0, args.seed)
     conn.commit()
     # a town comes with its congregations and clubs already in it
     from .groups import assign_faith, form_groups, refresh_standing
     faith = assign_faith(conn)
     founded = form_groups(conn, 0, args.seed)
     refresh_standing(conn)
+    mentorship.pair_mentors(conn, 0, args.seed)
     conn.commit()
     print(f"Miniville populated: {stats}")
     print(f"  faith parsed from personas: {faith['named']} named, "
@@ -50,8 +61,12 @@ def cmd_init(args) -> int:
 
 def cmd_economy(args) -> int:
     from . import economy
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
+    from . import individual
+    from . import ambitions
     economy.ensure_businesses(conn)
+    individual.ensure_profiles(conn, args.seed)
+    ambitions.assign_ambitions(conn, 0, args.seed)
     conn.commit()
     s = economy.economy_stats(conn)
     print(f"money supply:    ${s['money_supply_cents'] / 100:,.0f}")
@@ -98,7 +113,7 @@ def cmd_economy(args) -> int:
 
 def cmd_run(args) -> int:
     from .engine import run
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     seed = dbmod.get_meta(conn, "seed", "miniville")
     assert seed is not None
     run(conn, args.ticks, seed, verbose=True)
@@ -107,7 +122,7 @@ def cmd_run(args) -> int:
 
 
 def cmd_status(args) -> int:
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     from .seasons import fmt_date, holiday_for, season_of
     from .timekeeper import day_of
     from .timekeeper import fmt_tick
@@ -133,11 +148,21 @@ def cmd_status(args) -> int:
     print("  relationships:", {l["label"]: l["c"] for l in labels})
     from . import economy
     print("  economy:", economy.economy_line(conn))
+    # The ledger should never hold events dated after the clock. A probe that
+    # wrote into the live DB (see docs/STATE.md, Fri 09 Oct 2026) or a restore
+    # that rolled the clock back leaves rows from the future; say so loudly
+    # rather than letting them show up as future-dated rows in the observer UI.
+    future = conn.execute("SELECT COUNT(*) c FROM events WHERE tick > ?",
+                          (tick,)).fetchone()["c"]
+    if future:
+        newest = conn.execute("SELECT MAX(tick) FROM events").fetchone()[0]
+        print(f"  !! ledger/clock mismatch: {future} events dated after the clock "
+              f"(now tick {tick}, newest tick {newest})")
     return 0
 
 
 def cmd_inspect(args) -> int:
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     a = conn.execute(
         "SELECT * FROM agents WHERE name LIKE ? OR id=?", (f"%{args.who}%", args.who if str(args.who).isdigit() else -1)
     ).fetchone()
@@ -146,7 +171,30 @@ def cmd_inspect(args) -> int:
         return 1
     st = conn.execute("SELECT * FROM agent_state WHERE agent_id=?", (a["id"],)).fetchone()
     print(f"{a['name']} — {a['age']} {a['sex']}, {a['occupation']}")
+    from .individual import resident_summary
+    ind = resident_summary(conn, a["id"])
     print(f"  from {a['origin_city']}, {a['origin_state']}; status={a['marital_status']}")
+    print(f"  temperament: {ind['archetype']} (chronotype={ind['chronotype']}, knack={ind['knack']}"
+          + (f", favorite={ind['favorite_place']}" if ind.get("favorite_place") else "") + ")")
+    if ind.get("ambition"):
+        am = ind["ambition"]
+        print(f"  ambition: {am['label']} ({am['status']}, {am['progress']*100:.0f}%)")
+    if ind.get("household_tradition"):
+        print(f"  household tradition: {ind['household_tradition']}")
+    if ind.get("mentor"):
+        m = ind["mentor"]
+        print(f"  mentor: {m['name']} in {m['craft']} ({m['status']}, {m['lessons']}/{m['target_lessons']} lessons)")
+    if ind.get("apprentices"):
+        apps = ", ".join(f"{ap['name']} ({ap['craft']}, {ap['status']})" for ap in ind["apprentices"])
+        print(f"  apprentices: {apps}")
+    if ind.get("keepsakes"):
+        ks = ", ".join(f"{k['title']} (by {k['creator_name']}, gen {k['generations']})" for k in ind["keepsakes"])
+        print(f"  keepsakes: {ks}")
+    if ind.get("ribbons"):
+        rbs = ", ".join(f"{rb['title']} (Day {rb['day']})" for rb in ind["ribbons"])
+        print(f"  blue ribbons: {rbs}")
+    if ind.get("diary"):
+        print(f"  latest diary: {ind['diary'][0]['entry']}")
     print(f"  persona: {(a['persona'] or '')[:240]}")
     print(f"  hobbies: {a['hobbies_json']}")
     print(f"  state: energy={st['energy']:.0f} hunger={st['hunger']:.0f} "
@@ -171,8 +219,389 @@ def cmd_inspect(args) -> int:
     return 0
 
 
+
+
+def cmd_fate(args) -> int:
+    from . import individual
+    conn = dbmod.connect(args.db)
+    seed = dbmod.get_meta(conn, "seed", "miniville") or "miniville"
+    out = individual.inject_fate(conn, args.who, args.kind, seed=seed)
+    print(out["message"])
+    return 0 if out["ok"] else 1
+
+
+def cmd_traits(args) -> int:
+    from . import individual
+    conn = dbmod.connect(args.db)
+    stats = individual.town_individualism_stats(conn)
+    print("chronotypes:", stats["chronotypes"])
+    print("top archetypes:", stats["top_archetypes"])
+    if stats["favorite_places"]:
+        print("favorite third places:")
+        for fp in stats["favorite_places"]:
+            print(f"  {fp['venue']:<28} {fp['regulars']} regulars")
+    if stats["personal_event_counts"]:
+        print("personal happenings on record:", stats["personal_event_counts"])
+    return 0
+
+
+def cmd_monologue(args) -> int:
+    from .narrator import narrate_resident
+    conn = dbmod.connect(args.db)
+    a = conn.execute(
+        "SELECT id FROM agents WHERE name LIKE ? OR id=?",
+        (f"%{args.who}%", args.who if str(args.who).isdigit() else -1),
+    ).fetchone()
+    if not a:
+        print("no such agent")
+        return 1
+    print(narrate_resident(conn, a["id"], provider=args.provider))
+    return 0
+
+
+
+
+def cmd_projects(args) -> int:
+    from .civic_projects import list_projects
+    conn = dbmod.connect(args.db)
+    rows = list_projects(conn)
+    print(f"{'project':<40} {'district':<18} {'status':<10} {'funded':>13} {'hours':>7}")
+    for r in rows:
+        fstr = f"${r['funded_cents']/100:,.0f}/${r['target_cents']/100:,.0f}"
+        hstr = f"{r['volunteer_hours']}/{r['target_hours']}"
+        print(f"  {r['title'][:38]:<38} {r['district']:<18} {r['status']:<10} {fstr:>13} {hstr:>7}")
+    return 0
+
+
+def cmd_health(args) -> int:
+    from .health import health_stats
+    conn = dbmod.connect(args.db)
+    s = health_stats(conn)
+    print(f"average vitality:    {s['avg_vitality']:.1f} / 100")
+    print(f"high vitality (>=75): {s['high_vitality']} residents   low (<45): {s['low_vitality']} residents")
+    print(f"currently sick:      {s['currently_sick']} residents")
+    print(f"hospital clinicians: {s['hospital_clinicians']} on staff")
+    print(f"medical rounds:      {s['treatments_total']} treatments, {s['checkups_total']} preventive checkups")
+    if s["vital_seniors"]:
+        print("most vital seniors:")
+        for sr in s["vital_seniors"]:
+            print(f"  {sr['name']:<24} age {sr['age']:<3} vitality {sr['vitality']:.1f}")
+    return 0
+
+
+def cmd_diary(args) -> int:
+    from .correspondence import diary_of, list_diaries
+    conn = dbmod.connect(args.db)
+    if args.who:
+        a = conn.execute(
+            "SELECT id, name FROM agents WHERE name LIKE ? OR id=?",
+            (f"%{args.who}%", args.who if str(args.who).isdigit() else -1),
+        ).fetchone()
+        if not a:
+            print("no such agent")
+            return 1
+        rows = diary_of(conn, int(a["id"]), limit=args.limit)
+    else:
+        rows = list_diaries(conn, limit=args.limit)
+    if not rows:
+        print("no diary entries recorded yet")
+        return 0
+    for r in rows:
+        print(f"  [day {r['day']:>3}] {r['name']} ({r['kind']}): {r['entry']}")
+    return 0
+
+
+def cmd_competitions(args) -> int:
+    from .competitions import list_competitions
+    conn = dbmod.connect(args.db)
+    rows = list_competitions(conn, limit=args.limit)
+    if not rows:
+        print("no town competitions held yet")
+        return 0
+    print(f"{'day':>4}  {'competition':<36} {'winner':<20} {'runner-up':<20} {'entrants':>8}")
+    for r in rows:
+        print(f"  {r['day']:>3}  {r['title'][:34]:<36} {r['winner_name'][:18]:<20} "
+              f"{(r['runner_up_name'] or '-'):<20} {r['entrants']:>8}")
+    return 0
+
+
+def cmd_milestones(args) -> int:
+    from .milestones import list_milestones
+    conn = dbmod.connect(args.db)
+    rows = list_milestones(conn, limit=args.limit)
+    if not rows:
+        print("no personal milestones recorded yet")
+        return 0
+    for r in rows:
+        print(f"  [day {r['day']:>3}] {r['text']}")
+    return 0
+
+
+def cmd_culture(args) -> int:
+    from .culture import list_cultural_commons
+    conn = dbmod.connect(args.db)
+    rows = list_cultural_commons(conn, limit=args.limit)
+    if not rows:
+        print("no cultural works exhibited yet")
+        return 0
+    print(f"{'title':<36} {'kind':<11} {'creator':<18} {'venue':<26} {'admirers':>8}")
+    for r in rows:
+        print(f"  {r['title'][:34]:<34} {r['kind'][:10]:<11} "
+              f"{r['creator_name'][:16]:<18} {(r['venue_name'] or '-'):<26} {r['appreciations']:>8}")
+    return 0
+
+
+def cmd_keepsakes(args) -> int:
+    from .keepsakes import list_keepsakes
+    conn = dbmod.connect(args.db)
+    rows = list_keepsakes(conn, heirlooms_only=args.heirlooms, limit=args.limit)
+    if not rows:
+        print("no keepsakes on record yet")
+        return 0
+    print(f"{'title':<38} {'kind':<11} {'creator':<20} {'owner':<20} {'gen':>3}")
+    for r in rows:
+        print(f"  {r['title'][:36]:<36} {r['kind'][:10]:<11} "
+              f"{r['creator_name'][:18]:<20} {r['owner_name'][:18]:<20} {r['generations']:>3}")
+    return 0
+
+
+def cmd_neighborhoods(args) -> int:
+    from .neighborhood import neighborhood_stats
+    conn = dbmod.connect(args.db)
+    rows = neighborhood_stats(conn)
+    print(f"{'district':<20} {'residents':>9} {'cohesion':>9} {'vigilance':>10}  last activity")
+    for r in rows:
+        last = f"{r['last_event_kind']} (day {r['last_event_day'] + 1})" if r['last_event_kind'] else "-"
+        print(f"  {r['district']:<18} {r['residents']:>9} "
+              f"{r['cohesion']*100:>8.0f}% {r['vigilance']*100:>9.0f}%  {last}")
+    return 0
+
+
+def cmd_mentorships(args) -> int:
+    from .mentorship import list_mentorships, tradition_stats
+    conn = dbmod.connect(args.db)
+    rows = list_mentorships(conn, status=args.status, limit=args.limit)
+    if not rows:
+        print("no mentorships matching filter")
+    else:
+        print(f"{'mentor':<22} {'apprentice':<22} {'craft':<20} {'status':<10} {'lessons':>7}")
+        for r in rows:
+            prog = f"{r['lessons']}/{r['target_lessons']}"
+            print(f"  {r['mentor_name'][:20]:<20} {r['apprentice_name'][:20]:<20} "
+                  f"{r['craft'][:18]:<18} {r['status']:<10} {prog:>7}")
+    trads = tradition_stats(conn)[:6]
+    if trads:
+        print("\nhousehold traditions:")
+        for t in trads:
+            print(f"  {t['tradition']:<38} {t['households']} households ({t['residents']} residents)")
+    return 0
+
+
+def cmd_ambitions(args) -> int:
+    from .ambitions import list_ambitions
+    conn = dbmod.connect(args.db)
+    rows = list_ambitions(conn, status=args.status, limit=args.limit)
+    if not rows:
+        print("no ambitions matching filter")
+        return 0
+    print(f"{'resident':<24} {'ambition':<38} {'status':<10} {'progress':>8}")
+    for r in rows:
+        print(f"  {r['name'][:22]:<22} {r['label'][:36]:<36} {r['status']:<10} {r['progress']*100:7.0f}%")
+    return 0
+
+
+
+
+def cmd_pets(args) -> int:
+    from .pets import pet_summary
+    conn = dbmod.connect(args.db)
+    summary = pet_summary(conn)
+    print(f"=== Household Pets ({summary['total_pets']} total: {summary['dogs']} dogs, {summary['cats']} cats) ===")
+    print(f"  park dog-walk encounters: {summary['pet_encounters']} · lost-pet reunions: {summary['reunions']}")
+    for p in summary["pets"][: args.limit]:
+        print(f"  {p['name']:12s} ({p['breed']} {p['species']}) · {p['household_name']} ({p['owner_name']}) — {p['quirk']}")
+    return 0
+
+
+def cmd_market(args) -> int:
+    from .flea_market import market_summary
+    conn = dbmod.connect(args.db)
+    summary = market_summary(conn)
+    print(f"=== Weekend Flea Market ({summary['total_trades']} sales · ${summary['total_volume_cents']/100:,.0f} volume) ===")
+    for t in summary["recent_trades"][: args.limit]:
+        print(f"  Day {t['day']+1:3d}: {t['buyer_name']} bought {t['item_title']} from {t['seller_name']} (${t['price_cents']/100:,.0f})")
+    return 0
+
+
+def cmd_youth(args) -> int:
+    from .youth import youth_summary
+    conn = dbmod.connect(args.db)
+    summary = youth_summary(conn)
+    print(f"=== Youth Discovery & Scholarships ({summary['discoveries']} discoveries · {summary['scholarships']} scholarships) ===")
+    for item in summary["recent"][: args.limit]:
+        print(f"  Day {item['day']:3d} [{item['tag']}]: {item['name']} — {item['text']}")
+    return 0
+
+
+def cmd_history(args) -> int:
+    from .history import history_summary
+    conn = dbmod.connect(args.db)
+    summary = history_summary(conn)
+    print("=== Miniville Historical Eras ===")
+    for e in summary["eras"]:
+        print(f"  {e['name']} [{e['theme']}]: {e['summary']}")
+    print("\n=== Miniville Hall of Fame ===")
+    for h in summary["hall_of_fame"]:
+        print(f"  {h['category']:24s}: {h['name']} ({h['metric']} · {h['detail']})")
+    return 0
+
+
+def cmd_radio(args) -> int:
+    from .radio import radio_summary
+    conn = dbmod.connect(args.db)
+    summary = radio_summary(conn)
+    print(f"=== WMNV 94.3 FM Community Radio ({summary['total_broadcasts']} broadcasts: {summary['oral_histories']} oral histories, {summary['live_music_sessions']} live sessions) ===")
+    for b in summary["recent"][: args.limit]:
+        print(f"  Day {b['day']+1:3d} [{b['show_kind']}]: {b['title']} — {b['transcript']}")
+    return 0
+
+
+def cmd_guilds(args) -> int:
+    from .guilds import guilds_summary
+    conn = dbmod.connect(args.db)
+    summary = guilds_summary(conn)
+    print(f"=== Miniville Craft Guilds ({summary['total_guilds']} guilds · {summary['total_members']} members · {summary['total_masterpieces']} masterpieces · ${summary['total_patronage_cents']/100:,.0f} grants) ===")
+    for g in summary["guilds"]:
+        print(f"  {g['name']:36s} ({g['craft']}) · {g['members_count']:2d} members · Master: {g['master_name'] or 'none'} · {g['masterpieces_count']} masterpieces")
+    return 0
+
+
+def cmd_harvest(args) -> int:
+    from .harvest import harvest_summary
+    conn = dbmod.connect(args.db)
+    summary = harvest_summary(conn)
+    print(f"=== Seasonal Harvest Co-op ({summary['boxes_sold']} boxes sold [${summary['total_volume_cents']/100:,.0f}] · {summary['baskets_shared']} surplus baskets shared) ===")
+    for h in summary["recent"][: args.limit]:
+        print(f"  Day {h['day']+1:3d} [{h['season']} {h['kind']}]: {h['grower_name']} -> {h['recipient_name']}: {h['produce_item']} (${h['price_cents']/100:,.0f})")
+    return 0
+
+
+def cmd_sports(args) -> int:
+    from .sports import sports_summary
+    conn = dbmod.connect(args.db)
+    summary = sports_summary(conn)
+    print(f"=== Inter-District Sports League ({summary['total_matches']} Saturday derbies) ===")
+    for s in summary["standings"]:
+        print(f"  {s['team']:24s} ({s['district']:10s}): {s['wins']}W - {s['losses']}L (PF {s['points_for']})")
+    if summary["recent_matches"]:
+        print("\n=== Recent Saturday Derbies ===")
+        for m in summary["recent_matches"][: args.limit]:
+            print(f"  Day {m['day']+1:3d}: {m['summary']}")
+    return 0
+
+
+
+
+def cmd_brigade(args) -> int:
+    from .fire_brigade import brigade_summary
+    conn = dbmod.connect(args.db)
+    summary = brigade_summary(conn)
+    print(f"=== Volunteer Fire Brigade ({summary['total_volunteers']} volunteers · {summary['captains']} captains · {summary['total_drills']} drills · {summary['total_rebuilds']} rebuilds) ===")
+    for v in summary["roster"][: args.limit]:
+        print(f"  {v['name']:22s} [{v['role']:9s} · {v['district']:12s}] vitality {v['vitality']} · {v['drills_completed']} drills · {v['rescues_count']} rebuilds")
+    return 0
+
+
+def cmd_bookclub(args) -> int:
+    from .book_club import book_club_summary
+    conn = dbmod.connect(args.db)
+    summary = book_club_summary(conn)
+    print(f"=== Miniville Literary Circle ({summary['total_selections']} selections · ${summary['total_royalties_cents']/100:,.0f} local author royalties) ===")
+    for b in summary["selections"][: args.limit]:
+        auth = b["author_name"] or "Traditional"
+        print(f"  Day {b['day']+1:3d} [{b['season']}]: '{b['title']}' by {auth} ({b['readers_count']} readers · ${b['royalty_cents']/100:,.0f} royalties)")
+    return 0
+
+
+def cmd_renovations(args) -> int:
+    from .renovations import renovations_summary
+    conn = dbmod.connect(args.db)
+    summary = renovations_summary(conn)
+    print(f"=== Home Renovations & Porch Additions ({summary['total_renovations']} upgrades · ${summary['total_spent_cents']/100:,.0f} paid to local builders) ===")
+    for r in summary["recent"][: args.limit]:
+        print(f"  Day {r['day']+1:3d}: {r['household_name']} ({r['district']}) hired {r['builder_name']} for {r['title']} (${r['cost_cents']/100:,.0f})")
+    return 0
+
+
+def cmd_jubilee(args) -> int:
+    from .jubilee import jubilee_summary
+    conn = dbmod.connect(args.db)
+    summary = jubilee_summary(conn)
+    print(f"=== Founders' Jubilee & Time Capsules ({summary['total_capsules']} capsules sealed) ===")
+    for c in summary["capsules"]:
+        print(f"  Day {c['day']+1:3d}: {c['theme']} · Key to Miniville: {c['honouree_name']} (${c['honorarium_cents']/100:,.0f}) · Items: {', '.join(c['items'])}")
+    return 0
+
+
+
+
+def cmd_theater(args) -> int:
+    from .theater import theater_summary
+    conn = dbmod.connect(args.db)
+    summary = theater_summary(conn)
+    print(f"=== Miniville Players Theater ({summary['total_productions']} productions · ${summary['total_box_office_cents']/100:,.0f} box office) ===")
+    for p in summary["productions"][: args.limit]:
+        print(f"  Day {p['day']+1:3d} [{p['season']}]: '{p['title']}' by {p['playwright_name']} (starring {p['lead_actor_name']}, {p['audience_count']} attendees, ${p['box_office_cents']/100:,.0f})")
+    return 0
+
+
+def cmd_toollibrary(args) -> int:
+    from .commons_library import commons_library_summary
+    conn = dbmod.connect(args.db)
+    summary = commons_library_summary(conn)
+    print(f"=== Tool Library, Seed Bank & Orchard ({summary['total_loans']} loans/gleanings · ${summary['total_endowment_cents']/100:,.0f} patron endowments) ===")
+    for t in summary["recent"][: args.limit]:
+        print(f"  Day {t['day']+1:3d} [{t['item_kind']}]: {t['borrower_name']} borrowed {t['item_name']} from steward {t['steward_name']} (${t['endowment_cents']/100:,.0f} endowment)")
+    return 0
+
+
+def cmd_plaques(args) -> int:
+    from .plaques import plaques_summary
+    conn = dbmod.connect(args.db)
+    summary = plaques_summary(conn)
+    print(f"=== Municipal Historical Plaques & Walking Tours ({summary['total_plaques']} plaques · ${summary['total_tips_cents']/100:,.0f} docent tips) ===")
+    for hp in summary["plaques"][: args.limit]:
+        print(f"  Day {hp['day']+1:3d}: {hp['title']} — {hp['inscription']}")
+    return 0
+
+
+def cmd_sabbaticals(args) -> int:
+    from .sabbaticals import sabbaticals_summary
+    conn = dbmod.connect(args.db)
+    summary = sabbaticals_summary(conn)
+    print(f"=== Resident Sabbaticals, Memoirs & Masterclasses ({summary['total_sabbaticals']} sessions · ${summary['total_stipends_cents']/100:,.0f} Lyceum stipends) ===")
+    for sb in summary["recent"][: args.limit]:
+        print(f"  Day {sb['day']+1:3d} [{sb['kind']}]: {sb['title']} at {sb['venue_name'] or 'Library'} ({sb['attendees_count']} attendees · ${sb['stipend_cents']/100:,.0f})")
+    return 0
+
+
+def cmd_sync(args) -> int:
+    """Print structured inter-agent claims and operator priority queue."""
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    sync_file = repo_root / "docs" / "AGENT_SYNC.md"
+    if not sync_file.is_file():
+        print("no docs/AGENT_SYNC.md found")
+        return 1
+    text = sync_file.read_text(encoding="utf-8")
+    for section in ("## Operator Priority Queue", "## Claims"):
+        if section in text:
+            block = text.split(section, 1)[1].split("\n## ", 1)[0].strip()
+            print(section); print(block); print()
+    return 0
+
+
 def cmd_chronicle(args) -> int:
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     row = conn.execute(
         "SELECT * FROM chronicle WHERE day=?", (args.day - 1,)).fetchone()
     if row:
@@ -184,14 +613,14 @@ def cmd_chronicle(args) -> int:
 
 def cmd_digest(args) -> int:
     from .chronicle import day_digest
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     print(day_digest(conn, args.day - 1, max_events=args.max))
     return 0
 
 
 def cmd_narrate_write(args) -> int:
     from .chronicle import write_narrative
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     if args.file:
         text = Path(args.file).read_text(encoding="utf-8")
     else:
@@ -206,7 +635,7 @@ def cmd_narrate_write(args) -> int:
 
 def cmd_narrate(args) -> int:
     from .narrator import narrate_events, spend_report
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     lines = narrate_events(conn, args.day - 1, provider=args.provider,
                            hf_model=args.hf_model,
                            ollama_model=args.ollama_model,
@@ -222,7 +651,7 @@ def cmd_narrate(args) -> int:
 def cmd_immigrate(args) -> int:
     from .db import get_meta
     from .growth import immigrate
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     seed = get_meta(conn, "seed", "miniville")
     tick = int(get_meta(conn, "tick", "0") or 0)
     n = immigrate(conn, args.n, tick, seed, dataset_dir=args.dataset)
@@ -234,7 +663,7 @@ def cmd_immigrate(args) -> int:
 def cmd_year_in_review(args) -> int:
     from .db import get_meta
     from .newspaper import year_in_review
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     day = int(get_meta(conn, "tick", "0") or 0) // 48
     year = args.year or max(1, day // 365 + (1 if day % 365 else 0))
     print(year_in_review(conn, year))
@@ -243,7 +672,7 @@ def cmd_year_in_review(args) -> int:
 
 def cmd_influence(args) -> int:
     from .conflict import influence_of, most_influential
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     rows = most_influential(conn, args.top)
     if not rows:
         print("nobody has any influence yet")
@@ -269,7 +698,7 @@ def cmd_influence(args) -> int:
 def cmd_council(args) -> int:
     from .db import get_meta
     from .politics import POLICIES, council, next_election_day, policy
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     day = int(get_meta(conn, "tick", "0") or 0) // 48
     seats = council(conn)
     if not seats:
@@ -299,7 +728,7 @@ def cmd_council(args) -> int:
 def cmd_election(args) -> int:
     from .db import get_meta
     from .politics import hold_election
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     seed = get_meta(conn, "seed", "miniville")
     tick = int(get_meta(conn, "tick", "0") or 0)
     out = hold_election(conn, tick, seed)
@@ -317,7 +746,7 @@ def cmd_election(args) -> int:
 def cmd_motion(args) -> int:
     from .db import get_meta
     from .politics import consider_motion
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     seed = get_meta(conn, "seed", "miniville")
     tick = int(get_meta(conn, "tick", "0") or 0)
     out = consider_motion(conn, tick, seed)
@@ -334,7 +763,7 @@ def cmd_motion(args) -> int:
 def cmd_form_groups(args) -> int:
     from .db import get_meta
     from .groups import assign_faith, form_groups, refresh_standing, roster
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     seed = get_meta(conn, "seed", "miniville")
     tick = int(get_meta(conn, "tick", "0") or 0)
     faith = assign_faith(conn)
@@ -352,7 +781,7 @@ def cmd_form_groups(args) -> int:
 
 def cmd_groups(args) -> int:
     from .groups import roster
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     rows = roster(conn)
     if not rows:
         print("no groups yet — run `form-groups`")
@@ -372,7 +801,7 @@ def cmd_groups(args) -> int:
 def cmd_rebalance_jobs(args) -> int:
     from .db import get_meta
     from .jobs import fix_minor_flags, rebalance, venue_targets
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     seed = get_meta(conn, "seed", "miniville")
     tick = int(get_meta(conn, "tick", "0") or 0)
     minors = fix_minor_flags(conn)
@@ -398,7 +827,7 @@ def cmd_rebalance_jobs(args) -> int:
 def cmd_newspaper(args) -> int:
     from .db import get_meta
     from .newspaper import latest, publish_week, week_of
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     if args.week is not None:
         text = publish_week(conn, args.week - 1, get_meta(conn, "seed", "miniville"))
     else:
@@ -416,7 +845,7 @@ def cmd_newspaper(args) -> int:
 def cmd_reflect(args) -> int:
     from .db import get_meta
     from .memory import reflect_all
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     tick = int(get_meta(conn, "tick", "0") or 0)
     n = reflect_all(conn, tick // 48, limit=args.limit)
     print(f"{n} resident(s) reflected")
@@ -425,7 +854,7 @@ def cmd_reflect(args) -> int:
 
 def cmd_backup(args) -> int:
     from .backup import backup_db, export_days
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     dest = backup_db(conn)
     n = export_days(conn)
     print(f"snapshot: {dest} (+chronicle export of {n} day(s) to export/)")
@@ -440,7 +869,7 @@ def cmd_daily(args) -> int:
     from .db import get_meta
     from .narrator import narrate_events, spend_report
     from .timekeeper import TICKS_PER_DAY
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     seed = get_meta(conn, "seed", "miniville")
     start_day = int(get_meta(conn, "tick", "0") or 0) // TICKS_PER_DAY
     for d in range(start_day, start_day + args.days):
@@ -474,7 +903,7 @@ def cmd_daily(args) -> int:
 
 def cmd_shock(args) -> int:
     from . import shocks
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     seed = dbmod.get_meta(conn, "seed", "miniville")
     out = shocks.inject(conn, args.kind, args.venue, seed or "miniville",
                         day=None if args.day is None else args.day - 1,
@@ -486,7 +915,7 @@ def cmd_shock(args) -> int:
 def cmd_shocks(args) -> int:
     from . import shocks
     from .seasons import fmt_date
-    conn = _conn(args)
+    conn = dbmod.connect(args.db)
     rows = shocks.list_shocks(conn)
     if not rows:
         print("no shocks on record")
@@ -503,7 +932,39 @@ def cmd_shocks(args) -> int:
 
 def cmd_serve(args) -> int:
     from .ui.server import serve
-    serve(args.db, args.host, args.port)
+    serve(args.db, args.host, args.port, getattr(args, "live_step", 0.0))
+    return 0
+
+
+def cmd_tv(args) -> int:
+    from . import tv
+    conn = dbmod.connect(args.db)
+    snap = tv.tv_director_snapshot(conn, max_movers=args.movers)
+    sky = snap["sky"]
+    v = snap["vitality"]
+    print(f"=== Miniville 10-Foot TV Director Feed ({snap['date']} · {snap['time']} · {sky['label']}) ===")
+    print(f"Pop {v['population']} ({v['awake']} awake, {v['employed']} employed) · Treasury ${v['treasury_dollars']:,} · Active Movers: {v['active_movers']}")
+    sr = snap.get("spotlight_resident")
+    if sr:
+        amb_str = f" · Ambition: {sr['ambition']['label']} ({sr['ambition']['progress_pct']}%)" if sr.get("ambition") else ""
+        pet_str = f" · Pet: {sr['pet']}" if sr.get("pet") else ""
+        print(f"Spotlight Resident: {sr['name']} ({sr['archetype']}, {sr['occupation']}) @ {sr['place_name']} [{sr['activity']}]{amb_str}{pet_str}")
+    sv = snap.get("spotlight_venue")
+    if sv:
+        print(f"Spotlight Venue:    {sv['name']} ({sv['district']}) — {sv['inside']} inside")
+    print("Featured Movers:")
+    for m in snap["movers"][:8]:
+        print(f"  → {m['name']} ({m['activity']}): {m['from_label']} ➔ {m['to_label']}")
+    if snap["stories"]:
+        print("Today's Stories (newsworthiness):")
+        for sc in snap["stories"]:
+            flag = "BREAKING " if sc["breaking"] else ""
+            print(f"  [{sc['score']:>3}] {flag}{sc['category']}: {sc['headline']}")
+    rc = snap.get("recap")
+    if rc and rc["stories"]:
+        print(f"Previously in Miniville ({rc['date']}):")
+        for st in rc["stories"]:
+            print(f"  · {st['category']}: {st['text']}")
     return 0
 
 
@@ -550,6 +1011,110 @@ def main(argv=None) -> int:
 
     ps = sub.add_parser("status"); ps.set_defaults(fn=cmd_status)
     pj = sub.add_parser("inspect"); pj.add_argument("who"); pj.set_defaults(fn=cmd_inspect)
+    pft = sub.add_parser("fate", help="trigger a personal event on an individual resident")
+    pft.add_argument("who", help="resident name (substring) or id")
+    pft.add_argument("kind", choices=["breakthrough", "mishap", "triumph", "repair", "care", "epiphany"])
+    pft.set_defaults(fn=cmd_fate)
+    ptr = sub.add_parser("traits", help="summary of town chronotypes, archetypes, and personal events")
+    ptr.set_defaults(fn=cmd_traits)
+    pam = sub.add_parser("ambitions", help="list residents' active or completed personal ambitions")
+    pam.add_argument("--status", choices=["active", "completed", "all"], default="active")
+    pam.add_argument("--limit", type=int, default=30)
+    pam.set_defaults(fn=cmd_ambitions)
+    pmt = sub.add_parser("mentorships", help="list intergenerational mentorships and household traditions")
+    pmt.add_argument("--status", choices=["active", "graduated", "all"], default="all")
+    pmt.add_argument("--limit", type=int, default=30)
+    pmt.set_defaults(fn=cmd_mentorships)
+    pks = sub.add_parser("keepsakes", help="list craftsman creations, keepsakes, and family heirlooms")
+    pks.add_argument("--heirlooms", action="store_true", help="only show multi-generational heirlooms")
+    pks.add_argument("--limit", type=int, default=30)
+    pks.set_defaults(fn=cmd_keepsakes)
+    pnb = sub.add_parser("neighborhoods", help="list district cohesion, watch vigilance, and neighborhood events")
+    pnb.set_defaults(fn=cmd_neighborhoods)
+    pml = sub.add_parser("milestones", help="list personal life milestones, anniversaries, and retirement send-offs")
+    pml.add_argument("--limit", type=int, default=30)
+    pml.set_defaults(fn=cmd_milestones)
+    pcu = sub.add_parser("culture", help="list works exhibited in the Town Cultural Commons (library, gallery, stage)")
+    pcu.add_argument("--limit", type=int, default=30)
+    pcu.set_defaults(fn=cmd_culture)
+    pdr = sub.add_parser("diary", help="read residents' personal diaries and hometown correspondence")
+    pdr.add_argument("who", nargs="?", default=None, help="optional resident name or id")
+    pdr.add_argument("--limit", type=int, default=25)
+    pdr.set_defaults(fn=cmd_diary)
+    pcp = sub.add_parser("competitions", help="list seasonal town competitions and Blue-Ribbon champions")
+    pcp.add_argument("--limit", type=int, default=25)
+    pcp.set_defaults(fn=cmd_competitions)
+    ppj = sub.add_parser("projects", help="list civic improvement projects, funding, and volunteer hours")
+    ppj.set_defaults(fn=cmd_projects)
+    phl = sub.add_parser("health", help="town public health, athletic vitality, and hospital rounds summary")
+    phl.set_defaults(fn=cmd_health)
+    ppets = sub.add_parser("pets", help="show household pet companions and park encounters")
+    ppets.add_argument("--limit", type=int, default=20)
+    ppets.set_defaults(fn=cmd_pets)
+
+    pmkt = sub.add_parser("market", help="show weekend flea-market and yard-sale trades")
+    pmkt.add_argument("--limit", type=int, default=20)
+    pmkt.set_defaults(fn=cmd_market)
+
+    pyth = sub.add_parser("youth", help="show school youth discoveries and civic scholarships")
+    pyth.add_argument("--limit", type=int, default=20)
+    pyth.set_defaults(fn=cmd_youth)
+
+    phist = sub.add_parser("history", help="show town historical eras and Hall of Fame")
+    phist.set_defaults(fn=cmd_history)
+
+    prad = sub.add_parser("radio", help="show WMNV 94.3 FM radio broadcasts and oral histories")
+    prad.add_argument("--limit", type=int, default=20)
+    prad.set_defaults(fn=cmd_radio)
+
+    pgld = sub.add_parser("guilds", help="show chartered craft guilds and masterpiece grants")
+    pgld.set_defaults(fn=cmd_guilds)
+
+    phar = sub.add_parser("harvest", help="show seasonal harvest co-op sales and shared baskets")
+    phar.add_argument("--limit", type=int, default=20)
+    phar.set_defaults(fn=cmd_harvest)
+
+    pspt = sub.add_parser("sports", help="show inter-district sports standings and Saturday derbies")
+    pspt.add_argument("--limit", type=int, default=15)
+    pspt.set_defaults(fn=cmd_sports)
+
+    pbrg = sub.add_parser("brigade", help="show Volunteer Fire Brigade roster, drills, and rebuilds")
+    pbrg.add_argument("--limit", type=int, default=20)
+    pbrg.set_defaults(fn=cmd_brigade)
+
+    pbkc = sub.add_parser("bookclub", help="show Town Book Club selections and author signings")
+    pbkc.add_argument("--limit", type=int, default=20)
+    pbkc.set_defaults(fn=cmd_bookclub)
+
+    pren = sub.add_parser("renovations", help="show household porch additions, studios, and garden upgrades")
+    pren.add_argument("--limit", type=int, default=20)
+    pren.set_defaults(fn=cmd_renovations)
+
+    pjub = sub.add_parser("jubilee", help="show Founders' Jubilee honourees and sealed Time Capsules")
+    pjub.set_defaults(fn=cmd_jubilee)
+
+    ptht = sub.add_parser("theater", help="show Town Theater Troupe playbills and box-office premieres")
+    ptht.add_argument("--limit", type=int, default=20)
+    ptht.set_defaults(fn=cmd_theater)
+
+    ptlb = sub.add_parser("toollibrary", help="show Tool Library, Seed Bank swaps, and Community Orchard gleaning")
+    ptlb.add_argument("--limit", type=int, default=20)
+    ptlb.set_defaults(fn=cmd_toollibrary)
+
+    pplq = sub.add_parser("plaques", help="show dedicated Municipal Historical Plaques and walking tours")
+    pplq.add_argument("--limit", type=int, default=20)
+    pplq.set_defaults(fn=cmd_plaques)
+
+    psab = sub.add_parser("sabbaticals", help="show Resident Memoirs and Town Lyceum Masterclasses")
+    psab.add_argument("--limit", type=int, default=20)
+    psab.set_defaults(fn=cmd_sabbaticals)
+
+    psy = sub.add_parser("sync", help="print agent claims and operator priority queue from AGENT_SYNC.md")
+    psy.set_defaults(fn=cmd_sync)
+    pmn = sub.add_parser("monologue", help="single-resident inner monologue (bounded 1-call LLM or raw)")
+    pmn.add_argument("who", help="resident name (substring) or id")
+    pmn.add_argument("--provider", choices=["vw", "hf", "ollama", "raw"], default="vw")
+    pmn.set_defaults(fn=cmd_monologue)
     pc = sub.add_parser("chronicle"); pc.add_argument("day", type=int); pc.set_defaults(fn=cmd_chronicle)
     pd = sub.add_parser("digest")
     pd.add_argument("--day", type=int, required=True)
@@ -586,6 +1151,7 @@ def main(argv=None) -> int:
     pv = sub.add_parser("serve", help="read-only observer UI")
     pv.add_argument("--host", default="127.0.0.1")
     pv.add_argument("--port", type=int, default=8787)
+    pv.add_argument("--live-step", type=float, default=0.0, help="Advance 1 tick every N seconds in background for TV mode")
     pv.set_defaults(fn=cmd_serve)
     pm = sub.add_parser("benchmark", help="time ticks on a temp copy of the DB")
     pm.add_argument("--days", type=int, default=1)
@@ -639,6 +1205,9 @@ def main(argv=None) -> int:
     pin = sub.add_parser("influence", help="who actually runs this town")
     pin.add_argument("--top", type=int, default=12)
     pin.set_defaults(fn=cmd_influence)
+    ptv = sub.add_parser("tv", help="Inspect the 10-foot TV Director snapshot")
+    ptv.add_argument("--movers", type=int, default=10)
+    ptv.set_defaults(fn=cmd_tv)
 
     args = p.parse_args(argv)
     return args.fn(args)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+from typing import Any
 
 # per-tick decay
 DECAY = {"energy": 0.35, "hunger": 0.9, "social": 0.35, "fun": 0.6}
@@ -38,20 +39,82 @@ MOOD_RULES = [
 ]
 
 
-def apply_needs(conn: sqlite3.Connection, agent_id: int, activity: str) -> dict:
-    st = conn.execute("SELECT * FROM agent_state WHERE agent_id=?", (agent_id,)).fetchone()
-    new = dict(st)
+def _compute_needs(row: sqlite3.Row | dict, activity: str,
+                   prof: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Compute next-tick needs and mood, modulated by individual temperament."""
+    new = dict(row)
+    soc = float(prof.get("sociability", 0.0)) if prof else 0.0
+    res = float(prof.get("resilience", 0.0)) if prof else 0.0
+    ind = float(prof.get("industriousness", 0.0)) if prof else 0.0
+
     for k, d in DECAY.items():
+        if k == "social" and prof:
+            d = d * (1.0 + 0.18 * soc)
         new[k] = max(0.0, min(100.0, new[k] - d))
-    for k, d in ACTIVITY_EFFECTS.get(activity, {}).items():
-        new[k] = max(0.0, min(100.0, new[k] + d))
+
+    effects = ACTIVITY_EFFECTS.get(activity, {})
+    for k, d in effects.items():
+        delta = d
+        if prof:
+            if k == "stress":
+                if d > 0:
+                    delta = d * (1.0 - 0.25 * res)
+                elif d < 0:
+                    delta = d * (1.0 + 0.20 * res)
+            elif k == "social" and d > 0 and activity in ("gathering", "celebrate", "social_call"):
+                delta = d * (1.0 + 0.15 * max(0.0, soc))
+            elif k == "fun" and activity == "work" and d < 0 and ind > 0.2:
+                delta = d * (1.0 - 0.35 * ind)
+        new[k] = max(0.0, min(100.0, new[k] + delta))
+
+    if prof and activity in ("home", "resting") and soc < -0.25:
+        new["energy"] = min(100.0, new["energy"] + 0.2 * abs(soc))
+        new["stress"] = max(0.0, new["stress"] - 0.2 * abs(soc))
+
     for label, rule in MOOD_RULES:
         if rule(new):
             new["mood"] = label
             break
+    return new
+
+
+def apply_needs(conn: sqlite3.Connection, agent_id: int, activity: str) -> dict:
+    from .individual import profile_of
+    st = conn.execute("SELECT * FROM agent_state WHERE agent_id=?", (agent_id,)).fetchone()
+    prof = profile_of(conn, agent_id)
+    new = _compute_needs(st, activity, prof)
     conn.execute(
         """UPDATE agent_state SET energy=?,hunger=?,social=?,fun=?,stress=?,mood=?
            WHERE agent_id=?""",
         (new["energy"], new["hunger"], new["social"], new["fun"],
          new["stress"], new["mood"], agent_id))
     return new
+
+
+def apply_all_needs(conn: sqlite3.Connection) -> int:
+    """Batch-update needs for all living residents in one SQL read + executemany."""
+    from .individual import profile_of
+    rows = conn.execute(
+        """SELECT s.agent_id, s.energy, s.hunger, s.social, s.fun, s.stress,
+                  s.mood, s.activity
+           FROM agent_state s JOIN agents a ON a.id = s.agent_id
+           WHERE a.alive = 1"""
+    ).fetchall()
+    if not rows:
+        return 0
+    updates = []
+    for row in rows:
+        aid = int(row["agent_id"])
+        prof = profile_of(conn, aid)
+        new = _compute_needs(row, row["activity"], prof)
+        updates.append((
+            new["energy"], new["hunger"], new["social"], new["fun"],
+            new["stress"], new["mood"], aid,
+        ))
+    conn.executemany(
+        """UPDATE agent_state
+           SET energy=?, hunger=?, social=?, fun=?, stress=?, mood=?
+           WHERE agent_id=?""",
+        updates,
+    )
+    return len(updates)

@@ -118,7 +118,7 @@ def vw_budget(timeout: int = 5) -> dict | None:
 
 
 def _call_ollama(prompt: str, model: str, timeout: int = 120) -> str:
-    body = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
+    body = json.dumps({"model": model, "prompt": prompt, "stream": False, "options": {"num_ctx": 1024, "num_predict": 220}}).encode()
     req = urllib.request.Request(OLLAMA_URL, data=body,
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -188,3 +188,57 @@ def spend_report(conn: sqlite3.Connection) -> str:
     else:
         line += "; vault-inference: offline"
     return line
+
+
+def narrate_resident(conn: sqlite3.Connection, agent_id: int,
+                     provider: str = "vw",
+                     hf_model: str = HF_MODEL,
+                     ollama_model: str = OLLAMA_MODEL,
+                     vw_model: str = VW_MODEL) -> str:
+    """Single-call, on-demand inner monologue for one resident (12 GB VRAM safe)."""
+    from .individual import resident_summary
+    from .memory import retrieve
+
+    a = conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+    if not a:
+        return "no such resident"
+    st = conn.execute(
+        """SELECT s.*, p.name AS place_name FROM agent_state s
+           LEFT JOIN places p ON p.id = s.place_id
+           WHERE s.agent_id = ?""",
+        (agent_id,),
+    ).fetchone()
+    ind = resident_summary(conn, agent_id)
+    mems = [m["text"] for m in retrieve(conn, agent_id, k=4)]
+    raw_fallback = (
+        f"{a['name']} ({ind['archetype']}, {st['mood']} at {st['place_name'] or 'home'}): "
+        f"thinking about {mems[0] if mems else ind['knack']}."
+    )
+    if provider == "raw":
+        return f"[raw] {raw_fallback}"
+
+    context = (
+        f"You are {a['name']}, a {a['age']}-year-old {a['occupation'] or 'resident'} "
+        f"in Miniville ({ind['archetype']}, knack: {ind['knack']}). "
+        f"Right now you are {st['activity']} at {st['place_name'] or 'home'}, "
+        f"feeling {st['mood']} (energy {st['energy']:.0f}/100, stress {st['stress']:.0f}/100). "
+        f"Recent memories: {'; '.join(mems) if mems else 'quiet days lately'}.\n"
+        f"Write a 2-sentence first-person inner monologue in your voice:"
+    )
+    if provider == "vw":
+        try:
+            return f"[vw] {_call_vw(context, vw_model, max_tokens=240)}"
+        except Exception:
+            pass
+    if provider in ("vw", "hf") and _spent(conn) < CAP_USD and _load_hf_token():
+        try:
+            text, cost = _call_hf(context, hf_model, max_tokens=320)
+            set_meta(conn, "narration_cost_usd", f"{_spent(conn) + cost:.6f}")
+            conn.commit()
+            return f"[hf] {text}"
+        except Exception:
+            pass
+    try:
+        return f"[ollama] {_call_ollama(context, ollama_model)}"
+    except Exception:
+        return f"[raw] {raw_fallback}"

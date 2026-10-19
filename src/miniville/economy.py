@@ -408,15 +408,27 @@ def collect_rent(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
 
     collected = missed = downsized = 0
     households = conn.execute("SELECT * FROM households").fetchall()
+    from .politics import policy
+    rent_mult = policy(conn, "rent_multiplier")
+    place_districts = {
+        r["id"]: r["district"]
+        for r in conn.execute("SELECT id, district FROM places").fetchall()
+    }
+    adults_by_hh: dict[int, list[sqlite3.Row]] = {}
+    for r in conn.execute(
+        """SELECT a.id, a.household_id, s.money_cents FROM agents a
+           JOIN agent_state s ON s.agent_id=a.id
+           WHERE a.alive=1 AND a.is_child=0 AND a.household_id IS NOT NULL"""
+    ).fetchall():
+        adults_by_hh.setdefault(r["household_id"], []).append(r)
+
     for h in households:
-        adults = conn.execute(
-            """SELECT a.id, s.money_cents FROM agents a
-               JOIN agent_state s ON s.agent_id=a.id
-               WHERE a.household_id=? AND a.alive=1 AND a.is_child=0""",
-            (h["id"],)).fetchall()
+        adults = adults_by_hh.get(h["id"])
         if not adults:
             continue
-        rent = rent_for(conn, h["home_place_id"])
+        dist = place_districts.get(h["home_place_id"])
+        base_rent = RENT_BY_DISTRICT.get(dist, DEFAULT_RENT) if dist else DEFAULT_RENT
+        rent = int(base_rent * rent_mult)
         purse = sum(a["money_cents"] for a in adults)
         if purse < rent:
             missed += 1

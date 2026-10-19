@@ -192,3 +192,203 @@ def test_council_endpoint(client, tmp_path):
     assert len(body["influential"]) > 0
 
 
+
+
+def test_individual_and_ambitions_endpoints(client):
+    ind = client.get("/api/individual").json()
+    assert "chronotypes" in ind
+    assert "top_archetypes" in ind
+    assert "active_ambitions" in ind
+    ambs = client.get("/api/ambitions").json()
+    assert isinstance(ambs, list)
+    rid = client.get("/api/residents?q=Ada").json()[0]["id"]
+    detail = client.get(f"/api/resident/{rid}").json()
+    assert "individual" in detail
+    assert "archetype" in detail["individual"]
+    assert "axes" in detail["individual"]
+
+
+def test_mentorships_and_network_endpoints(tmp_path):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    from miniville import db, economy, individual, mentorship, world
+    from miniville.ui.server import create_app
+
+    db_file = tmp_path / "ui_ment.db"
+    c = db.connect(db_file)
+    world.create_world(c)
+    economy.ensure_businesses(c)
+    c.execute("INSERT INTO places(name,kind,district,capacity) VALUES('H1','home','Downtown',6)")
+    home = c.execute("SELECT id FROM places WHERE name='H1'").fetchone()["id"]
+    c.execute("INSERT INTO households(name,home_place_id) VALUES('Miller household',?)", (home,))
+    diner = c.execute("SELECT id FROM places WHERE name='Riverside Diner'").fetchone()["id"]
+    c.execute(
+        """INSERT INTO agents(uuid,name,sex,age,marital_status,occupation,hobbies_json,skills_json,household_id,home_place_id,work_place_id,standing)
+           VALUES('u1','Martha','Female',48,'married_present','cook','["baking"]','["woodworking"]',1,?,?,12),
+                 ('u2','Leo','Male',21,'never_married','cook','["running"]','[]',1,?,?,0)""",
+        (home, diner, home, diner),
+    )
+    for i in (1, 2):
+        c.execute("INSERT INTO agent_state(agent_id,place_id,money_cents) VALUES(?,?,500000)", (i, home))
+    individual.ensure_profiles(c, "test")
+    mentorship.ensure_traditions(c, "test")
+    mentorship.pair_mentors(c, 0, "test")
+    c.commit()
+    c.close()
+
+    client = TestClient(create_app(str(db_file)))
+    r_ment = client.get("/api/mentorships")
+    assert r_ment.status_code == 200
+    data_m = r_ment.json()
+    assert len(data_m["mentorships"]) == 1
+    assert len(data_m["traditions"]) == 1
+
+    r_net = client.get("/api/network?filter_kind=mentorship")
+    assert r_net.status_code == 200
+    data_n = r_net.json()
+    assert len(data_n["edges"]) == 1
+    assert data_n["edges"][0]["label"] == "mentorship"
+
+
+def test_keepsakes_and_neighborhoods_endpoints(tmp_path):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    from miniville import db, economy, individual, keepsakes, neighborhood, world
+    from miniville.ui.server import create_app
+
+    db_file = tmp_path / "ui_kn.db"
+    c = db.connect(db_file)
+    world.create_world(c)
+    economy.ensure_businesses(c)
+    c.execute("INSERT INTO places(name,kind,district,capacity) VALUES('H1','home','Downtown',6)")
+    home = c.execute("SELECT id FROM places WHERE name='H1'").fetchone()["id"]
+    c.execute("INSERT INTO households(name,home_place_id) VALUES('Ashbrook household',?)", (home,))
+    c.execute(
+        """INSERT INTO agents(uuid,name,sex,age,marital_status,occupation,hobbies_json,skills_json,household_id,home_place_id)
+           VALUES('u1','Clara','Female',48,'married_present','carpenter','["woodworking"]','["carpentry"]',1,?)""",
+        (home,),
+    )
+    c.execute("INSERT INTO agent_state(agent_id,place_id,money_cents) VALUES(1,?,500000)", (home,))
+    individual.ensure_profiles(c, "test")
+    neighborhood.ensure_districts(c)
+    keepsakes.craft_keepsake(c, 1, 10, "test")
+    c.commit()
+    c.close()
+
+    client = TestClient(create_app(str(db_file)))
+    rk = client.get("/api/keepsakes")
+    assert rk.status_code == 200
+    assert len(rk.json()) == 1
+
+    rn = client.get("/api/neighborhoods")
+    assert rn.status_code == 200
+    assert len(rn.json()) == 5
+
+
+def test_milestones_and_culture_endpoints(tmp_path):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    from miniville import culture, db, economy, individual, keepsakes, milestones, world
+    from miniville.ui.server import create_app
+
+    db_file = tmp_path / "ui_mc.db"
+    c = db.connect(db_file)
+    world.create_world(c)
+    economy.ensure_businesses(c)
+    c.execute("INSERT INTO places(name,kind,district,capacity) VALUES('H1','home','Downtown',6)")
+    home = c.execute("SELECT id FROM places WHERE name='H1'").fetchone()["id"]
+    c.execute("INSERT INTO households(name,home_place_id) VALUES('Ashbrook household',?)", (home,))
+    c.execute(
+        """INSERT INTO agents(uuid,name,sex,age,birth_day,marital_status,occupation,hobbies_json,skills_json,household_id,home_place_id)
+           VALUES('u1','Elena','Female',40,1,'never_married','writer_or_author','["poetry"]','["writing"]',1,?)""",
+        (home,),
+    )
+    c.execute("INSERT INTO agent_state(agent_id,place_id,money_cents) VALUES(1,?,500000)", (home,))
+    individual.ensure_profiles(c, "test")
+    keepsakes.craft_keepsake(c, 1, 10, "test")
+    culture.curate_exhibits(c, 48, "test")
+    milestones.due(c, 48, "test")
+    c.commit()
+    c.close()
+
+    client = TestClient(create_app(str(db_file)))
+    rc = client.get("/api/culture")
+    assert rc.status_code == 200
+    assert len(rc.json()) == 1
+
+    rm = client.get("/api/milestones")
+    assert rm.status_code == 200
+    assert len(rm.json()) == 1
+
+
+def test_diary_and_competitions_endpoints(tmp_path):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    from miniville import competitions, correspondence, db, economy, events, individual, world
+    from miniville.ui.server import create_app
+
+    db_file = tmp_path / "ui_dc.db"
+    c = db.connect(db_file)
+    world.create_world(c)
+    economy.ensure_businesses(c)
+    c.execute("INSERT INTO places(name,kind,district,capacity) VALUES('H1','home','Downtown',6)")
+    home = c.execute("SELECT id FROM places WHERE name='H1'").fetchone()["id"]
+    c.execute("INSERT INTO households(name,home_place_id) VALUES('Ashbrook household',?)", (home,))
+    c.execute(
+        """INSERT INTO agents(uuid,name,sex,age,origin_city,origin_state,marital_status,occupation,hobbies_json,skills_json,household_id,home_place_id)
+           VALUES('u1','Ada','Female',34,'Austin','Texas','never_married','baker','["baking"]','["baking"]',1,?),
+                 ('u2','Ben','Male',36,'Dallas','Texas','never_married','cook','["cooking"]','["cooking"]',1,?)""",
+        (home, home),
+    )
+    for i in (1, 2):
+        c.execute("INSERT INTO agent_state(agent_id,place_id,money_cents,social,mood) VALUES(?,?,500000,30,'lonely')", (i, home))
+    individual.ensure_profiles(c, "test")
+    events.emit(c, 48, "life_event", place_id=home, a=1, importance=3, text="was promoted", tag="promoted")
+    correspondence.write_milestone_diaries(c, 48, "test")
+    competitions.hold_competition(c, 48, "test", category_override="baking")
+    c.commit()
+    c.close()
+
+    client = TestClient(create_app(str(db_file)))
+    rd = client.get("/api/diary")
+    assert rd.status_code == 200
+    assert len(rd.json()) >= 1
+
+    rcp = client.get("/api/competitions")
+    assert rcp.status_code == 200
+    assert len(rcp.json()) == 1
+
+
+def test_projects_and_health_endpoints(tmp_path):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    from miniville import civic_projects, db, economy, health, individual, world
+    from miniville.ui.server import create_app
+
+    db_file = tmp_path / "ui_ph.db"
+    c = db.connect(db_file)
+    world.create_world(c)
+    economy.ensure_businesses(c)
+    c.execute("INSERT INTO places(name,kind,district,capacity) VALUES('H1','home','Downtown',6)")
+    home = c.execute("SELECT id FROM places WHERE name='H1'").fetchone()["id"]
+    c.execute("INSERT INTO households(name,home_place_id) VALUES('Ashbrook household',?)", (home,))
+    c.execute(
+        """INSERT INTO agents(uuid,name,sex,age,marital_status,occupation,hobbies_json,skills_json,household_id,home_place_id)
+           VALUES('u1','Clara','Female',62,'married_present','physician','["running"]','["medicine"]',1,?)""",
+        (home,),
+    )
+    c.execute("INSERT INTO agent_state(agent_id,place_id,money_cents,vitality) VALUES(1,?,600000,82)", (home,))
+    individual.ensure_profiles(c, "test")
+    civic_projects.ensure_projects(c)
+    health.due(c, 48, "test")
+    c.commit()
+    c.close()
+
+    client = TestClient(create_app(str(db_file)))
+    rp = client.get("/api/projects")
+    assert rp.status_code == 200
+    assert len(rp.json()) == 6
+
+    rh = client.get("/api/health")
+    assert rh.status_code == 200
+    assert rh.json()["avg_vitality"] >= 80.0

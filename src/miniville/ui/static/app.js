@@ -54,9 +54,33 @@ async function residentCard(id) {
        · influence <b>${(a.influence ?? 0).toFixed(1)}</b></p>
     <p class="state">energy ${Math.round(s.energy ?? 0)} · hunger ${Math.round(s.hunger ?? 0)}
        · social ${Math.round(s.social ?? 0)} · fun ${Math.round(s.fun ?? 0)}
-       · stress ${Math.round(s.stress ?? 0)} · mood <b>${esc(s.mood)}</b>
+       · stress ${Math.round(s.stress ?? 0)} · vitality <b>${Math.round(s.vitality ?? 60)}</b> · mood <b>${esc(s.mood)}</b>
        · $${((s.money_cents ?? 0) / 100).toFixed(2)}</p>
     <p class="persona">${esc((a.persona || "").slice(0, 400))}</p>
+    ${r.individual ? `
+    <div class="ind-box">
+      <div><b>Temperament:</b> <span class="badge-pass">${esc(r.individual.archetype)}</span>
+        · <b>Chronotype:</b> ${esc(r.individual.chronotype)}
+        · <b>Signature knack:</b> ${esc(r.individual.knack)}
+        ${r.individual.favorite_place ? `· <b>Favorite spot:</b> ${esc(r.individual.favorite_place)}` : ""}</div>
+      <div class="axes-row">
+        ${Object.entries(r.individual.axes || {}).map(([k, v]) =>
+          `<span class="axis-pill">${esc(k)}: <b>${v >= 0 ? "+" : ""}${Number(v).toFixed(2)}</b></span>`
+        ).join(" ")}
+      </div>
+      ${r.individual.household_tradition ? `<div class="amb-row"><b>Household tradition:</b> ${esc(r.individual.household_tradition)}</div>` : ""}
+      ${r.individual.mentor ? `<div class="amb-row"><b>Mentor:</b> ${esc(r.individual.mentor.name)} in <b>${esc(r.individual.mentor.craft)}</b> (${esc(r.individual.mentor.status)} · ${r.individual.mentor.lessons}/${r.individual.mentor.target_lessons} lessons)</div>` : ""}
+      ${r.individual.apprentices && r.individual.apprentices.length ? `<div class="amb-row"><b>Apprentices:</b> ${r.individual.apprentices.map(ap => `${esc(ap.name)} (${esc(ap.craft)} · ${esc(ap.status)})`).join(", ")}</div>` : ""}
+      ${r.individual.keepsakes && r.individual.keepsakes.length ? `<div class="amb-row"><b>Keepsakes &amp; Heirlooms:</b> ${r.individual.keepsakes.map(k => `${esc(k.title)} <span class="muted">(by ${esc(k.creator_name)}${k.generations ? ` · gen ${k.generations} heirloom` : ""})</span>`).join(", ")}</div>` : ""}
+      ${r.individual.ribbons && r.individual.ribbons.length ? `<div class="amb-row"><b>Blue Ribbons Won:</b> ${r.individual.ribbons.map(rb => `<span class="badge-pass">${esc(rb.title)} (Day ${rb.day})</span>`).join(" ")}</div>` : ""}
+      ${r.individual.diary && r.individual.diary.length ? `<div class="amb-row"><b>Personal Diary:</b> <i>"${esc(r.individual.diary[0].entry)}"</i></div>` : ""}
+      ${r.individual.ambition ? `
+      <div class="amb-row">
+        <b>Ambition:</b> ${esc(r.individual.ambition.label)}
+        <span class="muted">(${esc(r.individual.ambition.status)} · ${Math.round((r.individual.ambition.progress || 0) * 100)}%)</span>
+        <div class="prog-bar"><div class="prog-fill" style="width:${Math.round((r.individual.ambition.progress || 0) * 100)}%"></div></div>
+      </div>` : ""}
+    </div>` : ""}
     ${r.debts && (r.debts.owes.length || r.debts.owed.length) ? `
     <h4>IOUs</h4>
     <ul>${r.debts.owes.map(d => `<li>owes ${esc(d.creditor)} — ${esc(d.kind)}</li>`).join("")}
@@ -99,6 +123,7 @@ async function debts() {
 }
 
 async function rels() {
+  if (!window._bond) renderTownNetwork($("#bond-host"), "all");
   const rows = await api("/api/relationships?label=" + $("#rel-filter").value);
   $("#rels-list").innerHTML = rows.map(r =>
     `<li class="click" onclick="mvBond(${r.a_id})"><b>${r.label}</b>
@@ -106,6 +131,10 @@ async function rels() {
      <span class="t">fam ${Math.round(r.familiarity)} aff ${Math.round(r.affinity)}
      rom ${Math.round(r.romance)}</span></li>`).join("");
 }
+
+window.mvTownNet = (filterKind) => {
+  renderTownNetwork($("#bond-host"), filterKind || "all");
+};
 
 // open a resident's ego network on the Bonds tab
 window.mvBond = (id) => {
@@ -120,10 +149,14 @@ function showGazette(edition) {
   const line = edition.editorial_line || "community";
   const basis = edition.editorial_basis || "independent local paper";
   const credibility = Math.round((edition.credibility ?? 1) * 100);
+  const readers = edition.readers;
+  const reachNote = (readers == null) ? "" :
+    ` Read by ${readers.toLocaleString()} adults — its reach is what gives the ` +
+    `paper power over the town's opinion.`;
   $("#gaz-meta").textContent =
     `Owned by ${byline}; edited by ${editor}. ` +
     `Editorial line: ${line} — ${basis}. Credibility ${credibility}%. ` +
-    `This is a resident's account, not the neutral event record.`;
+    `This is a resident's account, not the neutral event record.` + reachNote;
   const claims = edition.claims || [];
   $("#gaz-claims").hidden = claims.length === 0;
   $("#gaz-claims-list").innerHTML = claims.map(c =>
@@ -220,7 +253,28 @@ async function council() {
     (daysLeft != null ? ` (${daysLeft} days away)` : "") +
     ` · 5 district seats · policy levers directly influence town books, rent, and wages.`;
 
+  const pressInfo = r.press || {};
+  if (pressInfo.readers != null) {
+    $("#council-press").textContent =
+      `The Gazette (${pressInfo.editorial_line || "no line"}) is read by ` +
+      `${pressInfo.readers.toLocaleString()} of ${pressInfo.adults.toLocaleString()} adults ` +
+      `(${Math.round((pressInfo.reach || 0) * 100)}% reach, credibility ` +
+      `${Math.round((pressInfo.credibility || 0) * 100)}%). Reach is how far the paper ` +
+      `can move the town's opinion — and a caught lie shrinks it.`;
+  }
+
   const polKeys = Object.keys(policies).sort();
+  const opinion = r.opinion || {};
+  $("#council-opinion").innerHTML = polKeys.map(k => {
+    const v = opinion[k] ?? 0;
+    const cls = v >= 0 ? "op-up" : "op-down";
+    return `<div class="op-row">
+      <span class="op-label">${k.replace(/_/g, " ")}</span>
+      <span class="op-bar"><span class="${cls}" style="width:${Math.abs(v) * 50}%"></span></span>
+      <span class="muted">${v >= 0 ? "+" : ""}${v.toFixed(2)} — wants to ${v >= 0 ? "raise" : "lower"}</span>
+    </div>`;
+  }).join("");
+
   $("#council-policies").innerHTML = polKeys.map(k => {
     const p = policies[k];
     const label = k.replace(/_/g, " ");
@@ -248,13 +302,15 @@ async function council() {
     const pass = m.passed === 1;
     const badge = pass ? `<span class="badge-pass">Passed</span>` : `<span class="badge-fail">Rejected</span>`;
     const dir = m.direction > 0 ? "▲ Raise" : "▼ Lower";
+    const swing = m.press_swing === 1
+      ? ` <span class="t">· opinion swung it (${(m.support ?? 0).toFixed(2)})</span>` : "";
     return `<tr>
       <td>Day ${m.day + 1}</td>
       <td><b>${esc(m.policy)}</b></td>
       <td>${formatPolicy(m.policy, m.value)}</td>
       <td>${dir}</td>
       <td>${m.votes_for} for / ${m.votes_against} against</td>
-      <td>${badge}</td>
+      <td>${badge}${swing}</td>
     </tr>`;
   }).join("") : `<tr><td colspan="6" class="muted">No motions debated yet</td></tr>`;
 
@@ -279,7 +335,153 @@ async function council() {
   ).join("") : `<li class="muted">No influence data</li>`;
 }
 
-const loaders = { feed, venues, residents: () => residents($("#q").value), chronicle, rels, debts, gazette, economy, council,
+
+async function individual() {
+  const r = await api("/api/individual");
+  const chronos = r.chronotypes || {};
+  const order = ["early_bird", "morning", "day_walker", "evening", "night_owl"];
+  const labels = {
+    early_bird: "Early Birds (-1h)",
+    morning: "Morning Risers (-30m)",
+    day_walker: "Day Walkers",
+    evening: "Evening Strollers (+30m)",
+    night_owl: "Night Owls (+1h)"
+  };
+  $("#ind-chronos").innerHTML = order.map(k =>
+    `<div class="stat"><b>${chronos[k] ?? 0}</b><span>${labels[k] || k}</span></div>`
+  ).join("") + `<div class="stat active-policy"><b>${r.ambitions_completed ?? 0}</b><span>ambitions fulfilled</span></div>` + `<div class="stat active-policy"><b>${r.mentorships_graduated ?? 0}</b><span>apprentices graduated</span></div>`;
+
+  const favs = r.favorite_places || [];
+  $("#ind-favs").innerHTML = favs.length ? favs.map(f =>
+    `<tr><td><b>${esc(f.venue)}</b></td><td>${f.regulars}</td></tr>`
+  ).join("") : `<tr><td colspan="2" class="muted">Regulars form after warm encounters</td></tr>`;
+
+  const archs = Object.entries(r.top_archetypes || {});
+  $("#ind-archetypes").innerHTML = archs.map(([k, n]) =>
+    `<tr><td>${esc(k)}</td><td>${n}</td></tr>`
+  ).join("");
+
+  const evs = Object.entries(r.personal_event_counts || {});
+  $("#ind-events").innerHTML = evs.length ? evs.map(([k, n]) =>
+    `<tr><td><b>${esc(k.replace(/_/g, " "))}</b></td><td>${n}</td></tr>`
+  ).join("") : `<tr><td colspan="2" class="muted">No personal happenings recorded yet</td></tr>`;
+
+  const ambs = r.active_ambitions || [];
+  $("#ind-ambitions").innerHTML = ambs.length ? ambs.map(am => {
+    const pct = Math.round((am.progress || 0) * 100);
+    return `<tr>
+      <td><a class="click-link" onclick="mvPick({id: ${am.agent_id}})"><b>${esc(am.name)}</b></a></td>
+      <td>${esc(am.occupation || "—")}</td>
+      <td>${esc(am.label)}</td>
+      <td><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div> <span class="muted">${pct}%</span></td>
+      <td>${esc(am.place_name || "home")}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="5" class="muted">No active ambitions</td></tr>`;
+
+  const ments = r.mentorships || [];
+  $("#ind-mentorships").innerHTML = ments.length ? ments.map(m => {
+    const pct = Math.round(((m.lessons || 0) / Math.max(1, m.target_lessons || 5)) * 100);
+    const badge = m.status === "graduated"
+      ? `<span class="badge-pass">Graduated</span>`
+      : `<span class="muted">${m.lessons}/${m.target_lessons} lessons</span>`;
+    return `<tr>
+      <td><a class="click-link" onclick="mvPick({id: ${m.mentor_id}})"><b>${esc(m.mentor_name)}</b></a></td>
+      <td><a class="click-link" onclick="mvPick({id: ${m.apprentice_id}})"><b>${esc(m.apprentice_name)}</b></a></td>
+      <td><b>${esc(m.craft)}</b></td>
+      <td>${esc(m.venue_name || "town")}</td>
+      <td><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div></td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="6" class="muted">No mentorships formed yet</td></tr>`;
+
+  const trads = r.household_traditions || [];
+  $("#ind-traditions").innerHTML = trads.length ? trads.map(t =>
+    `<tr><td><b>${esc(t.tradition)}</b></td><td>${t.households}</td><td>${t.residents}</td></tr>`
+  ).join("") : `<tr><td colspan="3" class="muted">No household traditions yet</td></tr>`;
+
+  const keeps = r.keepsakes || [];
+  $("#ind-keepsakes").innerHTML = keeps.length ? keeps.map(k =>
+    `<tr>
+      <td><b>${esc(k.title)}</b></td>
+      <td>${esc(k.kind)}</td>
+      <td><a class="click-link" onclick="mvPick({id: ${k.creator_id}})">${esc(k.creator_name)}</a></td>
+      <td><a class="click-link" onclick="mvPick({id: ${k.owner_id}})"><b>${esc(k.owner_name)}</b></a></td>
+      <td>${k.generations > 0 ? `<span class="badge-pass">Gen ${k.generations} Heirloom</span>` : `<span class="muted">Original</span>`}</td>
+    </tr>`
+  ).join("") : `<tr><td colspan="5" class="muted">No keepsakes crafted yet</td></tr>`;
+
+  const nbs = r.neighborhoods || [];
+  $("#ind-neighborhoods").innerHTML = nbs.length ? nbs.map(nb =>
+    `<tr>
+      <td><b>${esc(nb.district)}</b></td>
+      <td>${nb.residents}</td>
+      <td>${Math.round((nb.cohesion || 0) * 100)}%</td>
+      <td>${Math.round((nb.vigilance || 0) * 100)}%</td>
+      <td>${nb.last_event_kind ? `${esc(nb.last_event_kind.replace(/_/g, " "))} (Day ${nb.last_event_day + 1})` : `<span class="muted">—</span>`}</td>
+    </tr>`
+  ).join("") : `<tr><td colspan="5" class="muted">No district data</td></tr>`;
+
+  const cult = r.cultural_commons || [];
+  $("#ind-culture").innerHTML = cult.length ? cult.map(c =>
+    `<tr>
+      <td><b>${esc(c.title)}</b></td>
+      <td>${esc(c.kind)}</td>
+      <td><a class="click-link" onclick="mvPick({id: ${c.creator_id}})">${esc(c.creator_name)}</a></td>
+      <td>${esc(c.venue_name || "town")}</td>
+      <td><b>${c.appreciations ?? 0}</b></td>
+    </tr>`
+  ).join("") : `<tr><td colspan="5" class="muted">No works exhibited yet</td></tr>`;
+
+  const projs = r.civic_projects || [];
+  $("#ind-projects").innerHTML = projs.length ? projs.map(p => {
+    const fpct = Math.min(100, Math.round(((p.funded_cents || 0) / Math.max(1, p.target_cents || 35000)) * 100));
+    const badge = p.status === "completed"
+      ? `<span class="badge-pass">Completed</span>`
+      : (p.status === "active" ? `<b>Active</b>` : `<span class="muted">Proposed</span>`);
+    return `<tr>
+      <td><b>${esc(p.title)}</b></td>
+      <td>${esc(p.district)}</td>
+      <td>${esc(p.venue_name || "—")}</td>
+      <td><div class="prog-bar"><div class="prog-fill" style="width:${fpct}%"></div></div> <span class="muted">$${Math.round((p.funded_cents || 0)/100)}/$${Math.round((p.target_cents || 0)/100)}</span></td>
+      <td>${p.volunteer_hours}/${p.target_hours} hrs</td>
+      <td>${badge} <span class="muted">${esc(p.benefit)}</span></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="6" class="muted">No civic projects</td></tr>`;
+
+  const hl = r.health || {};
+  $("#ind-health").innerHTML = `
+    <div class="stat"><b>${hl.avg_vitality ?? 60}</b><span>mean vitality</span></div>
+    <div class="stat"><b>${hl.high_vitality ?? 0}</b><span>high vitality (&ge;75)</span></div>
+    <div class="stat"><b>${hl.currently_sick ?? 0}</b><span>currently sick</span></div>
+    <div class="stat"><b>${hl.hospital_clinicians ?? 0}</b><span>hospital clinicians</span></div>
+    <div class="stat active-policy"><b>${hl.treatments_total ?? 0}</b><span>patients treated</span></div>
+    <div class="stat"><b>${hl.checkups_total ?? 0}</b><span>wellness checkups</span></div>
+  `;
+
+  const comps = r.competitions || [];
+  $("#ind-competitions").innerHTML = comps.length ? comps.map(cp =>
+    `<tr>
+      <td>Day ${cp.day}</td>
+      <td><b>${esc(cp.title)}</b></td>
+      <td><a class="click-link" onclick="mvPick({id: ${cp.winner_id}})"><b>${esc(cp.winner_name)}</b></a></td>
+      <td>${esc(cp.winning_work || "—")}</td>
+      <td>${cp.runner_up_id ? `<a class="click-link" onclick="mvPick({id: ${cp.runner_up_id}})">${esc(cp.runner_up_name)}</a>` : "—"}</td>
+      <td>${cp.entrants}</td>
+    </tr>`
+  ).join("") : `<tr><td colspan="6" class="muted">No competitions held yet</td></tr>`;
+
+  const drs = r.diaries || [];
+  $("#ind-diaries").innerHTML = drs.length ? drs.map(d =>
+    `<li><span class="t">Day ${d.day} · ${esc(d.kind)}</span> <a class="click-link" onclick="mvPick({id: ${d.agent_id}})"><b>${esc(d.name)}</b></a>: <i>"${esc(d.entry)}"</i></li>`
+  ).join("") : `<li class="muted">No diary entries recorded yet</li>`;
+
+  const mls = r.milestones || [];
+  $("#ind-milestones").innerHTML = mls.length ? mls.map(m =>
+    `<li><span class="t">Day ${m.day} · ${esc(m.tag.replace(/_/g, " "))}</span> ${esc(m.text)}</li>`
+  ).join("") : `<li class="muted">No personal milestones recorded yet</li>`;
+}
+
+const loaders = { feed, venues, residents: () => residents($("#q").value), individual, chronicle, rels, debts, gazette, economy, council,
   map: () => renderMap($("#map-host")) };
 for (const b of document.querySelectorAll("#tabs button"))
   b.onclick = () => {

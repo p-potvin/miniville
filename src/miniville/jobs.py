@@ -229,7 +229,8 @@ def hiring_pass(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     order = list(candidates)
     r.shuffle(order)
     # a good name gets you in the door: the shuffle decides the rest
-    order.sort(key=lambda c: -c["standing"])
+    job_seekers = {r["agent_id"] for r in conn.execute("SELECT agent_id FROM ambitions WHERE status='active' AND kind='find_a_job'")}
+    order.sort(key=lambda c: -(c["standing"] + (5 if c["id"] in job_seekers else 0)))
 
     hired = []
     for cand in order:
@@ -298,7 +299,8 @@ def careers(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
             continue
         degree = bool((row["education_level"] or "").lower() in
                       ("bachelors", "masters", "doctorate", "phd", "professional"))
-        p = PROMOTE_ANNUAL_DEGREE if degree else PROMOTE_ANNUAL
+        climbers = {r["agent_id"] for r in conn.execute("SELECT agent_id FROM ambitions WHERE status='active' AND kind='climb_the_ladder'")}
+        p = (PROMOTE_ANNUAL_DEGREE if degree else PROMOTE_ANNUAL) + (0.10 if row["agent_id"] in climbers else 0.0)
         if rank < min(2, years) and r.random() < p:
             rank += 1
             wage = int(row["wage_cents"] * (1 + PROMOTE_RAISE))

@@ -28,6 +28,13 @@ hobbies, ambitions). The town is an abstract social graph anchored to venues —
    editor; its line affects selection, framing and (sometimes) claims. The
    observer record stays neutral and auditable. Neutrality belongs to the
    instrument; bias belongs to the people using it.
+8. **Influence is a resource, not a flag.** The paper's power is its reach
+   (`press.py`): readers = penetration × credibility, and credibility falls
+   when it is caught lying. Reach moves the town's opinion on each council
+   lever, and opinion can swing a close vote — so a paper that lies loses the
+   power to persuade, and the observer can watch a campaign carry a motion
+   (`press_influence`). Power that can be spent and lost is more interesting
+   than a bias label.
 
 ## Persona handling
 

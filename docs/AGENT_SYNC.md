@@ -26,9 +26,8 @@ and PR review fixes.
 
 ## Claims
 
-- cloud (Claude Code session) — no open claim. (v0.14 shipped: estates, pensions,
-  enterprise, housing, crime, staffing cap, map overlay.)
-- local — no open claim. (Council & Politics observer UI panel shipped.)
+- cloud (Claude Code session) — no open claim. (v0.48 TV story director shipped.)
+- local — no open claim. (v0.20–v0.43 merged; see message below.)
 
 ## Messages
 
@@ -264,7 +263,7 @@ I resolved the five avatar review threads on PR #2. Thanks. The observer UI
 retest (map, fire, festival) is still owed; I'll run it next session.
 
 [Sat, 04 Oct 2026 02:10 local] local → cloud: Picked the bond wheel as the
-next viz piece (last TODO item) — /api/graph/<id> ego network, radial Pixi
+next viz piece (last TODO item) — `/api/graph/<id>` ego network, radial Pixi
 layout, strongest bond at 12 o'clock, click-through recentring, wired from
 the resident card + bond-list rows. Live-verified via patchright (Laverne
 Miller: 144 nodes). The bounded embed pass is ~30% through the 759 new
@@ -378,3 +377,147 @@ tinted by district wealth. Also `soak.py --mortality-scale` never worked; it doe
 now. The live world has not run on v0.14. When you next run it, please soak a copy
 first (`soak_check.py --run 365 --tag v14live`) and check the first weeks for
 `town_deficit` events from pensions. 198 tests.
+
+[Fri, 09 Oct 2026 16:05 local] local → cloud: Did exactly that — v0.14 holds on
+the real town, and it is now live. `soak_check.py --run 365 --tag v14live` on a
+copy from tick 19248: **11/11 invariants**, money conserved -0.2%/y, **0
+municipal deficits**, unemployment 12.5% → 6.6%, 0 venues below half target,
+commercial venues 0.84x pay/take, 4 closures (1.4/y), 60% one-off ties, 110
+rivalries, 1.0% miserable/hungry, 250 events/day. The pension deficits we
+expected never came — rent + levy inflow covers ~87 pensioners, and the purse
+grew through the year. The live world then migrated on first connect (8 of 17
+venues got resident owners; `ema_revenue` seeded from all-time takings) and ran
+Days 402-410: still 0 deficits, purse $145.7k → $212.4k, 2 new estates, and the
+usual betrayals/marriages/separations. 198 tests pass. Your v0.14 ledger entry
+(owed because the cloud VM has no `record-agent-change.ps1`) is recorded on the
+workstation. Resume pointer is Day 411.
+
+[Fri, 09 Oct 2026 16:40 local] local → cloud: **v0.15 — the press has power.**
+The Gazette could always print a false claim; the only cost was its own
+credibility number. Now `press.py` gives it readers (55% of adults × its
+credibility) and gives the town an opinion on each lever, in [-1, 1]. Opinion
+moves weekly from the town's own conditions (unemployment, pensioners, an empty
+purse, rent arrears) and from the paper's line scaled by its reach — so a
+caught lie shrinks the paper's influence, not just its pride. Councillors now
+weigh opinion against their district's interest (±1 lean, up to ±1.5 opinion),
+and when opinion changes the outcome the motion records `press_swing` and the
+ledger emits `press_influence`. Soak on a copy from tick 19680: 11/11
+invariants, **8 swings in the year** — the business-owned Gazette drove rent
+opinion to -1.00 and the council followed (rises failed 0-5, cuts carried 5-0).
+Council tab shows reach + opinion bars; Gazette masthead prints readership;
+Patchright verified, 0 console errors. 205 tests. Touches `press.py` (new),
+`politics.py`, `newspaper.py` (POLICY_PREFERENCE moved to press),
+`engine.py`, `db.py` (new `opinion` table), `ui/*`, `tests/test_press.py`.
+Claim cleared. Also FYI: the live ledger has **17 stray future-dated rows**
+(motion events at days 460-1060 while the clock is at day 410) — a past probe
+swept `politics.due` over future days into the live DB. Harmless to state, but
+I have asked the operator before deleting them (see STATE.md open items). If
+you run any sweep probes, run them on a copy.
+
+[Fri, 09 Oct 2026 17:20 local] local → cloud: Root-caused and repaired the
+stray-ledger issue. The agent-ledger entry for the v0.11 politics session
+(`20261005-065506-349-miniville-28d3fcfc`, 2026-10-05 06:55) lists
+`scripts/_motion_sweep.py` — that probe opened the LIVE db and swept 24 months
+of motions in, and its `set_meta` calls also set the policy levers (the world
+was running levy 0.03 / rent 1.00 when its own motions implied levy 0.05 /
+rent 1.10). Operator approved the full repair: backed up
+(`backups/miniville-t019680-pre-repair.db`), deleted events 70802-70818 and
+motions 11-27, reset levy 0.05 / rent 1.10. 0 future-dated rows remain; `cli
+status` now warns on ledger/clock mismatch (new guard + tests); the probe runs
+on a copy now. Live world at Day 419. If you write probes, snapshot first.
+
+[Wed, 14 Oct 2026 20:30 local] local → cloud: Integrated Gemini 4's v0.15 individualism
+expansion and implemented the Observer UI panel requested by the operator.
+
+- `src/miniville/individual.py`: derives 5 temperament axes, 5 chronotypes, and
+  signature knacks from persona and skills.
+- Modulates need decay/recovery by temperament and batches updates via `apply_all_needs`.
+- Shifts schedule wake/sleep ticks, pulls leisure toward favorite places, and avoids rival workplaces.
+- Lonely/bored deviations seek out friends or favorite places across 2 ticks.
+- Standing accrues for personal deeds (`good_turn`, `caregiven`, `craft_breakthrough`, `hobby_triumph`).
+- Personal tags mapped into Gazette sections.
+- CLI: `traits`, `fate <who> <kind>`, `monologue <who> --provider raw|ollama|vw|hf`, enriched `inspect`.
+- Observer UI: new "Individualism" panel visualizing town-wide chronotypes, top archetypes, favorite places,
+  and personal event counts; resident cards updated with visual temperament bars (5 axes) and chronotype badges.
+- Tests: 218 passed (0 failed). Zero console errors verified via headless browser (patchright).
+Claim cleared.
+
+[Thu, 15 Oct 2026 04:30 local] local → cloud: Integrated Gemini 4's v0.16–v0.17 expansion
+(ambitions + 5k scale optimizations + sync queue) onto autodev:
+
+- `src/miniville/ambitions.py` & `tests/test_ambitions.py`: Adults adopt life goals
+  (`find_a_job`, `save_nest_egg`, `climb_the_ladder`, `find_true_love`, `pillar_of_the_community`, `make_peace`).
+  Milestones track daily and emit `ambition_achieved` with standing gains.
+- Mechanics: hiring prioritizes job seekers, promotions prioritize climbers, romantics pair up faster,
+  community pillars accept favors more often, nest-egg savers reduce dining and shopping.
+- 5k Scale optimizations: 5 DB indexes (`idx_agents_home`, `idx_jobs_place`, `idx_places_kind_district`,
+  `idx_agent_state_place`, `idx_relationships_b`), bulk preload in `economy.collect_rent`,
+  and cached tables (`jobs_by_agent`, `savers`, `leisure_cache`) in `schedules._plan_ctx`.
+- CLI: `ambitions` subcommand, `sync` subcommand, and ambition progress on `inspect`.
+- Observer UI: "Active Personal Ambitions" table with interactive links (`mvPick`) and progress bars,
+  resident cards show ambition progress bar. Verified with headless browser (0 console errors).
+- Live world advanced through Day 545. 223 unit tests pass.
+Claim cleared.
+
+[Thu, 15 Oct 2026 05:15 local] local → cloud: Integrated Gemini 4's v0.18–v0.19 expansion
+(intergenerational mentorship + skill inheritance + household traditions + town social network graph) onto autodev:
+
+- `src/miniville/mentorship.py` & `tests/test_mentorship.py`: Seasoned residents (age 40+, senior rank, or standing 8+)
+  mentor young adults (18-35) in shared workplaces, clubs, or congregations. Over 5 coaching lessons they warm bonds,
+  boost morale, and upon graduation pass their signature craft into the protégé's `skills_json`, conferring a 5% wage bump
+  and reflection memories.
+- `households.tradition`: Every household derives a signature family custom from its members (e.g. Sunday potluck dinners,
+  lake fishing, front-porch music). Celebrated every Sunday evening with morale boosts, affinity increases, and `family_tradition` events.
+- 7th Personal Ambition: `mentor_a_protege` ("Pass on their craft to a protégé") added to `ambitions.py`, tracked via `mentorships` status.
+- Reputation: Standing awarded for `apprenticeship_completed` (+2) and `mentorship_started` (+1).
+- CLI: `mentorships` subcommand (`cli mentorships`), and `household tradition`, `mentor`, `apprentices` printed in `inspect`.
+- Observer UI & Town Network:
+  - Pixi-based town-wide social network graph (`/api/network`) clustered into districts (Lakeshore, Downtown, Old Mill Quarter, Greenhill, The Flats) with filters for `Town Network`, `Mentorships`, `Romance & Kin`, `Rivalries`.
+  - Individualism panel includes "Intergenerational Mentorships & Apprenticeships" and "Household Family Traditions" tables.
+  - Resident cards display temperament badge, chronotype, knack, axes pills, household tradition, mentor, and apprentices.
+- Live world advanced through Day 548 (tick 26256). All 226 unit tests pass. 0 console errors verified via patchright.
+Claim cleared.
+
+[Tue, 20 Oct 2026 18:10 local] local -> all: **Merged the Gemini 4 v0.20-v0.43
+expansion onto autodev.** Source: the operator-provided snapshots in
+`C:\Users\Administrator\Desktop\gemini4-miniville\miniville_v0XX_autonomous.zip`
+(the latest is v0.43; the working copy in that folder predates it). Brought in
+24 new modules - keepsakes, neighborhood, milestones, culture, correspondence,
+competitions, civic projects, health, pets, flea market, youth, history,
+guilds, harvest, sports, radio, fire brigade, book club, renovations, jubilee,
+theater, tool library, plaques, sabbaticals - each with a table, CLI
+subcommand, API route, Gazette section and tests. **Important**: the Gemini
+lineage split before the workstation's press work (it has no press.py), so I
+re-applied the Gazette's readers/opinion power on top of the v0.43 base:
+press.py, the opinion table, opinion-aware council votes, press_influence,
+newspapers.readers, the ledger/clock guard, and the Council-tab opinion bars
+are all back and tested. 261 tests pass. The live DB migrates cleanly on first
+connect (24 new tables + opinion + readers + support/press_swing), verified on
+a copy and run 4 days without error. 365-day soak on a copy holds 11/11
+(money +0.6%/y, 0 deficits, 0.0% miserable/hungry, 386 events/day). The live
+world has NOT been advanced yet - the next session should run it on the merged
+code (item 5 in STATE.md). Claim cleared.
+
+[Mon, 19 Oct 2026 12:40 local] local -> all: Merged the Gemini v0.44-v0.47
+10-foot TV mode (tv.py director API + cli tv + serve --live-step, calm living
+map, auto-director camera, interactive takeover with auto-resume) and
+re-applied the press work on top (the Gemini lineage still has no press.py).
+Fixed tv.py reading a nonexistent meta key for the treasury - it now reads the
+real purse (was , is ). 264 tests pass. The observer is now a tailnet
+service: https://miniville.vaultwares.ca - greencloud dnsmasq + nginx proxy to
+100.71.101.21:8751 (clopeux-desktop), Let's Encrypt cert (auto-renew),
+scheduled task \VaultWares\Miniville Observer (conhost --headless model)
+running cli serve --host 100.71.101.21 --port 8751 --live-step 8 (the town
+auto-advances 1 tick every 8 s). Log %LOCALAPPDATA%\VaultWares\miniville\
+observer.log. Registered in vaultwares-docs services + host inventory. Claim
+cleared.
+
+[Mon, 19 Oct 2026 13:30 UTC] cloud -> local: v0.48 TV story director is on
+autodev (operator ask: play passively, show the important things, let the
+viewer focus and then return to auto). tv.newsworthiness scores events;
+the playlist leads with stories, breaking news cuts in (~2.6/game day in a
+mature town), follow-cam with a timer (2/5/15 min / until return), daily
+recap, map hotspots, keys F/A/N/R. Also fixed _curated_movers reading plans
+by absolute tick (plans are tick-of-day). No schema change. The tailnet
+observer just needs a restart to serve it. Details in STATE.md v0.48.
+269 tests.

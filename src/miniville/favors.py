@@ -57,6 +57,8 @@ def maybe_ask_favor(conn: sqlite3.Connection, a: sqlite3.Row, b: sqlite3.Row,
     mood = _mood(conn, target["id"])
     accept_p = {"delighted": 0.9, "content": 0.7, "bored": 0.45,
                 "lonely": 0.55, "miserable": 0.15}.get(mood, 0.5)
+    if conn.execute("SELECT 1 FROM ambitions WHERE agent_id=? AND status='active' AND kind='pillar_of_the_community'", (target["id"],)).fetchone():
+        accept_p = min(0.95, accept_p + 0.15)
     if r.random() < accept_p:
         conn.execute(
             "INSERT INTO debts(debtor_id,creditor_id,kind,created_tick) VALUES(?,?,?,?)",

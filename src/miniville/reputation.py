@@ -31,6 +31,49 @@ from .timekeeper import day_of
 WEIGHTS = {
     "favor": 2,            # did somebody a good turn
     "favor_repaid": 1,
+    "good_turn": 2,
+    "caregiven": 2,
+    "craft_breakthrough": 1,
+    "hobby_triumph": 1,
+    "ambition_achieved": 2,
+    "apprenticeship_completed": 2,
+    "mentorship_started": 1,
+    "keepsake_crafted": 1,
+    "keepsake_gifted": 1,
+    "heirloom_inherited": 1,
+    "mutual_aid": 2,
+    "watch_patrol": 1,
+    "block_party": 1,
+    "milestone_birthday": 1,
+    "wedding_anniversary": 1,
+    "retirement_sendoff": 2,
+    "keepsake_exhibited": 1,
+    "acclaimed_work": 2,
+    "competition_won": 3,
+    "shared_roots": 1,
+    "civic_petition": 1,
+    "civic_donation": 2,
+    "civic_volunteer": 1,
+    "civic_project_completed": 3,
+    "medical_treatment": 2,
+    "wellness_checkup": 1,
+    "lost_pet_returned": 2,
+    "civic_scholarship": 2,
+    "radio_broadcast": 1,
+    "guild_masterpiece": 3,
+    "harvest_basket_shared": 1,
+    "district_derby": 2,
+    "fire_drill": 1,
+    "brigade_rebuild_aid": 3,
+    "author_signing": 2,
+    "home_renovation": 1,
+    "key_to_the_town": 3,
+    "theater_premiere": 2,
+    "tool_library_loan": 1,
+    "orchard_gleaning": 1,
+    "plaque_dedicated": 2,
+    "masterclass_taught": 2,
+    "memoir_published": 2,
     "marriage": 3,
     "birth": 2,
     "coming_of_age": 1,
@@ -91,7 +134,8 @@ def accrue(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
             continue
         # the subject of the event gets the full weight; the other party to a
         # betrayal or a split gets the sympathy of the wronged
-        for aid, delta in ((r["a_id"], weight), (r["b_id"], -weight)):
+        pairs = ((r["a_id"], weight), (r["b_id"], weight)) if tag in ("apprenticeship_completed", "mentorship_started") else (((r["a_id"], weight),) if tag in ("good_turn", "caregiven", "keepsake_gifted", "heirloom_inherited", "mutual_aid", "block_party", "coming_of_age_gift", "milestone_birthday", "wedding_anniversary", "retirement_sendoff", "acclaimed_work", "competition_won", "shared_roots", "civic_petition", "civic_donation", "civic_volunteer", "civic_project_completed", "medical_treatment", "wellness_checkup") else ((r["a_id"], weight), (r["b_id"], -weight)))
+        for aid, delta in pairs:
             if not aid:
                 continue
             before = standing_of(conn, aid)

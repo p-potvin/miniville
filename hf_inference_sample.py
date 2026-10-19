@@ -6,7 +6,7 @@ client = InferenceClient(
 )
 
 completion = client.chat.completions.create(
-    model="openai/gpt-oss-20b:deepinfra",
+    model="openai/gpt-oss-20b:cheapest",
     messages=[
         {
             "role": "user",

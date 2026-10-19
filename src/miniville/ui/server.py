@@ -204,6 +204,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             from ..groups import memberships_of
             from ..conflict import influence_of
             from ..enterprise import owned_by
+            from ..individual import resident_summary
             a = dict(a)
             a["influence"] = influence_of(c, agent_id)
             return {"agent": a, "state": dict(st) if st else {},
@@ -211,7 +212,172 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     "debts": {"owes": owed_by, "owed": owed_to},
                     "relationships": rels, "recent": recent, "memories": mems,
                     "groups": memberships_of(c, agent_id),
-                    "owns": [dict(b) for b in owned_by(c, agent_id)]}
+                    "owns": [dict(b) for b in owned_by(c, agent_id)],
+                    "individual": resident_summary(c, agent_id)}
+        finally:
+            c.close()
+
+    @app.get("/api/ambitions")
+    def ambitions_view(status: str = "active", limit: int = Query(50, le=200)):
+        c = conn()
+        try:
+            from ..ambitions import list_ambitions
+            return list_ambitions(c, status=status, limit=limit)
+        finally:
+            c.close()
+
+    @app.get("/api/individual")
+    def individual_view():
+        c = conn()
+        try:
+            from ..individual import town_individualism_stats
+            return town_individualism_stats(c)
+        finally:
+            c.close()
+
+    @app.get("/api/mentorships")
+    def mentorships_view(status: str = "all", limit: int = Query(50, le=200)):
+        c = conn()
+        try:
+            from ..mentorship import list_mentorships, tradition_stats
+            return {
+                "mentorships": list_mentorships(c, status=status, limit=limit),
+                "traditions": tradition_stats(c),
+            }
+        finally:
+            c.close()
+
+    @app.get("/api/keepsakes")
+    def keepsakes_view(heirlooms_only: bool = False, limit: int = Query(40, le=200)):
+        c = conn()
+        try:
+            from ..keepsakes import list_keepsakes
+            return list_keepsakes(c, heirlooms_only=heirlooms_only, limit=limit)
+        finally:
+            c.close()
+
+    @app.get("/api/neighborhoods")
+    def neighborhoods_view():
+        c = conn()
+        try:
+            from ..neighborhood import neighborhood_stats
+            return neighborhood_stats(c)
+        finally:
+            c.close()
+
+    @app.get("/api/milestones")
+    def milestones_view(limit: int = Query(40, le=200)):
+        c = conn()
+        try:
+            from ..milestones import list_milestones
+            return list_milestones(c, limit=limit)
+        finally:
+            c.close()
+
+    @app.get("/api/culture")
+    def culture_view(limit: int = Query(40, le=200)):
+        c = conn()
+        try:
+            from ..culture import list_cultural_commons
+            return list_cultural_commons(c, limit=limit)
+        finally:
+            c.close()
+
+    @app.get("/api/diary")
+    def diary_view(agent_id: int | None = None, limit: int = Query(30, le=200)):
+        c = conn()
+        try:
+            from ..correspondence import diary_of, list_diaries
+            if agent_id is not None:
+                return diary_of(c, agent_id, limit=limit)
+            return list_diaries(c, limit=limit)
+        finally:
+            c.close()
+
+    @app.get("/api/competitions")
+    def competitions_view(limit: int = Query(30, le=200)):
+        c = conn()
+        try:
+            from ..competitions import list_competitions
+            return list_competitions(c, limit=limit)
+        finally:
+            c.close()
+
+    @app.get("/api/projects")
+    def projects_view():
+        c = conn()
+        try:
+            from ..civic_projects import list_projects
+            return list_projects(c)
+        finally:
+            c.close()
+
+    @app.get("/api/health")
+    def health_view():
+        c = conn()
+        try:
+            from ..health import health_stats
+            return health_stats(c)
+        finally:
+            c.close()
+
+    @app.get("/api/network")
+    def network_view(filter_kind: str = "all", limit_edges: int = Query(200, le=400)):
+        """Town-wide social network graph: district-clustered nodes and
+        strongest non-stranger + mentorship edges."""
+        c = conn()
+        try:
+            rel_edges = _rows(c,
+                """SELECT r.a_id, r.b_id, r.label, r.affinity, r.familiarity, r.romance
+                   FROM relationships r
+                   JOIN agents a ON a.id = r.a_id
+                   JOIN agents b ON b.id = r.b_id
+                   WHERE a.alive = 1 AND b.alive = 1 AND r.label != 'stranger'
+                   ORDER BY ABS(r.affinity) + r.familiarity DESC
+                   LIMIT ?""", (limit_edges * 2,))
+            ment_edges = _rows(c,
+                """SELECT m.mentor_id AS a_id, m.apprentice_id AS b_id,
+                          'mentorship' AS label, 45.0 AS affinity, 55.0 AS familiarity,
+                          0.0 AS romance, m.craft, m.status
+                   FROM mentorships m
+                   JOIN agents a ON a.id = m.mentor_id
+                   JOIN agents b ON b.id = m.apprentice_id
+                   WHERE a.alive = 1 AND b.alive = 1""")
+            all_edges = ment_edges + rel_edges
+            if filter_kind == "romance":
+                all_edges = [e for e in all_edges if e["label"] in ("spouse", "partner", "sweetheart", "kin")]
+            elif filter_kind == "mentorship":
+                all_edges = [e for e in all_edges if e["label"] == "mentorship"]
+            elif filter_kind == "rivalry":
+                all_edges = [e for e in all_edges if e["label"] in ("rival", "estranged") or (e.get("affinity") or 0) <= -15]
+
+            all_edges = all_edges[:limit_edges]
+            node_ids = sorted({int(e["a_id"]) for e in all_edges} | {int(e["b_id"]) for e in all_edges})
+            if not node_ids:
+                top_agents = _rows(c,
+                    """SELECT a.id, a.name, a.sex, COALESCE(a.standing, 0) AS standing,
+                              COALESCE(p.district, 'Downtown') AS district
+                       FROM agents a
+                       LEFT JOIN places p ON p.id = a.home_place_id
+                       WHERE a.alive = 1 ORDER BY a.id LIMIT 60""")
+                return {"nodes": top_agents, "edges": []}
+
+            ph = ",".join("?" * len(node_ids))
+            nodes = _rows(c,
+                f"""SELECT a.id, a.name, a.sex, a.occupation,
+                           COALESCE(a.standing, 0) AS standing,
+                           COALESCE(p.district, 'Downtown') AS district
+                    FROM agents a
+                    LEFT JOIN places p ON p.id = a.home_place_id
+                    WHERE a.id IN ({ph})
+                    ORDER BY a.id""", tuple(node_ids))
+            deg: dict[int, int] = {}
+            for e in all_edges:
+                deg[int(e["a_id"])] = deg.get(int(e["a_id"]), 0) + 1
+                deg[int(e["b_id"])] = deg.get(int(e["b_id"]), 0) + 1
+            for n in nodes:
+                n["degree"] = deg.get(int(n["id"]), 0)
+            return {"nodes": nodes, "edges": all_edges}
         finally:
             c.close()
 
@@ -270,8 +436,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     raise HTTPException(404, "no edition for that week")
                 return edition(row)
             rows = _rows(c, "SELECT week, created_tick, publisher_id, editor_id, "
-                            "editorial_line, editorial_basis, credibility "
-                            "FROM newspapers ORDER BY week DESC LIMIT 20")
+                        "editorial_line, editorial_basis, credibility, readers "
+                        "FROM newspapers ORDER BY week DESC LIMIT 20")
             for r in rows:
                 r["week"] += 1
                 for field in ("publisher_id", "editor_id"):
@@ -435,6 +601,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
         """Who governs, what they last decided, and what they have changed."""
         from ..conflict import most_influential
         from ..politics import POLICIES, council, next_election_day, policy
+        from .. import press
         c = conn()
         try:
             boycotts = _rows(c, """SELECT b.*, g.name group_name, p.name place_name
@@ -443,11 +610,20 @@ def create_app(db_path: str | None = None) -> FastAPI:
                                    JOIN places p ON p.id=b.place_id
                                    ORDER BY b.started_day DESC""")
             elections = _rows(c, "SELECT * FROM elections ORDER BY id DESC LIMIT 5")
+            profile = c.execute("SELECT * FROM newspaper_profile WHERE id=1").fetchone()
             return {
                 "seats": council(c),
                 "policies": {name: {"now": policy(c, name), "default": POLICIES[name][0],
                                     "low": POLICIES[name][1], "high": POLICIES[name][2]}
                              for name in sorted(POLICIES)},
+                "opinion": press.all_opinion(c),
+                "press": {
+                    "readers": press.readers(c),
+                    "adults": press.eligible_adults(c),
+                    "reach": round(press.reach(c), 4),
+                    "credibility": round(press.credibility(c), 4),
+                    "editorial_line": profile["editorial_line"] if profile else None,
+                },
                 "next_election_day": next_election_day(c),
                 "motions": _rows(c, "SELECT * FROM motions ORDER BY id DESC LIMIT 20"),
                 "boycotts": boycotts,
@@ -481,6 +657,187 @@ def create_app(db_path: str | None = None) -> FastAPI:
         finally:
             c.close()
 
+    import threading
+    _step_lock = threading.Lock()
+
+    @app.get("/api/pets")
+    def pets_view():
+        c = conn()
+        try:
+            from .. import pets
+            return pets.pet_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/market")
+    def market_view():
+        c = conn()
+        try:
+            from .. import flea_market
+            return flea_market.market_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/youth")
+    def youth_view():
+        c = conn()
+        try:
+            from .. import youth
+            return youth.youth_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/history")
+    def history_view():
+        c = conn()
+        try:
+            from .. import history
+            return history.history_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/radio")
+    def radio_view():
+        c = conn()
+        try:
+            from .. import radio
+            return radio.radio_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/guilds")
+    def guilds_view():
+        c = conn()
+        try:
+            from .. import guilds
+            return guilds.guilds_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/harvest")
+    def harvest_view():
+        c = conn()
+        try:
+            from .. import harvest
+            return harvest.harvest_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/sports")
+    def sports_view():
+        c = conn()
+        try:
+            from .. import sports
+            return sports.sports_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/brigade")
+    def brigade_view():
+        c = conn()
+        try:
+            from .. import fire_brigade
+            return fire_brigade.brigade_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/bookclub")
+    def bookclub_view():
+        c = conn()
+        try:
+            from .. import book_club
+            return book_club.book_club_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/renovations")
+    def renovations_view():
+        c = conn()
+        try:
+            from .. import renovations
+            return renovations.renovations_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/jubilee")
+    def jubilee_view():
+        c = conn()
+        try:
+            from .. import jubilee
+            return jubilee.jubilee_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/theater")
+    def theater_view():
+        c = conn()
+        try:
+            from .. import theater
+            return theater.theater_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/commons")
+    def commons_view():
+        c = conn()
+        try:
+            from .. import commons_library
+            return commons_library.commons_library_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/plaques")
+    def plaques_view():
+        c = conn()
+        try:
+            from .. import plaques
+            return plaques.plaques_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/sabbaticals")
+    def sabbaticals_view():
+        c = conn()
+        try:
+            from .. import sabbaticals
+            return sabbaticals.sabbaticals_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/tv")
+    def tv_view(
+        agent_id: int | None = None,
+        place_id: int | None = None,
+        max_movers: int = Query(10, ge=1, le=24),
+        since: int = Query(0, ge=0),
+        follow: int | None = None,
+        follow_place: int | None = None,
+    ):
+        c = conn()
+        try:
+            from .. import tv
+            return tv.tv_director_snapshot(
+                c,
+                focus_agent_id=agent_id or follow,
+                focus_place_id=place_id or follow_place,
+                max_movers=max_movers,
+                since_event_id=since,
+                follow_agent_id=follow,
+                follow_place_id=follow_place,
+            )
+        finally:
+            c.close()
+
+    @app.post("/api/tv/step")
+    def tv_step_view(ticks: int = Query(1, ge=1, le=6)):
+        with _step_lock:
+            c = conn()
+            try:
+                from .. import tv
+                return tv.tv_step(c, ticks=ticks)
+            finally:
+                c.close()
+
     # resident portraits live outside the repo (D:\miniville by default)
     av_dir = Path(os.environ.get("MINIVILLE_AVATARS_DIR", r"D:\miniville\avatars"))
     if av_dir.is_dir():
@@ -489,6 +846,27 @@ def create_app(db_path: str | None = None) -> FastAPI:
     return app
 
 
-def serve(db_path: str | None, host: str, port: int) -> None:
+def serve(db_path: str | None, host: str, port: int,
+          live_step_seconds: float = 0.0) -> None:
+    import threading
+    import time
     import uvicorn
-    uvicorn.run(create_app(db_path), host=host, port=port, log_level="warning")
+    app = create_app(db_path)
+    if live_step_seconds and live_step_seconds > 0:
+        interval = max(1.5, float(live_step_seconds))
+        def _bg_runner() -> None:
+            from .. import engine
+            while True:
+                time.sleep(interval)
+                try:
+                    c = dbmod.connect(db_path or dbmod.DEFAULT_DB)
+                    try:
+                        seed = dbmod.get_meta(c, "seed", "miniville") or "miniville"
+                        engine.step(c, seed)
+                    finally:
+                        c.close()
+                except Exception:
+                    pass
+        t = threading.Thread(target=_bg_runner, daemon=True, name="miniville-tv-stepper")
+        t.start()
+    uvicorn.run(app, host=host, port=port, log_level="warning")

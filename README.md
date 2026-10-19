@@ -21,7 +21,14 @@ pensions, businesses that residents own, found, buy and lose, wages that move
 with unemployment), a housing market that sorts districts by money,
 affiliations (congregations and clubs), an elected council whose motions move
 real numbers, grudges that turn into slander, boycotts and schisms, petty
-crime, and a newspaper with an owner and a line.
+crime, and a newspaper with an owner and a line whose reach moves public
+opinion. Inhabitants are individuals: 5-axis temperaments, chronotypes,
+signature knacks, situated personal events, favorite third places, and
+stateful personal ambitions. The town keeps its own culture and memory:
+keepsakes and heirlooms, milestones and anniversaries, pets, competitions,
+civic projects, a fire brigade, a book club, a theater troupe, town radio,
+harvest co-ops, sports, renovations, jubilees, heritage plaques and
+sabbaticals.
 
 No dataset at hand (a cloud session, say)? Generate a stand-in with the same
 columns and soak that:

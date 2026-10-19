@@ -11,12 +11,14 @@
 <header>
   <h1>Miniville</h1>
   <div id="status">loading…</div>
+  <button id="tv-toggle-btn" class="tv-launch-btn" onclick="window.mvTV && window.mvTV.toggle()" title="Toggle 10-Foot Living TV &amp; Ambient Director Mode (Shortcut: T)">📺 TV Mode</button>
 </header>
 <nav id="tabs">
   <button data-tab="feed" class="on">Feed</button>
   <button data-tab="map">Map</button>
   <button data-tab="venues">Venues</button>
   <button data-tab="residents">Residents</button>
+  <button data-tab="individual">Individualism</button>
   <button data-tab="chronicle">Chronicle</button>
   <button data-tab="rels">Bonds</button>
   <button data-tab="debts">IOUs</button>
@@ -30,8 +32,79 @@
     <ul id="feed-list"></ul>
   </section>
   <section id="map" class="panel">
-    <h2>Town map <small id="map-hint" class="muted">drag to pan · scroll to zoom · click a dot for the resident</small></h2>
-    <div id="map-host"></div>
+    <h2 class="map-std-title">Town map <small id="map-hint" class="muted">drag to pan · scroll to zoom · click a dot for the resident · press T for 10-foot TV Mode</small></h2>
+    <div id="map-stage-wrap">
+      <div id="map-host"></div>
+      <div id="tv-hud" hidden>
+        <div class="tv-top-bar">
+          <div id="tv-clock" class="tv-glass"></div>
+          <div id="tv-vitality" class="tv-glass"></div>
+          <div class="tv-controls tv-glass">
+            <div class="tv-ctrl-row">
+              <span id="tv-director-state" class="tv-badge auto">🎬 Auto-Director</span>
+              <button id="tv-resume-btn" class="tv-btn accent" hidden onclick="window.mvTV.backToAuto()" title="Back to the auto-director (A / Esc)">↩ Auto</button>
+              <button class="tv-btn" onclick="window.mvTV.nextCameraScene()" title="Cut to next camera angle (N)">⏭ Angle</button>
+              <button class="tv-btn" onclick="window.mvTV.followOnScreen()" title="Follow whoever is on screen (F)">📌 Follow</button>
+              <button class="tv-btn" onclick="window.mvTV.showRecap()" title="Yesterday's top stories (R)">📰 Recap</button>
+              <button class="tv-btn" onclick="window.mvTV.stepNow(1)" title="Advance simulation by 1 tick (30m)">+1 Tick</button>
+              <label class="tv-step-lbl">Auto-Step:
+                <select id="tv-step-select" onchange="window.mvTV.setLiveStep(this.value)">
+                  <option value="0">Paused</option>
+                  <option value="3">Every 3s</option>
+                  <option value="6">Every 6s</option>
+                  <option value="10">Every 10s</option>
+                  <option value="15">Every 15s</option>
+                </select>
+              </label>
+              <label class="tv-step-lbl" title="How long each camera angle holds">Pace:
+                <select id="tv-pace-select" onchange="window.mvTV.setPace(this.value)">
+                  <option value="8">Brisk</option>
+                  <option value="12">Calm</option>
+                  <option value="20">Slow</option>
+                </select>
+              </label>
+              <label class="tv-step-lbl" title="How long following lasts before the auto-director takes back over">Follow for:
+                <select id="tv-focus-select" onchange="window.mvTV.setFocusLength(this.value)">
+                  <option value="2">2 min</option>
+                  <option value="5">5 min</option>
+                  <option value="15">15 min</option>
+                  <option value="0">Until I return</option>
+                </select>
+              </label>
+              <button class="tv-btn" onclick="window.mvTV.disable()" title="Exit TV Mode (Esc / T)">✕ Exit TV</button>
+            </div>
+            <div class="tv-cam-bar"><div id="tv-camera-prog"></div></div>
+          </div>
+        </div>
+
+        <div id="tv-breaking" class="tv-breaking tv-glass" hidden></div>
+        <div id="tv-recap" class="tv-recap tv-glass" hidden></div>
+        <div id="tv-toasts" class="tv-toasts"></div>
+
+        <aside class="tv-right-rail">
+          <div id="tv-focus" class="tv-card tv-focus tv-glass" hidden></div>
+          <div id="tv-spot-resident" class="tv-card tv-glass"></div>
+          <div id="tv-spot-venue" class="tv-card tv-glass"></div>
+        </aside>
+
+        <aside id="tv-inspector" class="tv-inspector tv-glass" hidden>
+          <div class="tv-insp-top">
+            <span class="tv-card-kicker">INTERACTIVE INSPECTOR</span>
+            <div>
+              <button class="tv-btn accent" onclick="window.mvTV.backToAuto()">↩ Back to Auto</button>
+              <button class="tv-btn" onclick="window.mvTV.closeInspector()">✕</button>
+            </div>
+          </div>
+          <div id="tv-inspector-body"></div>
+        </aside>
+
+        <div id="tv-caption" class="tv-caption tv-glass" hidden></div>
+        <footer class="tv-lower-third tv-glass">
+          <div class="tv-chyron-brand">LIVE VILLAGE WIRE</div>
+          <div id="tv-ticker-strip" class="tv-ticker-strip"></div>
+        </footer>
+      </div>
+    </div>
   </section>
   <section id="venues" class="panel">
     <h2>Venues</h2>
@@ -44,6 +117,66 @@
     <div id="resident-list"></div>
     <div id="resident-card" hidden></div>
   </section>
+  <section id="individual" class="panel">
+    <h2>Inhabitant Individualism &amp; Personal Ambitions</h2>
+    <p class="press-meta">Persona-derived temperaments, chronotypes, third-place habits, situated personal happenings, and multi-week personal ambitions.</p>
+    <h3>Chronotypes &amp; Milestones</h3>
+    <div id="ind-chronos" class="policy-grid"></div>
+    <div id="ind-grid">
+      <div>
+        <h3>Favorite Third Places (The Regulars)</h3>
+        <table><thead><tr><th>Venue</th><th>Loyal Regulars</th></tr></thead>
+        <tbody id="ind-favs"></tbody></table>
+      </div>
+      <div>
+        <h3>Top Town Archetypes</h3>
+        <table><thead><tr><th>Archetype</th><th>Residents</th></tr></thead>
+        <tbody id="ind-archetypes"></tbody></table>
+      </div>
+      <div>
+        <h3>Personal Happenings on Record</h3>
+        <table><thead><tr><th>Happening Kind</th><th>Count</th></tr></thead>
+        <tbody id="ind-events"></tbody></table>
+      </div>
+    </div>
+    <h3>Active Personal Ambitions</h3>
+    <table><thead><tr><th>Resident</th><th>Occupation</th><th>Ambition</th>
+      <th>Progress</th><th>Current Location</th></tr></thead>
+      <tbody id="ind-ambitions"></tbody></table>
+    <h3>Intergenerational Mentorships &amp; Apprenticeships</h3>
+    <table><thead><tr><th>Mentor</th><th>Apprentice</th><th>Craft Passed Down</th>
+      <th>Venue</th><th>Progress</th><th>Status</th></tr></thead>
+      <tbody id="ind-mentorships"></tbody></table>
+    <h3>Household Family Traditions</h3>
+    <table><thead><tr><th>Sunday Family Tradition</th><th>Households</th><th>Residents</th></tr></thead>
+      <tbody id="ind-traditions"></tbody></table>
+    <h3>Keepsakes, Craftsman Works &amp; Family Heirlooms</h3>
+    <table><thead><tr><th>Keepsake / Heirloom</th><th>Kind</th><th>Created By</th>
+      <th>Current Owner</th><th>Generations</th></tr></thead>
+      <tbody id="ind-keepsakes"></tbody></table>
+    <h3>District Neighborhood Cohesion &amp; Civic Watch</h3>
+    <table><thead><tr><th>District</th><th>Residents</th><th>Cohesion</th>
+      <th>Watch Vigilance</th><th>Last Neighborhood Action</th></tr></thead>
+      <tbody id="ind-neighborhoods"></tbody></table>
+    <h3>Town Cultural Commons (Library, Gallery &amp; Stage)</h3>
+    <table><thead><tr><th>Exhibited Work</th><th>Medium</th><th>Creator</th>
+      <th>Exhibited Venue</th><th>Admirers</th></tr></thead>
+      <tbody id="ind-culture"></tbody></table>
+    <h3>Civic Projects &amp; Durable Town Landmarks</h3>
+    <table><thead><tr><th>Civic Landmark</th><th>District</th><th>Venue</th>
+      <th>Funding</th><th>Volunteer Hrs</th><th>Status &amp; Benefit</th></tr></thead>
+      <tbody id="ind-projects"></tbody></table>
+    <h3>Public Health, Athletic Vitality &amp; Hospital Rounds</h3>
+    <div id="ind-health" class="policy-grid"></div>
+    <h3>Town Competitions &amp; Blue-Ribbon Champions</h3>
+    <table><thead><tr><th>Day</th><th>Competition</th><th>Champion</th>
+      <th>Winning Entry</th><th>Runner-Up</th><th>Entrants</th></tr></thead>
+      <tbody id="ind-competitions"></tbody></table>
+    <h3>Resident Diaries &amp; Hometown Correspondence</h3>
+    <ul id="ind-diaries"></ul>
+    <h3>Life Milestones, Anniversaries &amp; Retirement Send-Offs</h3>
+    <ul id="ind-milestones"></ul>
+  </section>
   <section id="chronicle" class="panel">
     <h2>Chronicle <input id="chron-day" type="number" min="1" value="1" size="3">
       <button id="chron-go">go</button></h2>
@@ -51,7 +184,13 @@
     <div id="narratives"></div>
   </section>
   <section id="rels" class="panel">
-    <h2>Relationships <small class="muted">click a resident's card → bond wheel · click a node to re-centre</small></h2>
+    <h2>Relationships &amp; Social Network
+      <button class="mini" onclick="mvTownNet('all')">Town Network</button>
+      <button class="mini" onclick="mvTownNet('mentorship')">Mentorships</button>
+      <button class="mini" onclick="mvTownNet('romance')">Romance &amp; Kin</button>
+      <button class="mini" onclick="mvTownNet('rivalry')">Rivalries</button>
+      <small class="muted">click any node → resident ego wheel</small>
+    </h2>
     <div id="bond-host"></div>
     <select id="rel-filter">
       <option value="">all</option><option>spouse</option><option>partner</option>
@@ -98,7 +237,13 @@
   <section id="council" class="panel">
     <h2>Town Council & Politics</h2>
     <div id="council-meta" class="press-meta"></div>
+    <div id="council-press" class="press-meta"></div>
     <div id="council-policies" class="policy-grid"></div>
+    <h3>Public Opinion</h3>
+    <p class="muted">Support for raising each lever, in [-1, 1]. The town's own
+      conditions pull it one way; the Gazette's reach pulls it toward its
+      editorial line. A councillor weighs it against their district's interest.</p>
+    <div id="council-opinion" class="opinion-list"></div>
     <h3>Council Seats</h3>
     <table><thead><tr><th>Seat</th><th>Councillor</th><th>District</th><th>Backers</th>
       <th>Median Wallet</th><th>Out of Work</th></tr></thead>
@@ -123,5 +268,6 @@
 <script src="/app.js"></script>
 <script src="/map.js"></script>
 <script src="/graph.js"></script>
+<script src="/tv.js"></script>
 </body>
 </html>
