@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS agent_state (
     social REAL NOT NULL DEFAULT 60,
     fun REAL NOT NULL DEFAULT 60,
     stress REAL NOT NULL DEFAULT 20,
+    vitality REAL NOT NULL DEFAULT 60,
     money_cents INTEGER NOT NULL DEFAULT 500000,
     mood TEXT NOT NULL DEFAULT 'content',
     place_id INTEGER,
@@ -356,6 +357,10 @@ CREATE TABLE IF NOT EXISTS rent_arrears (
     last_missed_day INTEGER NOT NULL DEFAULT -1
 );
 
+-- Operator-injected shocks (god mode). A row is written when the shock is
+-- injected; applied flips once it has landed. detail holds per-kind payload
+-- (festival window, reopen day for disasters).
+
 -- Personal ambitions: forward-looking life goals pursued by adults (ambitions.py)
 CREATE TABLE IF NOT EXISTS ambitions (
     agent_id INTEGER PRIMARY KEY REFERENCES agents(id),
@@ -383,9 +388,79 @@ CREATE TABLE IF NOT EXISTS mentorships (
 );
 CREATE INDEX IF NOT EXISTS idx_mentorships_mentor ON mentorships(mentor_id, status);
 
--- Operator-injected shocks (god mode). A row is written when the shock is
--- injected; applied flips once it has landed. detail holds per-kind payload
--- (festival window, reopen day for disasters).
+-- Personal keepsakes, craftsman works & family heirlooms (keepsakes.py)
+CREATE TABLE IF NOT EXISTS keepsakes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    craft TEXT NOT NULL,
+    creator_id INTEGER NOT NULL REFERENCES agents(id),
+    owner_id INTEGER NOT NULL REFERENCES agents(id),
+    venue_id INTEGER REFERENCES places(id),
+    created_tick INTEGER NOT NULL DEFAULT 0,
+    generations INTEGER NOT NULL DEFAULT 0,
+    appreciations INTEGER NOT NULL DEFAULT 0,
+    history_json TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS idx_keepsakes_owner ON keepsakes(owner_id);
+CREATE INDEX IF NOT EXISTS idx_keepsakes_creator ON keepsakes(creator_id);
+
+-- District neighborhood watch & social cohesion (neighborhood.py)
+CREATE TABLE IF NOT EXISTS district_watch (
+    district TEXT PRIMARY KEY,
+    vigilance REAL NOT NULL DEFAULT 0.1,
+    cohesion REAL NOT NULL DEFAULT 0.5,
+    last_event_day INTEGER NOT NULL DEFAULT -1,
+    last_event_kind TEXT
+);
+
+-- Personal diaries & out-of-town hometown correspondence (correspondence.py)
+CREATE TABLE IF NOT EXISTS diary_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id INTEGER NOT NULL REFERENCES agents(id),
+    tick INTEGER NOT NULL,
+    day INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    origin TEXT,
+    entry TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_diary_agent ON diary_entries(agent_id, day DESC);
+
+-- Seasonal town competitions & Blue-Ribbon craft fairs (competitions.py)
+CREATE TABLE IF NOT EXISTS competitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    day INTEGER NOT NULL,
+    tick INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    venue_id INTEGER REFERENCES places(id),
+    winner_id INTEGER NOT NULL REFERENCES agents(id),
+    runner_up_id INTEGER REFERENCES agents(id),
+    entrants INTEGER NOT NULL DEFAULT 0,
+    prize_cents INTEGER NOT NULL DEFAULT 0,
+    winning_work TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_competitions_day ON competitions(day DESC);
+CREATE INDEX IF NOT EXISTS idx_competitions_winner ON competitions(winner_id);
+
+-- Civic projects, participatory petitions & durable town landmarks (civic_projects.py)
+CREATE TABLE IF NOT EXISTS civic_projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    district TEXT NOT NULL,
+    venue_id INTEGER REFERENCES places(id),
+    sponsor_id INTEGER REFERENCES agents(id),
+    target_cents INTEGER NOT NULL DEFAULT 35000,
+    funded_cents INTEGER NOT NULL DEFAULT 0,
+    volunteer_hours INTEGER NOT NULL DEFAULT 0,
+    target_hours INTEGER NOT NULL DEFAULT 8,
+    status TEXT NOT NULL DEFAULT 'proposed',
+    started_tick INTEGER NOT NULL DEFAULT 0,
+    completed_tick INTEGER,
+    benefit TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS shocks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     kind TEXT NOT NULL,              -- closure | fire | festival
@@ -395,6 +470,205 @@ CREATE TABLE IF NOT EXISTS shocks (
     applied INTEGER NOT NULL DEFAULT 0,
     detail TEXT NOT NULL DEFAULT '{}'
 );
+
+CREATE TABLE IF NOT EXISTS pets (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    household_id  INTEGER NOT NULL UNIQUE REFERENCES households(id),
+    owner_id      INTEGER REFERENCES agents(id),
+    name          TEXT NOT NULL,
+    species       TEXT NOT NULL,
+    breed         TEXT NOT NULL,
+    quirk         TEXT NOT NULL,
+    adopted_tick  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pets_owner ON pets(owner_id);
+
+CREATE TABLE IF NOT EXISTS market_trades (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    day           INTEGER NOT NULL,
+    tick          INTEGER NOT NULL,
+    seller_id     INTEGER REFERENCES agents(id),
+    buyer_id      INTEGER REFERENCES agents(id),
+    keepsake_id   INTEGER REFERENCES keepsakes(id),
+    item_title    TEXT NOT NULL,
+    price_cents   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_market_trades_day ON market_trades(day);
+
+CREATE TABLE IF NOT EXISTS town_eras (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    start_day     INTEGER NOT NULL,
+    end_day       INTEGER NOT NULL,
+    name          TEXT NOT NULL,
+    theme         TEXT NOT NULL,
+    summary       TEXT NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS radio_broadcasts (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    day           INTEGER NOT NULL,
+    tick          INTEGER NOT NULL,
+    host_id       INTEGER REFERENCES agents(id),
+    guest_id      INTEGER REFERENCES agents(id),
+    show_kind     TEXT NOT NULL,
+    title         TEXT NOT NULL,
+    transcript    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_radio_broadcasts_day ON radio_broadcasts(day);
+
+CREATE TABLE IF NOT EXISTS guilds (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    craft              TEXT NOT NULL UNIQUE,
+    name               TEXT NOT NULL,
+    hall_place_id      INTEGER REFERENCES places(id),
+    master_id          INTEGER REFERENCES agents(id),
+    members_count      INTEGER NOT NULL DEFAULT 0,
+    patronage_cents    INTEGER NOT NULL DEFAULT 0,
+    masterpieces_count INTEGER NOT NULL DEFAULT 0,
+    founded_tick       INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS guild_members (
+    guild_id      INTEGER NOT NULL REFERENCES guilds(id),
+    agent_id      INTEGER NOT NULL REFERENCES agents(id),
+    rank          TEXT NOT NULL DEFAULT 'journeyman',
+    joined_tick   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (guild_id, agent_id)
+);
+CREATE INDEX IF NOT EXISTS idx_guild_members_agent ON guild_members(agent_id);
+
+CREATE TABLE IF NOT EXISTS harvest_coops (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    day           INTEGER NOT NULL,
+    tick          INTEGER NOT NULL,
+    season        TEXT NOT NULL,
+    grower_id     INTEGER REFERENCES agents(id),
+    recipient_id  INTEGER REFERENCES agents(id),
+    produce_item  TEXT NOT NULL,
+    kind          TEXT NOT NULL DEFAULT 'sale',
+    price_cents   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_harvest_coops_day ON harvest_coops(day);
+
+CREATE TABLE IF NOT EXISTS sports_matches (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    day           INTEGER NOT NULL,
+    tick          INTEGER NOT NULL,
+    season        TEXT NOT NULL,
+    sport         TEXT NOT NULL,
+    home_district TEXT NOT NULL,
+    away_district TEXT NOT NULL,
+    home_score    INTEGER NOT NULL DEFAULT 0,
+    away_score    INTEGER NOT NULL DEFAULT 0,
+    mvp_id        INTEGER REFERENCES agents(id),
+    purse_cents   INTEGER NOT NULL DEFAULT 0,
+    summary       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sports_matches_day ON sports_matches(day);
+
+
+CREATE TABLE IF NOT EXISTS fire_brigade (
+    agent_id          INTEGER PRIMARY KEY REFERENCES agents(id),
+    district          TEXT NOT NULL,
+    role              TEXT NOT NULL DEFAULT 'volunteer',
+    drills_completed  INTEGER NOT NULL DEFAULT 0,
+    rescues_count     INTEGER NOT NULL DEFAULT 0,
+    joined_tick       INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_fire_brigade_district ON fire_brigade(district);
+
+CREATE TABLE IF NOT EXISTS book_club_selections (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    day               INTEGER NOT NULL,
+    tick              INTEGER NOT NULL,
+    season            TEXT NOT NULL,
+    title             TEXT NOT NULL,
+    author_id         INTEGER REFERENCES agents(id),
+    selector_id       INTEGER REFERENCES agents(id),
+    venue_id          INTEGER REFERENCES places(id),
+    readers_count     INTEGER NOT NULL DEFAULT 0,
+    royalty_cents     INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_book_club_day ON book_club_selections(day);
+
+CREATE TABLE IF NOT EXISTS home_renovations (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    day               INTEGER NOT NULL,
+    tick              INTEGER NOT NULL,
+    household_id      INTEGER NOT NULL REFERENCES households(id),
+    home_place_id     INTEGER NOT NULL REFERENCES places(id),
+    builder_id        INTEGER REFERENCES agents(id),
+    upgrade_kind      TEXT NOT NULL,
+    title             TEXT NOT NULL,
+    cost_cents        INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_home_renovations_hh ON home_renovations(household_id);
+
+CREATE TABLE IF NOT EXISTS time_capsules (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    day               INTEGER NOT NULL,
+    tick              INTEGER NOT NULL,
+    season            TEXT NOT NULL,
+    honouree_id       INTEGER REFERENCES agents(id),
+    theme             TEXT NOT NULL,
+    items_json        TEXT NOT NULL DEFAULT '[]',
+    honorarium_cents  INTEGER NOT NULL DEFAULT 0
+);
+
+
+CREATE TABLE IF NOT EXISTS theater_productions (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    day               INTEGER NOT NULL,
+    tick              INTEGER NOT NULL,
+    season            TEXT NOT NULL,
+    title             TEXT NOT NULL,
+    playwright_id     INTEGER REFERENCES agents(id),
+    lead_actor_id     INTEGER REFERENCES agents(id),
+    venue_id          INTEGER REFERENCES places(id),
+    audience_count    INTEGER NOT NULL DEFAULT 0,
+    box_office_cents  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_theater_day ON theater_productions(day);
+
+CREATE TABLE IF NOT EXISTS tool_library_loans (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    day               INTEGER NOT NULL,
+    tick              INTEGER NOT NULL,
+    season            TEXT NOT NULL,
+    steward_id        INTEGER REFERENCES agents(id),
+    borrower_id       INTEGER REFERENCES agents(id),
+    item_kind         TEXT NOT NULL,
+    item_name         TEXT NOT NULL,
+    endowment_cents   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_tool_loans_day ON tool_library_loans(day);
+
+CREATE TABLE IF NOT EXISTS historical_plaques (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    day               INTEGER NOT NULL,
+    tick              INTEGER NOT NULL,
+    place_id          INTEGER REFERENCES places(id),
+    honouree_id       INTEGER REFERENCES agents(id),
+    title             TEXT NOT NULL,
+    inscription       TEXT NOT NULL,
+    tours_count       INTEGER NOT NULL DEFAULT 1,
+    tip_cents         INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS sabbaticals (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    day               INTEGER NOT NULL,
+    tick              INTEGER NOT NULL,
+    scholar_id        INTEGER REFERENCES agents(id),
+    kind              TEXT NOT NULL,
+    title             TEXT NOT NULL,
+    venue_id          INTEGER REFERENCES places(id),
+    attendees_count   INTEGER NOT NULL DEFAULT 0,
+    stipend_cents     INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_sabbaticals_day ON sabbaticals(day);
+
 """
 
 
@@ -462,6 +736,18 @@ def _migrate(conn: sqlite3.Connection) -> None:
         hcols = {r["name"] for r in conn.execute("PRAGMA table_info(households)")}
         if "tradition" not in hcols:
             conn.execute("ALTER TABLE households ADD COLUMN tradition TEXT")
+
+    if _has_table(conn, "keepsakes"):
+        kcols = {r["name"] for r in conn.execute("PRAGMA table_info(keepsakes)")}
+        if "venue_id" not in kcols:
+            conn.execute("ALTER TABLE keepsakes ADD COLUMN venue_id INTEGER REFERENCES places(id)")
+        if "appreciations" not in kcols:
+            conn.execute("ALTER TABLE keepsakes ADD COLUMN appreciations INTEGER NOT NULL DEFAULT 0")
+
+    if _has_table(conn, "agent_state"):
+        scols = {r["name"] for r in conn.execute("PRAGMA table_info(agent_state)")}
+        if "vitality" not in scols:
+            conn.execute("ALTER TABLE agent_state ADD COLUMN vitality REAL NOT NULL DEFAULT 60.0")
 
     # Gazette authorship is in-world: historical editions get null bylines,
     # and the first new edition appoints an actual publisher/editor.
@@ -585,40 +871,6 @@ def _migrate(conn: sqlite3.Connection) -> None:
                     """UPDATE agent_state SET money_cents=0 WHERE money_cents>0
                        AND agent_id IN (SELECT id FROM agents WHERE alive=0)""")
         set_meta(conn, "estates_v1", "1")
-
-    if _has_table(conn, "agents"):
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS ambitions (
-                agent_id INTEGER PRIMARY KEY REFERENCES agents(id),
-                kind TEXT NOT NULL,
-                started_tick INTEGER NOT NULL DEFAULT 0,
-                baseline_value INTEGER NOT NULL DEFAULT 0,
-                target_value INTEGER NOT NULL DEFAULT 1,
-                progress REAL NOT NULL DEFAULT 0.0,
-                status TEXT NOT NULL DEFAULT 'active',
-                completed_tick INTEGER
-            )"""
-        )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_ambitions_status ON ambitions(status, kind)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_agents_home ON agents(home_place_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_place ON jobs(place_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_places_kind_district ON places(kind, district)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_state_place ON agent_state(place_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_relationships_b ON relationships(b_id)")
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS mentorships (
-                apprentice_id INTEGER PRIMARY KEY REFERENCES agents(id),
-                mentor_id INTEGER NOT NULL REFERENCES agents(id),
-                craft TEXT NOT NULL,
-                venue_id INTEGER REFERENCES places(id),
-                started_tick INTEGER NOT NULL DEFAULT 0,
-                lessons INTEGER NOT NULL DEFAULT 0,
-                target_lessons INTEGER NOT NULL DEFAULT 5,
-                status TEXT NOT NULL DEFAULT 'active',
-                graduated_tick INTEGER
-            )"""
-        )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_mentorships_mentor ON mentorships(mentor_id, status)")
 
 
 def get_meta(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:

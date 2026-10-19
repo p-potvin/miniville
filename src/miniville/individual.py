@@ -924,6 +924,9 @@ def resident_summary(conn: sqlite3.Connection, agent_id: int) -> dict[str, Any]:
     ).fetchall()
     from .ambitions import ambition_of
     from .events import describe
+    from .competitions import ribbons_of
+    from .correspondence import diary_of
+    from .keepsakes import keepsakes_of
     from .mentorship import mentorship_for_resident
     minfo = mentorship_for_resident(conn, agent_id)
     return {
@@ -931,6 +934,9 @@ def resident_summary(conn: sqlite3.Connection, agent_id: int) -> dict[str, Any]:
         "mentor": minfo["mentor"],
         "apprentices": minfo["apprentices"],
         "household_tradition": minfo["household_tradition"],
+        "keepsakes": keepsakes_of(conn, agent_id),
+        "ribbons": ribbons_of(conn, agent_id),
+        "diary": diary_of(conn, agent_id, limit=6),
         "archetype": prof.get("archetype", "balanced regular"),
         "chronotype": prof.get("chronotype", "day_walker"),
         "wake_offset": prof.get("wake_offset", 0),
@@ -970,7 +976,13 @@ def town_individualism_stats(conn: sqlite3.Connection) -> dict[str, Any]:
     personal_tags = ("craft_breakthrough", "work_mishap", "hobby_triumph",
                      "diy_fix", "repair_bill", "good_turn", "caregiven", "epiphany",
                      "ambition_achieved", "mentorship_started", "apprenticeship_completed",
-                     "family_tradition")
+                     "family_tradition", "keepsake_crafted", "keepsake_gifted",
+                     "heirloom_inherited", "mutual_aid", "watch_patrol", "block_party",
+                     "coming_of_age_gift", "milestone_birthday", "wedding_anniversary",
+                     "retirement_sendoff", "keepsake_exhibited", "acclaimed_work",
+                     "letter_home", "care_package", "shared_roots", "competition_won",
+                     "civic_petition", "civic_donation", "civic_volunteer",
+                     "civic_project_completed", "medical_treatment", "wellness_checkup", "pet_encounter", "lost_pet_returned", "flea_market_sale", "youth_discovery", "civic_scholarship", "radio_broadcast", "guild_masterpiece", "coop_market_box", "harvest_basket_shared", "district_derby", "fire_drill", "brigade_rebuild_aid", "author_signing", "book_club_meeting", "home_renovation", "key_to_the_town", "theater_premiere", "tool_library_loan", "orchard_gleaning", "plaque_dedicated", "masterclass_taught", "memoir_published")
     tag_counts: dict[str, int] = {}
     for t in personal_tags:
         c = conn.execute(
@@ -990,18 +1002,70 @@ def town_individualism_stats(conn: sqlite3.Connection) -> dict[str, Any]:
     completed_amb = conn.execute(
         "SELECT COUNT(*) n FROM events WHERE data LIKE ?", ("%\"ambition_achieved\"%",)
     ).fetchone()["n"]
+    from .civic_projects import list_projects
+    from .competitions import list_competitions
+    from .correspondence import list_diaries
+    from .book_club import book_club_summary
+    from .commons_library import commons_library_summary
+    from .plaques import plaques_summary
+    from .sabbaticals import sabbaticals_summary
+    from .theater import theater_summary
+    from .fire_brigade import brigade_summary
+    from .flea_market import market_summary
+    from .jubilee import jubilee_summary
+    from .renovations import renovations_summary
+    from .guilds import guilds_summary
+    from .harvest import harvest_summary
+    from .health import health_stats
+    from .history import history_summary
+    from .pets import pet_summary
+    from .radio import radio_summary
+    from .sports import sports_summary
+    from .youth import youth_summary
+    from .culture import list_cultural_commons
+    from .keepsakes import list_keepsakes
     from .mentorship import list_mentorships, tradition_stats
+    from .milestones import list_milestones
+    from .neighborhood import neighborhood_stats
     ment_done = conn.execute(
         "SELECT COUNT(*) n FROM mentorships WHERE status='graduated'"
+    ).fetchone()["n"]
+    heirloom_cnt = conn.execute(
+        "SELECT COUNT(*) n FROM keepsakes WHERE generations >= 1"
     ).fetchone()["n"]
     return {
         "chronotypes": chronos,
         "ambition_counts": amb_counts,
         "ambitions_completed": completed_amb,
         "mentorships_graduated": ment_done,
+        "heirlooms_count": heirloom_cnt,
         "active_ambitions": list_ambitions(conn, "active", limit=25),
         "mentorships": list_mentorships(conn, status="all", limit=25),
         "household_traditions": tradition_stats(conn)[:8],
+        "keepsakes": list_keepsakes(conn, limit=25),
+        "cultural_commons": list_cultural_commons(conn, limit=25),
+        "milestones": list_milestones(conn, limit=20),
+        "competitions": list_competitions(conn, limit=20),
+        "diaries": list_diaries(conn, limit=20),
+        "civic_projects": list_projects(conn),
+        "health": health_stats(conn),
+        "pets": pet_summary(conn),
+        "market": market_summary(conn),
+        "youth": youth_summary(conn),
+        "history": history_summary(conn),
+        "radio": radio_summary(conn),
+        "guilds": guilds_summary(conn),
+        "harvest": harvest_summary(conn),
+        "sports": sports_summary(conn),
+        "brigade": brigade_summary(conn),
+        "book_club": book_club_summary(conn),
+        "renovations": renovations_summary(conn),
+        "jubilee": jubilee_summary(conn),
+        "theater": theater_summary(conn),
+        "commons_library": commons_library_summary(conn),
+        "plaques": plaques_summary(conn),
+        "sabbaticals": sabbaticals_summary(conn),
+        "neighborhoods": neighborhood_stats(conn),
         "top_archetypes": dict(sorted(archetypes.items(), key=lambda kv: -kv[1])[:8]),
         "favorite_places": [{"venue": r["name"], "regulars": r["n"]} for r in favs],
         "personal_event_counts": tag_counts,

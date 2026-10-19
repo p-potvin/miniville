@@ -13,15 +13,39 @@ from . import (
     events,
     groups,
     growth,
+    book_club,
+    commons_library,
+    fire_brigade,
+    plaques,
+    sabbaticals,
+    theater,
+    flea_market,
+    guilds,
+    jubilee,
+    renovations,
+    harvest,
+    health,
+    history,
+    pets,
+    radio,
+    sports,
+    youth,
+    civic_projects,
+    competitions,
+    correspondence,
+    culture,
     individual,
+    keepsakes,
     mentorship,
+    milestones,
+    neighborhood,
     jobs,
     memory,
-    mortality,
-    newspaper,
     politics,
     press,
     reputation,
+    mortality,
+    newspaper,
     seasons,
     shocks,
 )
@@ -75,29 +99,18 @@ def _pay_and_spend(conn: sqlite3.Connection, tick: int) -> dict:
 
 def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     """Settle yesterday's books, age the town, then build today."""
-    # birthdays run before the plan rebuild so a child who comes of age today
-    # is planned as an adult
     stats: dict = {"birthdays": seasons.birthdays(conn, tick, seed)}
     individual.ensure_profiles(conn, seed)
 
-    # record_day must run before settle_businesses zeroes the daily counters,
-    # and settlement must run before plans are rebuilt so a business that
-    # closed overnight is not on anybody's schedule
     economy.ensure_businesses(conn)
     economy.record_day(conn, tick)
     stats["businesses"] = economy.settle_businesses(conn, tick, seed)
-    # pensions land before rent is due, so a retired household can pay it
     stats["pensions"] = economy.pay_pensions(conn, tick)
     stats["rent"] = economy.collect_rent(conn, tick, seed)
     stats["levy"] = economy.weekly_levy(conn, tick, seed)
     stats["labour"] = economy.wage_dynamics(conn, tick, seed)
-    # owners draw profit, buyers and founders put capital in
     stats["enterprise"] = enterprise.due(conn, tick, seed)
-    # operator shocks land after the books settle but before the town plans
-    # its day, so a venue that burnt overnight is nobody's destination
     stats["shocks"] = shocks.apply_due(conn, tick, seed)
-    # the labour market turns over before plans are built: a retiree is no
-    # longer planned at work, and a new hire is planned at their new venue
     stats["retirements"] = len(jobs.retirements(conn, tick, seed))
     if day_of(tick) % 7 == 0:
         stats["turnover"] = jobs.turnover(conn, tick, seed)
@@ -113,20 +126,39 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     stats["life_events"] = daily_life_lottery(conn, tick, seed)
     stats["individual"] = individual.daily_happenings(conn, tick, seed)
     stats["mentorship"] = mentorship.due(conn, tick, seed)
+    stats["keepsakes"] = keepsakes.due(conn, tick, seed)
+    stats["culture"] = culture.due(conn, tick, seed)
+    stats["neighborhood"] = neighborhood.due(conn, tick, seed)
+    stats["health"] = health.due(conn, tick, seed)
+    stats["pets"] = pets.due(conn, tick, seed)
+    stats["flea_market"] = flea_market.due(conn, tick, seed)
+    stats["youth"] = youth.due(conn, tick, seed)
+    stats["radio"] = radio.due(conn, tick, seed)
+    stats["guilds"] = guilds.due(conn, tick, seed)
+    stats["harvest"] = harvest.due(conn, tick, seed)
+    stats["sports"] = sports.due(conn, tick, seed)
+    stats["fire_brigade"] = fire_brigade.due(conn, tick, seed)
+    stats["book_club"] = book_club.due(conn, tick, seed)
+    stats["renovations"] = renovations.due(conn, tick, seed)
+    stats["jubilee"] = jubilee.due(conn, tick, seed)
+    stats["theater"] = theater.due(conn, tick, seed)
+    stats["commons_library"] = commons_library.due(conn, tick, seed)
+    stats["plaques"] = plaques.due(conn, tick, seed)
+    stats["sabbaticals"] = sabbaticals.due(conn, tick, seed)
+    stats["history"] = history.due(conn, tick, seed)
+    stats["civic_projects"] = civic_projects.due(conn, tick, seed)
+    stats["milestones"] = milestones.due(conn, tick, seed)
+    stats["competitions"] = competitions.due(conn, tick, seed)
     stats["ambitions"] = ambitions.due(conn, tick, seed)
+    stats["correspondence"] = correspondence.due(conn, tick, seed)
     stats["crime"] = crime.daily_crime(conn, tick, seed)
     stats["betrayals"] = spouse_discovery(conn, tick, seed)
-    # deaths settle before births: a widow is no longer a spouse, so the
-    # couple cannot also welcome a child on the same day
     stats["deaths"] = mortality.daily_mortality(conn, tick, seed)
     stats["births"] = growth.births(conn, tick, seed)
-    # what the town made of yesterday, after everyone who acted on it is gone
     stats["standing"] = reputation.accrue(conn, tick, seed)
-    # and the town's own decisions: an election every two years, a motion a month
     decided = politics.due(conn, tick)
     if decided:
         stats["politics"] = decided
-    # grudges act: a rival talks, a group boycotts, a congregation splits
     acted = conflict.due(conn, tick, seed)
     if acted:
         stats["conflict"] = acted
@@ -157,8 +189,6 @@ def step(conn: sqlite3.Connection, seed: str) -> dict:
         individual.update_favorite_places(conn, day_of(tick))
         text = chronicle.write_day(conn, day_of(tick), seed)
         stats["chronicle"] = len(text)
-        # fold the day's events into each participant's memory stream, then
-        # every third day distill the strongest memories into a reflection
         stats["memories"] = memory.record_event_memories(conn, tick)
         if day_of(tick) % 3 == 2:
             stats["reflections"] = memory.reflect_all(conn, day_of(tick))

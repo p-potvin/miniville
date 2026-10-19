@@ -23,6 +23,10 @@ AMBITION_LABELS = {
     "pillar_of_the_community": "Become a pillar of the community",
     "make_peace": "Bury an old grudge",
     "mentor_a_protege": "Pass on their craft to a protégé",
+    "create_masterwork": "Create or pass on a signature keepsake",
+    "publish_or_exhibit": "Share an acclaimed work in the Cultural Commons",
+    "win_blue_ribbon": "Win a Blue Ribbon at a town competition",
+    "champion_civic_project": "Champion a civic improvement landmark",
 }
 
 
@@ -48,6 +52,18 @@ def _choose_ambition(agent: sqlite3.Row, prof: dict[str, Any],
     if ms in ("never_married", "divorced", "widowed") and aid not in coupled:
         if r.random() < 0.45:
             return ("find_true_love", 0, 1)
+
+    if float(prof.get("sociability", 0.0)) >= 0.20 and wallet >= 350_000 and r.random() < 0.20:
+        return ("champion_civic_project", 0, 2)
+
+    if float(prof.get("industriousness", 0.0)) >= 0.25 and r.random() < 0.20:
+        return ("win_blue_ribbon", 0, 1)
+
+    if float(prof.get("curiosity", 0.0)) >= 0.25 and float(prof.get("sociability", 0.0)) >= 0.1 and r.random() < 0.22:
+        return ("publish_or_exhibit", 0, 3)
+
+    if float(prof.get("curiosity", 0.0)) >= 0.25 and r.random() < 0.30:
+        return ("create_masterwork", 0, 1)
 
     if (age >= 40 or rank >= 1) and float(prof.get("sociability", 0.0)) >= -0.2:
         if r.random() < 0.35:
@@ -162,6 +178,30 @@ def evaluate_ambitions(conn: sqlite3.Connection, tick: int,
         if cur is None or m["status"] == "graduated" or ratio > cur[1]:
             mentor_prog[mid] = (m["status"], ratio, m["app_name"])
 
+    crafted_by: dict[int, list[tuple[int, str, int]]] = {}
+    for k in conn.execute(
+        "SELECT creator_id, created_tick, title, COALESCE(appreciations, 0) AS app FROM keepsakes"
+    ).fetchall():
+        crafted_by.setdefault(int(k["creator_id"]), []).append((int(k["created_tick"]), k["title"], int(k["app"])))
+
+    comp_wins: dict[int, list[tuple[int, str]]] = {}
+    comp_ru: dict[int, int] = {}
+    for cp in conn.execute("SELECT winner_id, runner_up_id, tick, title FROM competitions").fetchall():
+        comp_wins.setdefault(int(cp["winner_id"]), []).append((int(cp["tick"]), cp["title"]))
+        if cp["runner_up_id"] is not None:
+            ru_id = int(cp["runner_up_id"])
+            comp_ru[ru_id] = comp_ru.get(ru_id, 0) + 1
+
+    civic_acts: dict[int, list[int]] = {}
+    for cev in conn.execute(
+        """SELECT a_id, tick FROM events
+           WHERE kind='life_event'
+             AND (data LIKE '%"civic_donation"%' OR data LIKE '%"civic_volunteer"%'
+                  OR data LIKE '%"civic_project_completed"%')"""
+    ).fetchall():
+        if cev["a_id"]:
+            civic_acts.setdefault(int(cev["a_id"]), []).append(int(cev["tick"]))
+
     bt_ticks: dict[int, list[int]] = {}
     for ev in conn.execute(
         "SELECT a_id, tick FROM events WHERE kind='life_event' AND data LIKE ?", ('%"craft_breakthrough"%',)
@@ -265,6 +305,55 @@ def evaluate_ambitions(conn: sqlite3.Connection, tick: int,
                 prog = max(0.15, min(0.95, mp[1]))
             else:
                 prog = 0.1
+
+        elif kind == "create_masterwork":
+            started = int(am["started_tick"] or 0)
+            new_works = [title for t, title, _app in crafted_by.get(aid, ()) if t >= started]
+            if new_works:
+                prog = 1.0
+                done = True
+                summary_txt = f"fulfilled their creative ambition by crafting {new_works[-1]}"
+            else:
+                prog = 0.35
+
+        elif kind == "publish_or_exhibit":
+            works = crafted_by.get(aid, ())
+            best_work = max(works, key=lambda x: x[2]) if works else None
+            if best_work and best_work[2] >= max(1, target):
+                prog = 1.0
+                done = True
+                summary_txt = f"earned town-wide acclaim for {best_work[1]} ({best_work[2]} admirers)"
+            elif best_work:
+                prog = max(0.2, min(0.9, best_work[2] / max(1, target)))
+            else:
+                prog = 0.1
+
+        elif kind == "win_blue_ribbon":
+            started = int(am["started_tick"] or 0)
+            wins = [title for t, title in comp_wins.get(aid, ()) if t >= started]
+            ru_cnt = comp_ru.get(aid, 0)
+            if wins:
+                prog = 1.0
+                done = True
+                summary_txt = f"won the Blue Ribbon at the {wins[-1]}"
+            elif ru_cnt >= 2:
+                prog = 1.0
+                done = True
+                summary_txt = "earned town-wide recognition as a repeat competition finalist"
+            elif ru_cnt == 1:
+                prog = 0.65
+            else:
+                prog = 0.2
+
+        elif kind == "champion_civic_project":
+            started = int(am["started_tick"] or 0)
+            acts = sum(1 for t in civic_acts.get(aid, ()) if t >= started)
+            if acts >= max(1, target):
+                prog = 1.0
+                done = True
+                summary_txt = "championed a civic improvement landmark for Miniville"
+            else:
+                prog = min(0.85, 0.4 * acts + 0.15)
 
         if done:
             conn.execute(

@@ -583,6 +583,59 @@ tested with a deliberately opposed council vote. A 90-day press soak is
 running to see whether routine politics produces claims and how credibility
 moves.
 
+## v0.16-v0.43 — the Gemini 4 expansion: a town with keepsakes, pets, radio and jubilees (merged Tue, 20 Oct 2026, workstation)
+
+The cloud seat ran autonomously as **gemini-lead** (Gemini 4 / Argon) and
+shipped milestones past v0.15, exporting snapshots
+(`miniville_v0XX_autonomous.zip`) up to **v0.43** in
+`C:\Users\Administrator\Desktop\gemini4-miniville`. The workstation integrated
+v0.16-v0.19 on 14-15 Oct (ambitions + 5k scale + sync queue; mentorship +
+traditions + network graph). **This session merged the rest: v0.20-v0.43,
+24 new modules**, each with its own table, CLI subcommand, API route, Gazette
+section, tests and deterministic RNG stream:
+
+| version | module | what the town gained |
+| --- | --- | --- |
+| v0.20 | `keepsakes.py` | crafted keepsakes with provenance, gifting, heirloom inheritance across generations |
+| v0.21 | `neighborhood.py` | district watch, mutual-aid transfers, block parties, porch swaps |
+| v0.22 | `milestones.py` | coming-of-age gifts, decade birthdays, anniversaries, retirement send-offs |
+| v0.23 | `culture.py` | library shelves, community gallery, recipe exchange, exhibitions |
+| v0.24 | `correspondence.py` | letters home, care packages, shared-roots bonding, personal diaries |
+| v0.25 | `competitions.py` | seasonal craft fairs and blue-ribbon honours |
+| v0.26 | `civic_projects.py` | donor- and purse-funded landmark projects |
+| v0.27 | `health.py` | athletic vitality curve, medical rounds at the hospital |
+| v0.28 | `pets.py` | household pets and dog-walking encounters |
+| v0.29 | `flea_market.py` | weekend secondhand trade |
+| v0.30 | `youth.py` | school discovery and conserved civic scholarships |
+| v0.31 | `history.py` | archives, cultural eras, hall of fame |
+| v0.32-v0.35 | `guilds.py`, `harvest.py`, `sports.py`, `radio.py` | trade guilds, harvest co-ops, sports matches, town radio |
+| v0.36 | `fire_brigade.py` | volunteer brigade, inspections, rebuild drives |
+| v0.37 | `book_club.py` | reading circles and author signings |
+| v0.38 | `renovations.py` | home additions and heirloom gardens |
+| v0.39 | `jubilee.py` | founders' jubilee, time capsules, Key to Miniville |
+| v0.40 | `theater.py` | theater troupe and playbills |
+| v0.41 | `commons_library.py` | tool library, seed bank, community orchard |
+| v0.42 | `plaques.py` | heritage plaques and walking tours |
+| v0.43 | `sabbaticals.py` | sabbaticals, memoirs, town masterclasses |
+
+The Gemini lineage **split before `press.py` existed** (it never had the
+workstation's Gazette readers/opinion work), so this merge re-applied the
+press power on top of the v0.43 base: `press.py`, the `opinion` table,
+opinion-aware council votes, `press_influence`, `newspapers.readers`, the
+ledger/clock guard and the Council-tab opinion bars are all back and tested.
+
+Verification: **261 tests pass** (257 on the v0.43 base + the 4 restored
+press/CLI tests). The live world's database migrates cleanly on first connect
+(24 new tables + `opinion` + `newspapers.readers` + `motions.support`/
+`press_swing`) — verified on a copy, then run 4 days (548-551) without error.
+A 365-day soak on a copy (`soak_check --run 365 --tag v043`) holds **11/11
+invariants**: money conserved **+0.6%/y**, 0 municipal deficits, unemployment
+9.8% → 5.6%, venues staffed, commercial pay/take 0.86x, 4 closures (1.6/y),
+54% one-off ties, 183 rivalries, **0.0% miserable or hungry**, 386 events/day.
+Every new module lived on the real town's data (keepsakes gifted, mutual aid,
+pet events, radio broadcasts, jubilees, plaques, sabbaticals, civic projects,
+competitions, heirlooms, watch patrols).
+
 ## v0.15 — the Gazette has readers, and public opinion moves the council (Fri, 09 Oct 2026, workstation)
 
 The paper could always print a false claim; the only cost was its own
@@ -968,6 +1021,7 @@ live DB.
 
 Status updates (Wed, 14 Oct 2026, workstation): **v0.15 expansion — Individualism & Personal Happenings**.
 Integrated Gemini 4's individualism feature set and implemented the Observer UI panel:
+
 - `src/miniville/individual.py`: derives 5 temperament axes (`sociability`, `industriousness`,
   `curiosity`, `resilience`, `thrift`), 5 chronotypes (`early_bird`, `morning`, `day_walker`,
   `evening`, `night_owl` with wake/sleep offsets), and signature knacks from persona and skills.
@@ -983,6 +1037,7 @@ Integrated Gemini 4's individualism feature set and implemented the Observer UI 
 
 Status updates (Thu, 15 Oct 2026, workstation): **v0.16–v0.17 expansion — Ambitions, 5k Scale Optimizations & Sync Queue**.
 Integrated Gemini 4's v0.16–v0.17 expansion bundled onto autodev:
+
 - `src/miniville/ambitions.py` & `tests/test_ambitions.py`: Adult residents adopt and pursue long-term ambitions (`find_a_job`, `save_nest_egg`, `climb_the_ladder`, `find_true_love`, `pillar_of_the_community`, `make_peace`) based on temperament and circumstances. Daily progress checks track milestones and emit `ambition_achieved` events with reputation gains.
 - Ambition-steered mechanics: hiring pass gives edge to `find_a_job`; promotions boosted for `climb_the_ladder`; romantics pair up faster in `encounters.py`; favor acceptance rate boosted for `pillar_of_the_community`; `save_nest_egg` savers reduce dining out and luxury shopping trips.
 - Scale & 5k performance optimizations: Added 5 targeted DB indexes (`idx_agents_home`, `idx_jobs_place`, `idx_places_kind_district`, `idx_agent_state_place`, `idx_relationships_b`), bulk pre-fetching in `economy.collect_rent`, and cached lookup tables (`jobs_by_agent`, `savers`, `leisure_cache`) in `schedules._plan_ctx`.
@@ -993,6 +1048,7 @@ Integrated Gemini 4's v0.16–v0.17 expansion bundled onto autodev:
 
 Status updates (Thu, 15 Oct 2026, workstation): **v0.18–v0.19 expansion — Mentorships, Traditions & Town Social Network Graph**.
 Integrated Gemini 4's v0.18–v0.19 expansion bundled onto autodev:
+
 - `src/miniville/mentorship.py` & `tests/test_mentorship.py`: Seasoned residents (age 40+, senior rank, or standing 8+) mentor young adults (18-35) at shared venues, clubs, or congregations. Across 5 coaching lessons they warm bonds, boost morale, and upon graduation pass their craft to the apprentice's skills, conferring a 5% wage bump and reflection memories.
 - `households.tradition`: Every household derives a signature custom (e.g. Sunday potluck dinners, lake fishing, front-porch music). Celebrated on Sundays with household morale boosts and affinity gains.
 - 7th Personal Ambition: `mentor_a_protege` ("Pass on their craft to a protégé") added to `ambitions.py`, tracked via `mentorships` status.
@@ -1004,6 +1060,24 @@ Integrated Gemini 4's v0.18–v0.19 expansion bundled onto autodev:
   - Resident cards display temperament badge, chronotype, knack, axes pills, household tradition, mentor, and apprentices.
 - Live world advanced to tick 26256 (Day 547). 226 unit tests pass. 0 console errors verified via patchright.
 
+Status updates (Tue, 20 Oct 2026, workstation): **merged the Gemini 4
+v0.20-v0.43 expansion** onto autodev from the snapshots in
+`C:\Users\Administrator\Desktop\gemini4-miniville`. 24 new modules (keepsakes,
+neighborhood, milestones, culture, correspondence, competitions, civic
+projects, health, pets, flea market, youth, history, guilds, harvest, sports,
+radio, fire brigade, book club, renovations, jubilee, theater, tool library,
+plaques, sabbaticals) each with a table, CLI, API, Gazette section and tests.
+The Gemini lineage had split before the workstation's press work, so the
+Gazette's readers/opinion power (`press.py`, `opinion`, `press_influence`,
+ledger/clock guard, Council opinion bars) was re-applied on top of the v0.43
+base. **261 tests pass.** The live DB migrates cleanly on first connect
+(24 new tables + opinion + newspapers.readers + motions.support/press_swing) —
+verified on a copy and run 4 days without error. The 365-day soak on a copy
+(`soak_check --run 365 --tag v043`) holds **11/11 invariants** (money +0.6%/y,
+0 deficits, 0.0% miserable/hungry, 386 events/day); details in the v0.16-v0.43
+section above. The live world has NOT yet run on the merged code (item 5
+below).
+
 Open items:
 
 1. Avatar pipeline: 129 deferred female residents awaiting IMDb StarMeter expansion
@@ -1012,5 +1086,7 @@ Open items:
 3. Scale test: 2k-5k agents (initial indexing/benchmarking done in bench5k.db).
 4. The council's next election is Day 1100 — the press has not yet been tested
    on an election (endorsements are not modelled; the line only moves opinion).
-5. Routine: read this file → `run` the next day(s) → `digest` → write a
+5. Advance the live world on the merged v0.43 code (once the v043 soak passes):
+   it migrates on first connect and the 24 new modules start living.
+6. Routine: read this file → `run` the next day(s) → `digest` → write a
    `narrate-write` entry → update this file → ledger.

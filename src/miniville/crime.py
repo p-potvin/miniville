@@ -144,7 +144,10 @@ def daily_crime(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         else:
             _pay(conn, amount, from_agent=person["id"], to_agent=t["id"])
 
-        if r.random() < p_catch:
+        from .neighborhood import vigilance_bonus_for
+        eff_catch = min(0.90, p_catch + vigilance_bonus_for(
+            conn, shop["place_id"] if shop else None, person["id"] if person else None))
+        if r.random() < eff_catch:
             caught += 1
             # the money goes back, and the fine is whatever they can pay
             if shop:

@@ -22,8 +22,6 @@ SCHOOL_START, SCHOOL_END = 14, 32
 LEISURE_TAGS = ["outdoors", "food", "drink", "nightlife", "sport", "quiet",
                 "arts", "community", "coffee"]
 
-# shops and eateries can be workplaces too (the grocer, the diner, the shops),
-# so customers must be able to plan a trip there
 SHOP_TAGS = ["retail", "trades"]
 SHOP_KINDS = ("workplace", "public")
 DINING_KINDS = ("workplace", "public")
@@ -239,7 +237,6 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
         else:
             in_work_shift = False
         if in_work_shift:
-            # lunch break mid-shift so workers don't starve
             length = (job["shift_end"] - job["shift_start"]) % TICKS_PER_DAY
             mid = (job["shift_start"] + length // 2) % TICKS_PER_DAY
             plan[t] = (job["place_id"], "break" if t == mid else "work")
@@ -251,10 +248,6 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
             and school_id
         )
         if in_school:
-            # school runs 06:30-17:00, which covers breakfast and lunch: the
-            # school branch used to win those ticks outright, so children ate
-            # only dinner and drifted permanently hungry (mean hunger 47
-            # against the adults' 93)
             plan[t] = (school_id, "eat" if t in MEAL_TICKS else "school")
             continue
 
@@ -267,8 +260,6 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
             plan[t] = (venue_id or home, "celebrate")
             continue
 
-        # post-shift dinner before the sleep check: a worker who finishes
-        # after bedtime still gets their meal on the way home
         if works_today and t == job["shift_end"]:
             plan[t] = (home, "eat")
             continue
@@ -285,7 +276,6 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
             plan[t] = (home, "eat")
             continue
 
-        # errands: a shopping trip now and then keeps the shops in business
         if t in SHOPPING_WINDOWS and shop_venues and not agent["is_child"]:
             if r.random() < 0.30:
                 v = r.choice(shop_venues)
@@ -293,7 +283,6 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
                     plan[t] = (v["id"], "shopping")
                     continue
 
-        # leisure: prob of going out depends on weekend & hour
         p_out = 0.55 if wknd else (0.35 if 18 <= t <= 30 else 0.2)
         if t >= 40 and r.random() < 0.3:
             p_out = 0.4  # nightlife window
@@ -309,11 +298,6 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
 
     _apply_personal_habits(agent, day, seed, plan, ctx, leisure_venues, season)
 
-    # A gathering outranks whatever else was planned for that hour, and it
-    # lasts GATHERING_TICKS: one tick of co-presence is a single encounter and
-    # nothing accumulates from it, which is why the town's whole social graph
-    # sat at familiarity 1-3 — a fog of one-off meetings. A club that sits
-    # together for two hours builds something.
     meeting = ctx.get("meetings", {}).get(agent["id"])
     if meeting:
         venue_id, meet_tick, _name = meeting
@@ -342,8 +326,6 @@ def rebuild_day_plans(conn: sqlite3.Connection, day: int, seed: str) -> int:
     agents = conn.execute("SELECT * FROM agents WHERE alive=1").fetchall()
     ctx = _plan_ctx(conn)
     ctx["holiday"] = holiday_for(conn, day)
-    # today's gatherings, one query for the whole town: a group is just an
-    # arrangement of who is in the room, and encounters do the rest
     from .groups import meetings_today
     ctx["meetings"] = meetings_today(conn, day)
     rows = []

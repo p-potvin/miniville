@@ -195,6 +195,8 @@ def _die(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) -> int | No
     # before the children are rehomed, while the household is still together
     estate = _settle_estate(conn, agent, survivor, tick)
     _pass_on_businesses(conn, agent, survivor, tick)
+    from .keepsakes import inherit_keepsakes
+    inherit_keepsakes(conn, agent, survivor, tick)
     orphans = _rehome_children(conn, agent, r)
 
     text = f"died at {agent['age']}"
@@ -217,15 +219,21 @@ def _die(conn: sqlite3.Connection, agent: sqlite3.Row, tick: int, r) -> int | No
 
 def daily_mortality(conn: sqlite3.Connection, tick: int, seed: str) -> int:
     """Once-per-day mortality roll. Returns the number of deaths."""
+    from .health import vitality_hazard_multiplier
     sick = {r["agent_id"] for r in conn.execute(
         "SELECT agent_id FROM conditions WHERE kind='sick'")}
+    vit_by_id = {
+        r["agent_id"]: r["vitality"]
+        for r in conn.execute("SELECT agent_id, vitality FROM agent_state").fetchall()
+    }
     adults = conn.execute(
         "SELECT * FROM agents WHERE alive=1 AND is_child=0 AND age >= ?",
         (MIN_DEATH_AGE,)).fetchall()
     deaths = 0
     for a in adults:
         r = rng_for(seed, "death", a["id"], tick)
-        if r.random() < daily_hazard(a["age"] or 0, a["id"] in sick):
+        v_mult = vitality_hazard_multiplier(vit_by_id.get(a["id"], 60.0))
+        if r.random() < daily_hazard(a["age"] or 0, a["id"] in sick) * v_mult:
             _die(conn, a, tick, r)
             deaths += 1
     conn.commit()

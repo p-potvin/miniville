@@ -247,6 +247,80 @@ def create_app(db_path: str | None = None) -> FastAPI:
         finally:
             c.close()
 
+    @app.get("/api/keepsakes")
+    def keepsakes_view(heirlooms_only: bool = False, limit: int = Query(40, le=200)):
+        c = conn()
+        try:
+            from ..keepsakes import list_keepsakes
+            return list_keepsakes(c, heirlooms_only=heirlooms_only, limit=limit)
+        finally:
+            c.close()
+
+    @app.get("/api/neighborhoods")
+    def neighborhoods_view():
+        c = conn()
+        try:
+            from ..neighborhood import neighborhood_stats
+            return neighborhood_stats(c)
+        finally:
+            c.close()
+
+    @app.get("/api/milestones")
+    def milestones_view(limit: int = Query(40, le=200)):
+        c = conn()
+        try:
+            from ..milestones import list_milestones
+            return list_milestones(c, limit=limit)
+        finally:
+            c.close()
+
+    @app.get("/api/culture")
+    def culture_view(limit: int = Query(40, le=200)):
+        c = conn()
+        try:
+            from ..culture import list_cultural_commons
+            return list_cultural_commons(c, limit=limit)
+        finally:
+            c.close()
+
+    @app.get("/api/diary")
+    def diary_view(agent_id: int | None = None, limit: int = Query(30, le=200)):
+        c = conn()
+        try:
+            from ..correspondence import diary_of, list_diaries
+            if agent_id is not None:
+                return diary_of(c, agent_id, limit=limit)
+            return list_diaries(c, limit=limit)
+        finally:
+            c.close()
+
+    @app.get("/api/competitions")
+    def competitions_view(limit: int = Query(30, le=200)):
+        c = conn()
+        try:
+            from ..competitions import list_competitions
+            return list_competitions(c, limit=limit)
+        finally:
+            c.close()
+
+    @app.get("/api/projects")
+    def projects_view():
+        c = conn()
+        try:
+            from ..civic_projects import list_projects
+            return list_projects(c)
+        finally:
+            c.close()
+
+    @app.get("/api/health")
+    def health_view():
+        c = conn()
+        try:
+            from ..health import health_stats
+            return health_stats(c)
+        finally:
+            c.close()
+
     @app.get("/api/network")
     def network_view(filter_kind: str = "all", limit_edges: int = Query(200, le=400)):
         """Town-wide social network graph: district-clustered nodes and
@@ -362,8 +436,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     raise HTTPException(404, "no edition for that week")
                 return edition(row)
             rows = _rows(c, "SELECT week, created_tick, publisher_id, editor_id, "
-                            "editorial_line, editorial_basis, credibility, readers "
-                            "FROM newspapers ORDER BY week DESC LIMIT 20")
+                        "editorial_line, editorial_basis, credibility, readers "
+                        "FROM newspapers ORDER BY week DESC LIMIT 20")
             for r in rows:
                 r["week"] += 1
                 for field in ("publisher_id", "editor_id"):

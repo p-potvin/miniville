@@ -83,30 +83,7 @@ li.click:hover { background: var(--panel); }
 .ind-box { background: #131820; border: 1px solid var(--line); border-radius: 6px; padding: .65rem .85rem; margin: .6rem 0; font-size: .9rem; }
 .axes-row { margin-top: .4rem; display: flex; flex-wrap: wrap; gap: .4rem; }
 .axis-pill { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: .1rem .45rem; font-size: .78rem; color: var(--dim); }
-#ind-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.2rem; margin-bottom: 1.4rem; }
-
-/* Individualism Panel & Resident Traits */
-.chrono-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .8rem; margin: .8rem 0 1.4rem; }
-.chrono-card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .75rem 1rem; text-align: center; }
-.chrono-card .chrono-icon { font-size: 1.4rem; margin-bottom: .2rem; }
-.chrono-card b { display: block; color: var(--accent); font-size: 1.2rem; }
-.chrono-card .chrono-name { font-size: .85rem; color: var(--fg); text-transform: capitalize; font-weight: 500; }
-.chrono-card .chrono-desc { font-size: .75rem; color: var(--dim); }
-
-.ind-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; }
-.trait-grid { display: flex; flex-wrap: wrap; gap: .8rem; margin: .8rem 0 1.4rem; }
-
-.trait-bars { display: flex; flex-direction: column; gap: .35rem; margin: .6rem 0 1rem; max-width: 420px; }
-.trait-bar-row { display: grid; grid-template-columns: 8rem 1fr 3.5rem; align-items: center; gap: .6rem; }
-.trait-label { color: var(--dim); font-size: .82rem; text-transform: capitalize; }
-.trait-bar-track { position: relative; height: .5rem; background: #12161c; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
-.trait-bar-track::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--line); z-index: 1; }
-.trait-bar-fill { position: absolute; top: 0; height: 100%; border-radius: 2px; }
-.trait-bar-fill.pos { background: #6bd48e; }
-.trait-bar-fill.neg { background: #e06c75; }
-.trait-val { color: var(--dim); font-size: .8rem; font-family: Consolas, monospace; text-align: right; }
-
-.amb-row { margin-top: .6rem; }
+.amb-row { margin-top: .5rem; }
 .prog-bar { display: inline-block; width: 110px; height: 8px; background: #262d38; border-radius: 4px; overflow: hidden; vertical-align: middle; margin-right: .35rem; }
 .prog-fill { height: 100%; background: var(--accent); }
-
+#ind-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.2rem; margin-bottom: 1.4rem; }

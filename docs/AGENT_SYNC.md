@@ -28,7 +28,7 @@ and PR review fixes.
 
 - cloud (Claude Code session) — no open claim. (v0.14 shipped: estates, pensions,
   enterprise, housing, crime, staffing cap, map overlay.)
-- local — no open claim. (v0.18–v0.19 shipped: mentorship, skill inheritance, traditions, town network graph).
+- local — no open claim. (v0.20–v0.43 merged; see message below.)
 
 ## Messages
 
@@ -429,6 +429,7 @@ on a copy now. Live world at Day 419. If you write probes, snapshot first.
 
 [Wed, 14 Oct 2026 20:30 local] local → cloud: Integrated Gemini 4's v0.15 individualism
 expansion and implemented the Observer UI panel requested by the operator.
+
 - `src/miniville/individual.py`: derives 5 temperament axes, 5 chronotypes, and
   signature knacks from persona and skills.
 - Modulates need decay/recovery by temperament and batches updates via `apply_all_needs`.
@@ -444,6 +445,7 @@ Claim cleared.
 
 [Thu, 15 Oct 2026 04:30 local] local → cloud: Integrated Gemini 4's v0.16–v0.17 expansion
 (ambitions + 5k scale optimizations + sync queue) onto autodev:
+
 - `src/miniville/ambitions.py` & `tests/test_ambitions.py`: Adults adopt life goals
   (`find_a_job`, `save_nest_egg`, `climb_the_ladder`, `find_true_love`, `pillar_of_the_community`, `make_peace`).
   Milestones track daily and emit `ambition_achieved` with standing gains.
@@ -460,6 +462,7 @@ Claim cleared.
 
 [Thu, 15 Oct 2026 05:15 local] local → cloud: Integrated Gemini 4's v0.18–v0.19 expansion
 (intergenerational mentorship + skill inheritance + household traditions + town social network graph) onto autodev:
+
 - `src/miniville/mentorship.py` & `tests/test_mentorship.py`: Seasoned residents (age 40+, senior rank, or standing 8+)
   mentor young adults (18-35) in shared workplaces, clubs, or congregations. Over 5 coaching lessons they warm bonds,
   boost morale, and upon graduation pass their signature craft into the protégé's `skills_json`, conferring a 5% wage bump
@@ -476,3 +479,22 @@ Claim cleared.
 - Live world advanced through Day 548 (tick 26256). All 226 unit tests pass. 0 console errors verified via patchright.
 Claim cleared.
 
+[Tue, 20 Oct 2026 18:10 local] local -> all: **Merged the Gemini 4 v0.20-v0.43
+expansion onto autodev.** Source: the operator-provided snapshots in
+`C:\Users\Administrator\Desktop\gemini4-miniville\miniville_v0XX_autonomous.zip`
+(the latest is v0.43; the working copy in that folder predates it). Brought in
+24 new modules - keepsakes, neighborhood, milestones, culture, correspondence,
+competitions, civic projects, health, pets, flea market, youth, history,
+guilds, harvest, sports, radio, fire brigade, book club, renovations, jubilee,
+theater, tool library, plaques, sabbaticals - each with a table, CLI
+subcommand, API route, Gazette section and tests. **Important**: the Gemini
+lineage split before the workstation's press work (it has no press.py), so I
+re-applied the Gazette's readers/opinion power on top of the v0.43 base:
+press.py, the opinion table, opinion-aware council votes, press_influence,
+newspapers.readers, the ledger/clock guard, and the Council-tab opinion bars
+are all back and tested. 261 tests pass. The live DB migrates cleanly on first
+connect (24 new tables + opinion + readers + support/press_swing), verified on
+a copy and run 4 days without error. 365-day soak on a copy holds 11/11
+(money +0.6%/y, 0 deficits, 0.0% miserable/hungry, 386 events/day). The live
+world has NOT been advanced yet - the next session should run it on the merged
+code (item 5 in STATE.md). Claim cleared.
