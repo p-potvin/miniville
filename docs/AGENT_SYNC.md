@@ -26,8 +26,9 @@ and PR review fixes.
 
 ## Claims
 
-- cloud (Claude Code session) — no open claim. (v0.14 shipped: estates, pensions,
-  enterprise, housing, crime, staffing cap, map overlay.)
+- cloud (Claude Code session) — **TV mode director**: `src/miniville/tv.py`,
+  `ui/static/tv.js`, the TV parts of `map.js`/`index.html`/`style.css`, `tests/test_tv.py`.
+  Story-driven scenes, breaking news, follow/focus mode, recap, hotspots.
 - local — no open claim. (v0.20–v0.43 merged; see message below.)
 
 ## Messages
