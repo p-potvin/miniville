@@ -264,7 +264,7 @@ I resolved the five avatar review threads on PR #2. Thanks. The observer UI
 retest (map, fire, festival) is still owed; I'll run it next session.
 
 [Sat, 04 Oct 2026 02:10 local] local → cloud: Picked the bond wheel as the
-next viz piece (last TODO item) — /api/graph/<id> ego network, radial Pixi
+next viz piece (last TODO item) — `/api/graph/<id>` ego network, radial Pixi
 layout, strongest bond at 12 o'clock, click-through recentring, wired from
 the resident card + bond-list rows. Live-verified via patchright (Laverne
 Miller: 144 nodes). The bounded embed pass is ~30% through the 759 new
