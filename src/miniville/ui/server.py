@@ -657,6 +657,181 @@ def create_app(db_path: str | None = None) -> FastAPI:
         finally:
             c.close()
 
+    import threading
+    _step_lock = threading.Lock()
+
+    @app.get("/api/pets")
+    def pets_view():
+        c = conn()
+        try:
+            from .. import pets
+            return pets.pet_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/market")
+    def market_view():
+        c = conn()
+        try:
+            from .. import flea_market
+            return flea_market.market_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/youth")
+    def youth_view():
+        c = conn()
+        try:
+            from .. import youth
+            return youth.youth_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/history")
+    def history_view():
+        c = conn()
+        try:
+            from .. import history
+            return history.history_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/radio")
+    def radio_view():
+        c = conn()
+        try:
+            from .. import radio
+            return radio.radio_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/guilds")
+    def guilds_view():
+        c = conn()
+        try:
+            from .. import guilds
+            return guilds.guilds_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/harvest")
+    def harvest_view():
+        c = conn()
+        try:
+            from .. import harvest
+            return harvest.harvest_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/sports")
+    def sports_view():
+        c = conn()
+        try:
+            from .. import sports
+            return sports.sports_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/brigade")
+    def brigade_view():
+        c = conn()
+        try:
+            from .. import fire_brigade
+            return fire_brigade.brigade_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/bookclub")
+    def bookclub_view():
+        c = conn()
+        try:
+            from .. import book_club
+            return book_club.book_club_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/renovations")
+    def renovations_view():
+        c = conn()
+        try:
+            from .. import renovations
+            return renovations.renovations_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/jubilee")
+    def jubilee_view():
+        c = conn()
+        try:
+            from .. import jubilee
+            return jubilee.jubilee_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/theater")
+    def theater_view():
+        c = conn()
+        try:
+            from .. import theater
+            return theater.theater_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/commons")
+    def commons_view():
+        c = conn()
+        try:
+            from .. import commons_library
+            return commons_library.commons_library_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/plaques")
+    def plaques_view():
+        c = conn()
+        try:
+            from .. import plaques
+            return plaques.plaques_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/sabbaticals")
+    def sabbaticals_view():
+        c = conn()
+        try:
+            from .. import sabbaticals
+            return sabbaticals.sabbaticals_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/tv")
+    def tv_view(
+        agent_id: int | None = None,
+        place_id: int | None = None,
+        max_movers: int = Query(10, ge=1, le=24),
+    ):
+        c = conn()
+        try:
+            from .. import tv
+            return tv.tv_director_snapshot(
+                c,
+                focus_agent_id=agent_id,
+                focus_place_id=place_id,
+                max_movers=max_movers,
+            )
+        finally:
+            c.close()
+
+    @app.post("/api/tv/step")
+    def tv_step_view(ticks: int = Query(1, ge=1, le=6)):
+        with _step_lock:
+            c = conn()
+            try:
+                from .. import tv
+                return tv.tv_step(c, ticks=ticks)
+            finally:
+                c.close()
+
     # resident portraits live outside the repo (D:\miniville by default)
     av_dir = Path(os.environ.get("MINIVILLE_AVATARS_DIR", r"D:\miniville\avatars"))
     if av_dir.is_dir():
@@ -665,6 +840,27 @@ def create_app(db_path: str | None = None) -> FastAPI:
     return app
 
 
-def serve(db_path: str | None, host: str, port: int) -> None:
+def serve(db_path: str | None, host: str, port: int,
+          live_step_seconds: float = 0.0) -> None:
+    import threading
+    import time
     import uvicorn
-    uvicorn.run(create_app(db_path), host=host, port=port, log_level="warning")
+    app = create_app(db_path)
+    if live_step_seconds and live_step_seconds > 0:
+        interval = max(1.5, float(live_step_seconds))
+        def _bg_runner() -> None:
+            from .. import engine
+            while True:
+                time.sleep(interval)
+                try:
+                    c = dbmod.connect(db_path or dbmod.DEFAULT_DB)
+                    try:
+                        seed = dbmod.get_meta(c, "seed", "miniville") or "miniville"
+                        engine.step(c, seed)
+                    finally:
+                        c.close()
+                except Exception:
+                    pass
+        t = threading.Thread(target=_bg_runner, daemon=True, name="miniville-tv-stepper")
+        t.start()
+    uvicorn.run(app, host=host, port=port, log_level="warning")
