@@ -955,6 +955,16 @@ def cmd_tv(args) -> int:
     print("Featured Movers:")
     for m in snap["movers"][:8]:
         print(f"  → {m['name']} ({m['activity']}): {m['from_label']} ➔ {m['to_label']}")
+    if snap["stories"]:
+        print("Today's Stories (newsworthiness):")
+        for sc in snap["stories"]:
+            flag = "BREAKING " if sc["breaking"] else ""
+            print(f"  [{sc['score']:>3}] {flag}{sc['category']}: {sc['headline']}")
+    rc = snap.get("recap")
+    if rc and rc["stories"]:
+        print(f"Previously in Miniville ({rc['date']}):")
+        for st in rc["stories"]:
+            print(f"  · {st['category']}: {st['text']}")
     return 0
 
 

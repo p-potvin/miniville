@@ -34,6 +34,8 @@ class TownMap {
     this.cameraTarget = null;
     this.spotlightTarget = null;
     this.moversData = [];
+    this.hotspots = [];        // recent newsworthy events: ripples on the map
+    this.flash = null;         // a breaking-news cut: one bright expanding ring
     this.moverPhase = 0;
     this.clock = 0;
 
@@ -49,11 +51,13 @@ class TownMap {
     this.moversGraphic = new PIXI.Graphics();
     this.moversLabels = new PIXI.Container();
     this.spotlightGraphic = new PIXI.Graphics();
+    this.hotspotGraphic = new PIXI.Graphics();
     this.skyOverlay = new PIXI.Graphics();
     this.skyOverlay.eventMode = "none";
 
     this.world.addChild(this.staticLayer);
     this.world.addChild(this.pulseLayer);
+    this.world.addChild(this.hotspotGraphic);
     this.world.addChild(this.moversGraphic);
     this.world.addChild(this.moversLabels);
     this.world.addChild(this.spotlightGraphic);
@@ -239,6 +243,35 @@ class TownMap {
         if (m._labelSprite && !m._labelSprite.destroyed) {
           m._labelSprite.position.set(cx, cy - 4);
         }
+      }
+    }
+
+    // 3b. Story hotspots: where something newsworthy happened in the last few
+    // hours, a slow ripple whose strength follows the story and fades with age
+    this.hotspotGraphic.clear();
+    if (this.tvMode && this.hotspots && this.hotspots.length) {
+      for (let i = 0; i < this.hotspots.length; i++) {
+        const h = this.hotspots[i];
+        const fresh = Math.max(0.25, 1 - (h.age || 0) / 6);
+        const strength = Math.min(1, (h.score || 30) / 70);
+        const color = (h.score || 0) >= 60 ? 0xe05d5d : 0xe8b64c;
+        for (let ring = 0; ring < 2; ring++) {
+          const phase = ((this.clock * 0.35 + i * 0.37 + ring * 0.5) % 1);
+          const r = 8 + phase * (22 + strength * 22);
+          this.hotspotGraphic.lineStyle(2, color, (1 - phase) * 0.7 * fresh * strength)
+            .drawCircle(h.x, h.y, r);
+        }
+        this.hotspotGraphic.lineStyle(0).beginFill(color, 0.8 * fresh).drawCircle(h.x, h.y, 3).endFill();
+      }
+    }
+    if (this.flash) {
+      this.flash.t += delta / 60;
+      const t = this.flash.t;
+      if (t > 1.6) {
+        this.flash = null;
+      } else {
+        this.hotspotGraphic.lineStyle(4, 0xff6b6b, Math.max(0, 1 - t / 1.6))
+          .drawCircle(this.flash.x, this.flash.y, 12 + t * 90);
       }
     }
 

@@ -124,20 +124,25 @@ def _curated_movers(conn: sqlite3.Connection, tick: int,
     public-venue visitors with recent events so there are always ~6-10 calm,
     purposeful movers on screen.
     """
+    # plans are keyed by tick-of-day (0-47), not by absolute tick: looking them
+    # up by `tick - 1` matched nothing after day one, so every mover fell back
+    # to a home -> venue arc instead of showing who had actually just moved
+    tod = timekeeper.tick_of_day(tick)
+    per_day = timekeeper.TICKS_PER_DAY
     prev_plans = {
         int(r["agent_id"]): (r["place_id"], r["activity"])
         for r in conn.execute(
             "SELECT agent_id, place_id, activity FROM plans WHERE tick = ?",
-            (max(0, tick - 1),),
+            ((tod - 1) % per_day,),
         ).fetchall()
-    }
+    } if tod > 0 else {}
     next_plans = {
         int(r["agent_id"]): (r["place_id"], r["activity"])
         for r in conn.execute(
             "SELECT agent_id, place_id, activity FROM plans WHERE tick = ?",
-            (tick + 1,),
+            (tod + 1,),
         ).fetchall()
-    }
+    } if tod + 1 < per_day else {}
     recent_event_agents = {
         int(r["a_id"])
         for r in conn.execute(
@@ -276,14 +281,10 @@ def _spotlight_resident(conn: sqlite3.Connection, tick: int,
     chosen_id = focus_agent_id
 
     if not chosen_id:
-        # Rotate across residents who recently had notable events or active ambitions
-        ev_rows = conn.execute(
-            """SELECT DISTINCT a_id FROM events
-               WHERE a_id IS NOT NULL AND importance >= 2
-                 AND kind IN ('life_event', 'milestone', 'romance', 'conflict', 'encounter')
-               ORDER BY id DESC LIMIT 16"""
-        ).fetchall()
-        pool = [int(r["a_id"]) for r in ev_rows if r["a_id"]]
+        # The cast of the town's current storylines, awake first, held for two
+        # game hours each: the old rotation changed every tick and often
+        # featured someone asleep.
+        pool = storyline_cast(conn, tick)
         if not pool:
             pool = [
                 int(r["id"])
@@ -292,7 +293,7 @@ def _spotlight_resident(conn: sqlite3.Connection, tick: int,
                 ).fetchall()
             ]
         if pool:
-            chosen_id = pool[(tick // 1) % len(pool)]
+            chosen_id = pool[(tick // SPOTLIGHT_SLOT_TICKS) % len(pool)]
 
     if not chosen_id:
         return None
@@ -394,9 +395,10 @@ def _spotlight_venue(conn: sqlite3.Connection, tick: int,
     if focus_place_id:
         chosen = next((r for r in crowd_rows if int(r["id"]) == int(focus_place_id)), None)
     if chosen is None:
-        # Rotate among the top 5 busiest venues
+        # Rotate among the busiest venues, never featuring an empty one while
+        # anywhere has people in it
         active_pool = [r for r in crowd_rows if int(r["inside"] or 0) > 0][:5] or crowd_rows[:5]
-        chosen = active_pool[(tick // 1) % len(active_pool)]
+        chosen = active_pool[(tick // SPOTLIGHT_SLOT_TICKS) % len(active_pool)]
 
     pid = int(chosen["id"])
     occupants = conn.execute(
@@ -525,6 +527,11 @@ def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any
             "conflict": "⚡ Tension",
             "encounter": "💬 Encounter",
         }.get(e["kind"], "📰 News")
+        # a story the director recognises gets its own label (Police Blotter,
+        # Wedding, Grand Opening...) instead of the generic kind
+        category = _category(e)
+        if category != "Village Life" and newsworthiness(e) >= STORY_MIN:
+            kind_badge = f"🔴 {category}" if newsworthiness(e) >= BREAKING_MIN else f"📰 {category}"
         items.append({
             "badge": kind_badge,
             "text": describe(conn, e),
@@ -536,11 +543,344 @@ def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any
     return items[:12]
 
 
+# --- the story director (v0.48) ---------------------------------------------
+#
+# The v0.44 director rotated mechanically: a new "spotlight" every tick drawn
+# from whoever last appeared in the ledger (often someone asleep), a venue
+# with nobody in it, and no way for the town's real news to reach the screen.
+# The importance field cannot pick the news on its own: in a 600-resident town
+# about 56 events a day are importance 3, and almost all of them are a
+# relationship label drifting ("acquaintance", "familiar"), while a wedding,
+# a death or a shop opening is a handful a day. So the director scores each
+# event for how much a viewer would want to see it, and builds the broadcast
+# from that: story scenes, breaking news that cuts in, map hotspots, and a
+# recap of yesterday.
+
+# extra newsworthiness by event tag, on top of 10 x importance
+NEWS_BONUS: dict[str, int] = {
+    "death": 40, "obituary": -40, "birth": 30, "marriage": 35, "cohabitation": 25,
+    "separation": 25, "betrayal": 30, "business_founded": 30, "business_closed": 30,
+    "business_reopened": 15, "inheritance": 15, "arrest": 30, "theft": 10,
+    "shock_fire": 40, "shock_closure": 30, "injured": 20, "festival": 25,
+    "festival_announced": 10, "election": 30, "seat_vacated": 20, "motion_passed": 15,
+    "slander": 25, "boycott": 25, "schism": 25, "promoted": 10, "fired": 10,
+    "downsize": 10, "immigration": 5, "coming_of_age": 10, "retirement_sendoff": 10,
+    "theater_premiere": 15, "guild_masterpiece": 12, "civic_project_completed": 20,
+    "plaque_dedicated": 12, "key_to_the_town": 25, "competition_won": 10,
+    "district_derby": 10, "block_party": 10, "ambition_achieved": 8,
+    "apprenticeship_completed": 5, "town_deficit": 10, "press_claim": 15,
+    "sick": -10, "medical_treatment": -10, "move": -5, "owner_draws": -25,
+    "dividend": -15, "wage_change": -10, "jobs_rebalanced": -25, "season": -10,
+}
+KIND_BONUS: dict[str, int] = {
+    "betrayal": 30, "affair": 15, "arrival": 5,
+    "encounter": -20, "gossip": -20, "favor": -15, "favor_repaid": -15,
+    "work_buddy": -10,
+}
+# a relationship row only makes the news when it turns into a romance or a feud
+RELATIONSHIP_BONUS: dict[str, int] = {
+    "sweetheart": 20, "partner": 25, "spouse": 30, "rival": 20, "estranged": 20,
+    "close_friend": 0,
+}
+STORY_MIN = 35          # worth a scene in the playlist
+BREAKING_MIN = 60       # worth cutting in for
+HOTSPOT_MIN = 30        # worth a ripple on the map
+HOTSPOT_TICKS = 6       # ...for three game hours
+STORY_WINDOW_TICKS = 96  # scenes come from the last two game days
+SPOTLIGHT_SLOT_TICKS = 4  # the featured resident changes every two game hours
+
+CATEGORY_BY_TAG = {
+    "death": "Obituary", "birth": "New Arrival", "marriage": "Wedding",
+    "cohabitation": "Romance", "separation": "Heartbreak", "betrayal": "Scandal",
+    "business_founded": "Grand Opening", "business_closed": "Closing Down",
+    "business_reopened": "Back in Business", "inheritance": "Inheritance",
+    "arrest": "Police Blotter", "theft": "Police Blotter", "shock_fire": "Fire",
+    "shock_closure": "Closure", "injured": "Injured", "festival": "Festival",
+    "election": "Election Night", "seat_vacated": "Council", "motion_passed": "Council",
+    "slander": "Feud", "boycott": "Boycott", "schism": "Schism",
+    "promoted": "Career", "fired": "Laid Off", "theater_premiere": "Opening Night",
+    "ambition_achieved": "Milestone", "apprenticeship_completed": "Milestone",
+    "civic_project_completed": "Civic Pride", "plaque_dedicated": "Civic Pride",
+    "key_to_the_town": "Civic Pride", "competition_won": "Champion",
+    "district_derby": "Champion", "guild_masterpiece": "Masterpiece",
+}
+
+
+def _event_data(ev: sqlite3.Row) -> dict[str, Any]:
+    try:
+        return json.loads(ev["data"] or "{}")
+    except (TypeError, ValueError):
+        return {}
+
+
+def newsworthiness(ev: sqlite3.Row) -> int:
+    """How much a viewer would want to see this event, 0 and up."""
+    data = _event_data(ev)
+    tag = data.get("tag")
+    score = 10 * int(ev["importance"] or 0)
+    score += KIND_BONUS.get(ev["kind"], 0)
+    if ev["kind"] == "relationship":
+        score += RELATIONSHIP_BONUS.get(data.get("label"), -25)
+    if tag:
+        score += NEWS_BONUS.get(tag, 0)
+    return max(0, score)
+
+
+def _category(ev: sqlite3.Row) -> str:
+    data = _event_data(ev)
+    if ev["kind"] == "relationship":
+        label = data.get("label")
+        return {"rival": "Feud", "estranged": "Feud"}.get(label, "Romance")
+    if ev["kind"] in ("affair", "betrayal"):
+        return "Scandal"
+    return CATEGORY_BY_TAG.get(data.get("tag"), "Village Life")
+
+
+def _event_frame(conn: sqlite3.Connection, ev: sqlite3.Row,
+                 places_by_id: dict[int, dict[str, Any]],
+                 vcoords: dict[int, tuple[float, float]]) -> tuple[float, float, str]:
+    """Where the camera should look for an event: its venue, else where its
+    resident is now, else their home district."""
+    if ev["place_id"] and int(ev["place_id"]) in places_by_id:
+        place = places_by_id[int(ev["place_id"])]
+        return _place_coords(place, place.get("district"), int(ev["a_id"] or 1), vcoords)
+    if ev["a_id"]:
+        row = conn.execute(
+            """SELECT s.place_id, hp.district home_district FROM agents a
+               LEFT JOIN agent_state s ON s.agent_id=a.id
+               LEFT JOIN places hp ON hp.id=a.home_place_id WHERE a.id=?""",
+            (ev["a_id"],)).fetchone()
+        if row:
+            place = places_by_id.get(int(row["place_id"])) if row["place_id"] else None
+            return _place_coords(place, row["home_district"], int(ev["a_id"]), vcoords)
+    return 800.0, 450.0, "Miniville"
+
+
+def _story_scene(conn: sqlite3.Connection, ev: sqlite3.Row, score: int,
+                 places_by_id: dict[int, dict[str, Any]],
+                 vcoords: dict[int, tuple[float, float]]) -> dict[str, Any]:
+    x, y, label = _event_frame(conn, ev, places_by_id, vcoords)
+    category = _category(ev)
+    return {
+        "mode": "story",
+        "event_id": int(ev["id"]),
+        "category": category,
+        "title": f"{category}: {describe(conn, ev)}",
+        "headline": describe(conn, ev),
+        "subtitle": f"{label} · {timekeeper.fmt_tick(int(ev['tick']))}",
+        "x": round(x, 1), "y": round(y, 1),
+        "scale": 1.7,
+        "agent_id": ev["a_id"], "other_id": ev["b_id"], "place_id": ev["place_id"],
+        "score": score,
+        "breaking": score >= BREAKING_MIN,
+        "tick": int(ev["tick"]),
+    }
+
+
+def story_scenes(conn: sqlite3.Connection, tick: int,
+                 places_by_id: dict[int, dict[str, Any]],
+                 vcoords: dict[int, tuple[float, float]],
+                 since_event_id: int = 0, limit: int = 6) -> list[dict[str, Any]]:
+    """The most newsworthy events of the last two game days (or since the
+    viewer's cursor), best first, one scene per resident-and-story."""
+    rows = conn.execute(
+        """SELECT * FROM events WHERE tick >= ? AND id > ? AND importance >= 2
+           ORDER BY id DESC LIMIT 600""",
+        (max(0, tick - STORY_WINDOW_TICKS), int(since_event_id or 0))).fetchall()
+    scored = []
+    seen: set[tuple] = set()
+    for ev in rows:
+        score = newsworthiness(ev)
+        if score < STORY_MIN:
+            continue
+        key = (ev["a_id"], ev["b_id"], _event_data(ev).get("tag") or ev["kind"])
+        if key in seen:
+            continue            # the same story twice (a couple's move-in, say)
+        seen.add(key)
+        scored.append((score, int(ev["id"]), ev))
+    scored.sort(key=lambda t: (-t[0], -t[1]))
+    return [_story_scene(conn, ev, score, places_by_id, vcoords)
+            for score, _id, ev in scored[:limit]]
+
+
+def hotspots(conn: sqlite3.Connection, tick: int,
+             places_by_id: dict[int, dict[str, Any]],
+             vcoords: dict[int, tuple[float, float]]) -> list[dict[str, Any]]:
+    """Ripples on the map where something happened in the last few hours."""
+    out = []
+    for ev in conn.execute(
+            """SELECT * FROM events WHERE tick >= ? AND importance >= 2
+               ORDER BY id DESC LIMIT 300""",
+            (max(0, tick - HOTSPOT_TICKS),)).fetchall():
+        score = newsworthiness(ev)
+        if score < HOTSPOT_MIN:
+            continue
+        x, y, _label = _event_frame(conn, ev, places_by_id, vcoords)
+        out.append({"x": round(x, 1), "y": round(y, 1), "score": score,
+                    "age": tick - int(ev["tick"]), "category": _category(ev),
+                    "event_id": int(ev["id"])})
+        if len(out) >= 12:
+            break
+    return out
+
+
+def day_recap(conn: sqlite3.Connection, day: int, limit: int = 5) -> dict[str, Any] | None:
+    """Yesterday's top stories, for the 'previously in Miniville' card."""
+    if day < 1:
+        return None
+    rows = conn.execute(
+        "SELECT * FROM events WHERE day = ? AND importance >= 2", (day - 1,)).fetchall()
+    scored = sorted(((newsworthiness(ev), int(ev["id"]), ev) for ev in rows),
+                    key=lambda t: (-t[0], -t[1]))
+    items, seen = [], set()
+    for score, _id, ev in scored:
+        if score < STORY_MIN:
+            break
+        text = describe(conn, ev)
+        if text in seen:
+            continue
+        seen.add(text)
+        items.append({"category": _category(ev), "text": text, "score": score,
+                      "agent_id": ev["a_id"], "place_id": ev["place_id"]})
+        if len(items) >= limit:
+            break
+    return {"day": day, "date": seasons.fmt_date(day - 1), "events": len(rows),
+            "stories": items}
+
+
+def storyline_cast(conn: sqlite3.Connection, tick: int, limit: int = 12) -> list[int]:
+    """Residents with the most going on lately, most newsworthy first; the
+    awake ones before those asleep."""
+    totals: dict[int, int] = {}
+    for ev in conn.execute(
+            """SELECT * FROM events WHERE tick >= ? AND importance >= 2
+               AND a_id IS NOT NULL ORDER BY id DESC LIMIT 1500""",
+            (max(0, tick - 3 * timekeeper.TICKS_PER_DAY),)).fetchall():
+        score = newsworthiness(ev)
+        if score < 20:
+            continue
+        for aid in (ev["a_id"], ev["b_id"]):
+            if aid:
+                totals[int(aid)] = totals.get(int(aid), 0) + score
+    if not totals:
+        return []
+    ids = list(totals)
+    marks = ",".join("?" * len(ids))
+    state = {int(r["id"]): r for r in conn.execute(
+        f"""SELECT a.id, a.alive, s.activity FROM agents a
+            LEFT JOIN agent_state s ON s.agent_id=a.id WHERE a.id IN ({marks})""", ids)}
+    cast = [aid for aid in ids if state.get(aid) is not None and state[aid]["alive"]]
+    cast.sort(key=lambda aid: (state[aid]["activity"] == "sleep", -totals[aid], aid))
+    return cast[:limit]
+
+
+def _segments(rows, start_tod: int) -> list[dict[str, Any]]:
+    """Collapse a resident's remaining plan rows into stops."""
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        if out and out[-1]["place_id"] == r["place_id"] and out[-1]["activity"] == r["activity"]:
+            continue
+        out.append({"tick_of_day": int(r["tick"]), "place_id": r["place_id"],
+                    "activity": r["activity"]})
+    return [s for s in out if s["tick_of_day"] > start_tod]
+
+
+def _today_lines(conn: sqlite3.Connection, rows) -> list[dict[str, Any]]:
+    """Today's events as time + text, identical lines merged."""
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for ev in rows:
+        text = describe(conn, ev)
+        if text in seen:
+            continue
+        seen.add(text)
+        out.append({"time": timekeeper.fmt_tick(int(ev["tick"])).split()[-1],
+                    "text": text, "score": newsworthiness(ev)})
+    return out
+
+
+def follow_view(conn: sqlite3.Connection, agent_id: int, tick: int,
+                places_by_id: dict[int, dict[str, Any]],
+                vcoords: dict[int, tuple[float, float]]) -> dict[str, Any] | None:
+    """Everything the follow-cam needs about one resident: where they are,
+    where they are going next today, and what has happened to them today."""
+    row = conn.execute(
+        """SELECT a.id, a.name, a.age, a.occupation, a.alive, s.place_id, s.activity,
+                  s.mood, hp.district home_district
+           FROM agents a LEFT JOIN agent_state s ON s.agent_id=a.id
+           LEFT JOIN places hp ON hp.id=a.home_place_id WHERE a.id=?""",
+        (agent_id,)).fetchone()
+    if not row:
+        return None
+    place = places_by_id.get(int(row["place_id"])) if row["place_id"] else None
+    x, y, label = _place_coords(place, row["home_district"], int(row["id"]), vcoords)
+    tod = timekeeper.tick_of_day(tick)
+    day_start = tick - tod
+    plan = conn.execute(
+        "SELECT tick, place_id, activity FROM plans WHERE agent_id=? ORDER BY tick",
+        (agent_id,)).fetchall()
+    upcoming = []
+    for seg in _segments(plan, tod)[:4]:
+        p = places_by_id.get(int(seg["place_id"])) if seg["place_id"] else None
+        upcoming.append({
+            "time": timekeeper.fmt_tick(day_start + seg["tick_of_day"]).split()[-1],
+            "activity": seg["activity"],
+            "place": (p["name"] if p and p["kind"] != "home" else "home"),
+        })
+    today = _today_lines(conn, conn.execute(
+        """SELECT * FROM events WHERE (a_id=? OR b_id=?) AND tick >= ?
+           AND importance >= 2 ORDER BY id DESC LIMIT 8""",
+        (agent_id, agent_id, day_start)).fetchall())[:6]
+    return {
+        "id": int(row["id"]), "name": row["name"], "age": row["age"],
+        "alive": bool(row["alive"]),
+        "occupation": (row["occupation"] or "resident").replace("_", " "),
+        "activity": row["activity"], "mood": row["mood"],
+        "place_id": row["place_id"], "place_name": label,
+        "x": round(x, 1), "y": round(y, 1),
+        "upcoming": upcoming, "today": today,
+    }
+
+
+def follow_venue_view(conn: sqlite3.Connection, place_id: int, tick: int,
+                      places_by_id: dict[int, dict[str, Any]],
+                      vcoords: dict[int, tuple[float, float]]) -> dict[str, Any] | None:
+    """The follow-cam on a venue: who is in, and what happened there today."""
+    place = places_by_id.get(int(place_id))
+    if not place:
+        return None
+    x, y, _label = _place_coords(place, place.get("district"), 1, vcoords)
+    inside = conn.execute(
+        """SELECT a.id, a.name, s.activity, s.mood FROM agent_state s
+           JOIN agents a ON a.id=s.agent_id WHERE s.place_id=? AND a.alive=1
+           ORDER BY a.standing DESC, a.id LIMIT 12""", (place_id,)).fetchall()
+    count = conn.execute(
+        "SELECT COUNT(*) n FROM agent_state s JOIN agents a ON a.id=s.agent_id "
+        "WHERE s.place_id=? AND a.alive=1", (place_id,)).fetchone()["n"]
+    day_start = tick - timekeeper.tick_of_day(tick)
+    today = _today_lines(conn, conn.execute(
+        """SELECT * FROM events WHERE place_id=? AND tick >= ?
+           AND importance >= 2 ORDER BY id DESC LIMIT 8""",
+        (place_id, day_start)).fetchall())[:6]
+    return {"id": int(place_id), "name": place["name"], "kind": place["kind"],
+            "district": place.get("district"), "capacity": place.get("capacity"),
+            "x": round(x, 1), "y": round(y, 1), "inside": count,
+            "occupants": [dict(o) for o in inside], "today": today}
+
+
 def tv_director_snapshot(conn: sqlite3.Connection,
                          focus_agent_id: int | None = None,
                          focus_place_id: int | None = None,
-                         max_movers: int = 10) -> dict[str, Any]:
-    """Return the complete payload for the 10-Foot Living TV & Director Mode."""
+                         max_movers: int = 10,
+                         since_event_id: int = 0,
+                         follow_agent_id: int | None = None,
+                         follow_place_id: int | None = None) -> dict[str, Any]:
+    """Return the complete payload for the 10-Foot Living TV & Director Mode.
+
+    `since_event_id` is the viewer's cursor: `breaking` only carries stories
+    newer than it, so a display cuts in for each piece of news once. The
+    follow ids feed the follow-cam (`followed` / `followed_venue`).
+    """
     tick = int(get_meta(conn, "tick", "0") or 0)
     day = timekeeper.day_of(tick)
     tod = timekeeper.tick_of_day(tick)
@@ -567,8 +907,19 @@ def tv_director_snapshot(conn: sqlite3.Connection,
     spot_res = _spotlight_resident(conn, tick, places_by_id, vcoords, focus_agent_id=focus_agent_id)
     spot_ven = _spotlight_venue(conn, tick, places_by_id, vcoords, focus_place_id=focus_place_id)
 
-    # Camera target sequence for the auto-director cycle
-    camera_targets: list[dict[str, Any]] = []
+    stories = story_scenes(conn, tick, places_by_id, vcoords)
+    latest = conn.execute("SELECT COALESCE(MAX(id), 0) n FROM events").fetchone()["n"]
+    # breaking news is what the viewer has not seen yet; a first look (cursor
+    # 0) gets no backlog of breaking cuts, only the playlist
+    breaking = []
+    if since_event_id:
+        breaking = [sc for sc in story_scenes(conn, tick, places_by_id, vcoords,
+                                              since_event_id=since_event_id, limit=4)
+                    if sc["breaking"]]
+
+    # Camera target sequence for the auto-director cycle: the day's two best
+    # stories, then the featured resident, a busy venue and the panorama
+    camera_targets: list[dict[str, Any]] = [dict(sc) for sc in stories[:2]]
     if spot_res:
         camera_targets.append({
             "mode": "resident",
@@ -580,7 +931,8 @@ def tv_director_snapshot(conn: sqlite3.Connection,
             "agent_id": spot_res["id"],
             "place_id": spot_res["place_id"],
         })
-    if spot_ven:
+    if spot_ven and spot_ven["inside"] > 0:
+        # an empty venue is not a scene (the hospital at 3am)
         camera_targets.append({
             "mode": "venue",
             "title": f"Gathering: {spot_ven['name']}",
@@ -623,6 +975,16 @@ def tv_director_snapshot(conn: sqlite3.Connection,
         "camera_targets": camera_targets,
         "progression": _progression_cards(conn),
         "ticker": _broadcast_ticker(conn, tick),
+        "stories": stories,
+        "breaking": breaking,
+        "latest_event_id": int(latest),
+        "hotspots": hotspots(conn, tick, places_by_id, vcoords),
+        "recap": day_recap(conn, day),
+        "followed": (follow_view(conn, follow_agent_id, tick, places_by_id, vcoords)
+                     if follow_agent_id else None),
+        "followed_venue": (follow_venue_view(conn, follow_place_id, tick,
+                                             places_by_id, vcoords)
+                           if follow_place_id else None),
     }
 
 

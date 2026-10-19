@@ -809,15 +809,21 @@ def create_app(db_path: str | None = None) -> FastAPI:
         agent_id: int | None = None,
         place_id: int | None = None,
         max_movers: int = Query(10, ge=1, le=24),
+        since: int = Query(0, ge=0),
+        follow: int | None = None,
+        follow_place: int | None = None,
     ):
         c = conn()
         try:
             from .. import tv
             return tv.tv_director_snapshot(
                 c,
-                focus_agent_id=agent_id,
-                focus_place_id=place_id,
+                focus_agent_id=agent_id or follow,
+                focus_place_id=place_id or follow_place,
                 max_movers=max_movers,
+                since_event_id=since,
+                follow_agent_id=follow,
+                follow_place_id=follow_place,
             )
         finally:
             c.close()

@@ -42,15 +42,33 @@
           <div class="tv-controls tv-glass">
             <div class="tv-ctrl-row">
               <span id="tv-director-state" class="tv-badge auto">🎬 Auto-Director</span>
-              <button id="tv-resume-btn" class="tv-btn accent" hidden onclick="window.mvTV.resumeDirector()">▶ Resume Director</button>
-              <button class="tv-btn" onclick="window.mvTV.nextCameraScene()" title="Cut to next camera angle">⏭ Angle</button>
+              <button id="tv-resume-btn" class="tv-btn accent" hidden onclick="window.mvTV.backToAuto()" title="Back to the auto-director (A / Esc)">↩ Auto</button>
+              <button class="tv-btn" onclick="window.mvTV.nextCameraScene()" title="Cut to next camera angle (N)">⏭ Angle</button>
+              <button class="tv-btn" onclick="window.mvTV.followOnScreen()" title="Follow whoever is on screen (F)">📌 Follow</button>
+              <button class="tv-btn" onclick="window.mvTV.showRecap()" title="Yesterday's top stories (R)">📰 Recap</button>
               <button class="tv-btn" onclick="window.mvTV.stepNow(1)" title="Advance simulation by 1 tick (30m)">+1 Tick</button>
               <label class="tv-step-lbl">Auto-Step:
                 <select id="tv-step-select" onchange="window.mvTV.setLiveStep(this.value)">
                   <option value="0">Paused</option>
+                  <option value="3">Every 3s</option>
                   <option value="6">Every 6s</option>
                   <option value="10">Every 10s</option>
                   <option value="15">Every 15s</option>
+                </select>
+              </label>
+              <label class="tv-step-lbl" title="How long each camera angle holds">Pace:
+                <select id="tv-pace-select" onchange="window.mvTV.setPace(this.value)">
+                  <option value="8">Brisk</option>
+                  <option value="12">Calm</option>
+                  <option value="20">Slow</option>
+                </select>
+              </label>
+              <label class="tv-step-lbl" title="How long following lasts before the auto-director takes back over">Follow for:
+                <select id="tv-focus-select" onchange="window.mvTV.setFocusLength(this.value)">
+                  <option value="2">2 min</option>
+                  <option value="5">5 min</option>
+                  <option value="15">15 min</option>
+                  <option value="0">Until I return</option>
                 </select>
               </label>
               <button class="tv-btn" onclick="window.mvTV.disable()" title="Exit TV Mode (Esc / T)">✕ Exit TV</button>
@@ -59,7 +77,12 @@
           </div>
         </div>
 
+        <div id="tv-breaking" class="tv-breaking tv-glass" hidden></div>
+        <div id="tv-recap" class="tv-recap tv-glass" hidden></div>
+        <div id="tv-toasts" class="tv-toasts"></div>
+
         <aside class="tv-right-rail">
+          <div id="tv-focus" class="tv-card tv-focus tv-glass" hidden></div>
           <div id="tv-spot-resident" class="tv-card tv-glass"></div>
           <div id="tv-spot-venue" class="tv-card tv-glass"></div>
         </aside>
@@ -68,13 +91,14 @@
           <div class="tv-insp-top">
             <span class="tv-card-kicker">INTERACTIVE INSPECTOR</span>
             <div>
-              <button class="tv-btn accent" onclick="window.mvTV.resumeDirector()">▶ Resume Auto-Director</button>
+              <button class="tv-btn accent" onclick="window.mvTV.backToAuto()">↩ Back to Auto</button>
               <button class="tv-btn" onclick="window.mvTV.closeInspector()">✕</button>
             </div>
           </div>
           <div id="tv-inspector-body"></div>
         </aside>
 
+        <div id="tv-caption" class="tv-caption tv-glass" hidden></div>
         <footer class="tv-lower-third tv-glass">
           <div class="tv-chyron-brand">LIVE VILLAGE WIRE</div>
           <div id="tv-ticker-strip" class="tv-ticker-strip"></div>
