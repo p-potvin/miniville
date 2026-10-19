@@ -326,7 +326,10 @@ class TVDirector {
       const storyHtml = sr.latest_story ? `<div class="tv-story">“${sr.latest_story}”</div>` : "";
 
       srEl.innerHTML = `
-        <div class="tv-card-kicker">SPOTLIGHT RESIDENT · CLICK TO INSPECT</div>
+        <div class="tv-card-head">
+          <span class="tv-card-kicker">SPOTLIGHT RESIDENT · CLICK TO INSPECT</span>
+          <button class="tv-card-toggle" title="Collapse / expand">−</button>
+        </div>
         <div class="tv-res-head">
           <div>
             <div class="tv-res-name">${sr.name} <span class="tv-age">(${sr.age})</span></div>
@@ -341,6 +344,7 @@ class TVDirector {
         ${ambHtml}
         ${storyHtml}
       `;
+      this._wireCardToggle(srEl);
       srEl.onclick = () => {
         this.pauseForInteraction("spotlight-resident-card");
         this.openResidentInspector(sr.id);
@@ -359,7 +363,10 @@ class TVDirector {
         .join("");
 
       svEl.innerHTML = `
-        <div class="tv-card-kicker">ACTIVE VENUE &amp; VILLAGE PROGRESSION</div>
+        <div class="tv-card-head">
+          <span class="tv-card-kicker">ACTIVE VENUE &amp; VILLAGE PROGRESSION</span>
+          <button class="tv-card-toggle" title="Collapse / expand">−</button>
+        </div>
         <div class="tv-ven-head" data-pid="${sv.id}">
           <b>🏛️ ${sv.name}</b>
           <span class="tv-ven-count">${sv.inside} inside · ${sv.district}</span>
@@ -367,6 +374,7 @@ class TVDirector {
         <div class="tv-occ-list">${occs || "<i class='muted'>Quiet right now</i>"}</div>
         <div class="tv-prog-grid">${progHtml}</div>
       `;
+      this._wireCardToggle(svEl);
       svEl.querySelector(".tv-ven-head")?.addEventListener("click", () => {
         this.pauseForInteraction("spotlight-venue-card");
         this.openVenueInspector(sv.id);
@@ -382,6 +390,19 @@ class TVDirector {
 
     // 4. Lower-Third Broadcast Ticker
     this._renderTickerHighlight();
+  }
+
+  _wireCardToggle(cardEl) {
+    const btn = cardEl.querySelector(".tv-card-toggle");
+    if (!btn) return;
+    // A card that was collapsed stays collapsed across 4s refreshes; keep the
+    // button glyph in sync with the card's state.
+    btn.textContent = cardEl.classList.contains("collapsed") ? "+" : "−";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      cardEl.classList.toggle("collapsed");
+      btn.textContent = cardEl.classList.contains("collapsed") ? "+" : "−";
+    });
   }
 
   _renderTickerHighlight() {
