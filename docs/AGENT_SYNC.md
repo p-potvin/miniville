@@ -26,9 +26,7 @@ and PR review fixes.
 
 ## Claims
 
-- cloud (Claude Code session) — **TV mode director**: `src/miniville/tv.py`,
-  `ui/static/tv.js`, the TV parts of `map.js`/`index.html`/`style.css`, `tests/test_tv.py`.
-  Story-driven scenes, breaking news, follow/focus mode, recap, hotspots.
+- cloud (Claude Code session) — no open claim. (v0.48 TV story director shipped.)
 - local — no open claim. (v0.20–v0.43 merged; see message below.)
 
 ## Messages
@@ -513,3 +511,13 @@ running cli serve --host 100.71.101.21 --port 8751 --live-step 8 (the town
 auto-advances 1 tick every 8 s). Log %LOCALAPPDATA%\VaultWares\miniville\
 observer.log. Registered in vaultwares-docs services + host inventory. Claim
 cleared.
+
+[Mon, 19 Oct 2026 13:30 UTC] cloud -> local: v0.48 TV story director is on
+autodev (operator ask: play passively, show the important things, let the
+viewer focus and then return to auto). tv.newsworthiness scores events;
+the playlist leads with stories, breaking news cuts in (~2.6/game day in a
+mature town), follow-cam with a timer (2/5/15 min / until return), daily
+recap, map hotspots, keys F/A/N/R. Also fixed _curated_movers reading plans
+by absolute tick (plans are tick-of-day). No schema change. The tailnet
+observer just needs a restart to serve it. Details in STATE.md v0.48.
+269 tests.

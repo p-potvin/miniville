@@ -583,6 +583,58 @@ tested with a deliberately opposed council vote. A 90-day press soak is
 running to see whether routine politics produces claims and how credibility
 moves.
 
+## v0.48 — the TV director tells stories (Mon, 19 Oct 2026, cloud: Claude Code)
+
+The operator asked for TV mode to play passively while the world runs, show
+the activity and the important things, and let the viewer focus on something
+before going back to auto-direction.
+
+**What was wrong with the v0.44 director.** It rotated mechanically: a new
+"spotlight" every tick drawn from whoever last appeared in the ledger (often
+asleep), the busiest venue even at 3am with nobody in it, and nothing that
+let the town's news reach the screen. Importance alone can't pick the news:
+in a 600-resident town ~56 events a day are importance 3, almost all of them
+a relationship label drifting ("acquaintance", "familiar"), while a wedding,
+a death or a shop opening is a handful. Also a real bug: `_curated_movers`
+looked `plans` up by absolute tick, but plans are keyed by tick-of-day, so
+after day one nobody ever read as having just moved.
+
+**`tv.newsworthiness(event)`** = 10 x importance + tag/kind bonuses
+(`NEWS_BONUS`, `KIND_BONUS`; relationships count only when they become a
+romance or a feud). `STORY_MIN` 35 makes a story, `BREAKING_MIN` 60 cuts in.
+Measured: ~2.6 breaking cuts per game day in a year-old town (betrayals,
+move-ins, weddings, separations, deaths, arrests), ~8 stories a day; a fresh
+town has far fewer. With the observer's `--live-step 8` a game day is ~6.4
+min, so roughly one cut every 2-3 minutes.
+
+**The broadcast** (`/api/tv` gains `stories`, `breaking`, `latest_event_id`,
+`hotspots`, `recap`, `followed`, `followed_venue`; params `since`, `follow`,
+`follow_place`):
+- the camera playlist leads with the day's two best stories (captioned),
+  then a resident from the cast of current storylines (awake first, held two
+  game hours), a venue with people in it, and the panorama;
+- **breaking news**: unseen stories past the threshold cut in for 10 s with
+  a banner and a "Follow this story" button, then the director resumes (at
+  most one per 20 s; a first look gets no backlog);
+- **follow-cam**: follow a resident or venue (from the banner, a card's 📌,
+  the inspector, the ticker, the recap, or F for whatever is on screen). The
+  camera tracks them tick after tick; a card shows where they are, their next
+  stops from today's plan and today's events. Lasts 2/5/15 min or "until I
+  return"; news meanwhile arrives as toasts with a Watch button;
+- **recap**: "previously in Miniville" at each new day (R any time);
+- **hotspots**: ripples on the map where stories happened in the last 3 game
+  hours, red for breaking-grade ones;
+- a scene keeps its subject for its whole shot; pace (brisk/calm/slow),
+  follow length and auto-step persist per browser (localStorage).
+Keys: T toggle · F follow · A/Esc back to auto · N next · R recap · Space pause.
+`cli tv` lists the day's stories and the recap.
+
+Verified headless (Playwright): 2-minute passive run on a year-old synthetic
+town with 3 s auto-step, 0 console errors, ~20-34 MB heap; breaking cut,
+follow from the banner, back to auto, recap and story captions all driven;
+the follow-cam tracked a resident from home to the marina at 07:00. Snapshot
+cost ~33 ms. 269 tests.
+
 ## v0.16-v0.43 — the Gemini 4 expansion: a town with keepsakes, pets, radio and jubilees (merged Tue, 20 Oct 2026, workstation)
 
 The cloud seat ran autonomously as **gemini-lead** (Gemini 4 / Argon) and
@@ -1092,6 +1144,10 @@ nginx proxy -> `100.71.101.21:8751` (clopeux-desktop), Let's Encrypt cert
 auto-advances 1 tick every 8 s while the TV display is up. Log:
 `%LOCALAPPDATA%\VaultWares\miniville\observer.log`. Registered in
 vaultwares-docs services + host inventory.
+
+Status updates (Mon, 19 Oct 2026, cloud): v0.48 TV story director shipped (see
+the v0.48 section). The tailnet observer picks it up on its next restart; no
+migration needed.
 
 Open items:
 
