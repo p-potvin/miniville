@@ -6,5 +6,5 @@ $action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "--headless p
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -Priority 7 -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 Register-ScheduledTask -TaskPath "\VaultWares\" -TaskName "Miniville Observer" -Action $action -Trigger $trigger -Settings $settings `
-    -Description "Miniville town observer + 10-foot TV director mode. Serves miniville.vaultwares.ca via greencloud nginx proxy to 100.71.101.21:8751 (--live-step 8). Log %LOCALAPPDATA%\VaultWares\miniville\observer.log" -Force | Out-Null
+    -Description "Miniville town observer + 10-foot TV director mode. Serves miniville.vaultwares.ca via greencloud nginx proxy to 100.71.101.21:8751 (--live-step 8). Logs %LOCALAPPDATA%\VaultWares\miniville\: observer.out.log/observer.err.log (server, per run) + launcher.log (append-only events)" -Force | Out-Null
 "registered"

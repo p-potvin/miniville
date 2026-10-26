@@ -610,6 +610,7 @@ min, so roughly one cut every 2-3 minutes.
 **The broadcast** (`/api/tv` gains `stories`, `breaking`, `latest_event_id`,
 `hotspots`, `recap`, `followed`, `followed_venue`; params `since`, `follow`,
 `follow_place`):
+
 - the camera playlist leads with the day's two best stories (captioned),
   then a resident from the cast of current storylines (awake first, held two
   game hours), a venue with people in it, and the panorama;
@@ -1148,6 +1149,41 @@ vaultwares-docs services + host inventory.
 Status updates (Mon, 19 Oct 2026, cloud): v0.48 TV story director shipped (see
 the v0.48 section). The tailnet observer picks it up on its next restart; no
 migration needed.
+
+Status updates (Wed, 21 Oct 2026, workstation): **TV Mode UI, Viewport & 10-foot Readability Overhaul**.
+Fixed TV mode presentation across large screen / TV viewports:
+
+- Canvas full-screen scaling: Fixed `#map-stage-wrap`, `#map-host`, and `#map-host canvas` so Pixi canvas fills 100% viewport width and height without 75% letterboxing or margins (`object-fit: cover`, absolute positioning, full viewport reset).
+- Top control bar overflow: Restructured `.tv-top-bar` and `.tv-ctrl-row` to wrap cleanly and use fluid flex constraints, preventing glass cards and controls from overflowing the viewport edge on 720p/1080p DPR TV browsers.
+- 10-foot distance typography: Scaled up font sizes across all TV HUD elements (clock date/time, vitality chips, controller badges, spotlight cards, lower-third ticker items, captions, and breaking news banners).
+- In-map canvas labels: Increased label font sizes in `map.js` when in TV mode (commuters, district headers, venue titles, crowd counts) for clarity from viewing distance.
+- All 269 tests pass.
+
+Status updates (Sun, 25 Oct 2026, workstation): **502 incident — observer down, root-caused and fixed.**
+`https://miniville.vaultwares.ca` returned 502 because nothing was listening on
+`100.71.101.21:8751`. The `\VaultWares\Miniville Observer` task sat idle (logon
+trigger), and a wedged launcher (Start-Observer.ps1 from 19 Oct) still held the
+`Local\MinivilleObserver` mutex, so every task run exited 0 instantly without
+restarting the server. The server had died after a week of
+`sqlite3.OperationalError: database is locked` (83 tracebacks in
+`%LOCALAPPDATA%\VaultWares\miniville\observer.log`, last write 21 Oct 06:37):
+`db.connect()` runs `executescript(SCHEMA)` (a write) on every connection with
+`busy_timeout=0`, and the TV stepper thread writes a tick every 8 s — any
+overlap failed instantly. Fixes applied:
+
+1. Killed the wedged launcher, restarted the task; observer back on 8751
+   (verified 200 on `/`, `/api/status`, and via the public name).
+2. `db.connect()` now sets `PRAGMA busy_timeout = 5000` (db.py) so concurrent
+   writers wait instead of failing with SQLITE_BUSY. 269 tests pass.
+3. `scripts/Start-Observer.ps1` hardened (Sun, 25 Oct): the launcher waits on
+   the server with a bounded poll (Start-Process -PassThru — `&` + `*>>` can
+   wedge on a console-handle leak), verifies port 8751 actually comes up within
+   30 s, kills a hung-but-silent server (taskkill /T), and gives up — releasing
+   the mutex — after 5 rapid exits, so a stale launcher can never block the
+   scheduled task again. Logs: observer.out.log / observer.err.log (per run,
+   truncated) + launcher.log (append-only launcher events). Verified live:
+   give-up path, auto-restart after a hard kill, mutex arbitration.
+   (Fix for the "Open risk" noted below.)
 
 Open items:
 
