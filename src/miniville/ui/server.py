@@ -72,10 +72,18 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "SELECT COUNT(*) n FROM agents WHERE alive=1").fetchone()["n"]
             day = day_of(tick)
             holiday = holiday_for(c, day)
-            from .. import weather
+            from .. import festivals, market, museum, weather
+            ms = museum.museum_summary(c)
             return {"tick": tick, "day": day + 1, "date": fmt_date(day),
                     "season": season_of(day),
                     "weather": weather.today(c, day),
+                    "festival": festivals.active_festival(c, day),
+                    "market": market.get_market_day(c, day),
+                    "museum": {
+                        "total_exhibits": ms["total_exhibits"],
+                        "today_visitors": ms["today_visitors"],
+                        "featured": ms["featured"],
+                    },
                     "holiday": holiday.name if holiday else None,
                     "time": fmt_tick(tick), "population": pop, "moods": moods}
         finally:
@@ -685,8 +693,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
         finally:
             c.close()
 
-    @app.get("/api/market")
-    def market_view():
+    @app.get("/api/flea-market")
+    def flea_market_view():
         c = conn()
         try:
             from .. import flea_market
@@ -826,6 +834,44 @@ def create_app(db_path: str | None = None) -> FastAPI:
         try:
             from .. import weather
             return weather.summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/festivals")
+    def festivals_view(limit: int = Query(12, le=50)):
+        c = conn()
+        try:
+            from .. import festivals
+            tick = int(dbmod.get_meta(c, "tick", "0") or 0)
+            return {
+                "active": festivals.active_festival(c, day_of(tick)),
+                "festivals": festivals.list_festivals(c, limit=limit),
+            }
+        finally:
+            c.close()
+
+    @app.get("/api/museum")
+    def museum_view(limit: int = Query(24, le=100)):
+        c = conn()
+        try:
+            from .. import museum
+            summ = museum.museum_summary(c)
+            if limit != 12:
+                summ["exhibits"] = museum.list_exhibits(c, limit=limit)
+            return summ
+        finally:
+            c.close()
+
+    @app.get("/api/market")
+    def market_view(days: int = Query(14, le=90)):
+        c = conn()
+        try:
+            from .. import market
+            tick = int(dbmod.get_meta(c, "tick", "0") or 0)
+            return {
+                "today": market.get_market_day(c, day_of(tick)),
+                "history": market.market_history(c, days=days),
+            }
         finally:
             c.close()
 

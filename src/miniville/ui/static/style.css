@@ -592,3 +592,35 @@ body.tv-mode #map-host canvas {
   margin-right: .15rem;
 }
 .tv-card-follow:hover { border-color: var(--accent); }
+
+/* v0.54-v0.56 Festivals, Museum & Market CPI */
+.festival-banner { margin-bottom: 1rem; }
+.fest-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: .7rem .95rem;
+}
+.fest-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .25rem; }
+.fest-meta { font-size: .88rem; color: var(--dim); }
+.fest-note { font-size: .85rem; margin-top: .25rem; color: #c7d1de; }
+
+.market-strip { margin-bottom: 1rem; }
+.market-row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.market-note { font-size: .82rem; margin-top: .35rem; }
+.cpi-badge {
+  display: inline-block;
+  padding: .45rem .75rem;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: .95rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.cpi-high { color: #e06c75; border-color: rgba(224, 108, 117, 0.45); }
+.cpi-low { color: #6bd48e; border-color: rgba(107, 212, 142, 0.45); }
+.cpi-steady { color: var(--accent); border-color: rgba(232, 182, 76, 0.45); }
+
+.cat-pill { display: inline-block; font-size: .8rem; margin-right: .35rem; color: var(--fg); }
+.museum-featured-card { min-width: 240px; }

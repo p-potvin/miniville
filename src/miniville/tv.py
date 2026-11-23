@@ -494,6 +494,22 @@ def _progression_cards(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     return cards[:4]
 
 
+def _safe_active_festival(conn: sqlite3.Connection, day: int) -> dict[str, Any] | None:
+    try:
+        from . import festivals
+        return festivals.active_festival(conn, day)
+    except Exception:
+        return None
+
+
+def _safe_market_day(conn: sqlite3.Connection, day: int) -> dict[str, Any] | None:
+    try:
+        from . import market
+        return market.get_market_day(conn, day)
+    except Exception:
+        return None
+
+
 def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any]]:
     """Build a 10-foot lower-third broadcast ticker with clickable items."""
     items: list[dict[str, Any]] = []
@@ -552,6 +568,52 @@ def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any
                 "agent_id": ar.get("primary_agent_id"),
                 "place_id": ar.get("place_id"),
                 "time": f"Day {int(ar['last_day']) + 1}",
+            })
+    except Exception:
+        pass
+
+    # Active seasonal festival, recent museum exhibit, and notable CPI swings
+    cur_day = timekeeper.day_of(tick)
+    try:
+        from . import festivals
+        af = festivals.active_festival(conn, cur_day)
+        if af:
+            items.insert(0, {
+                "badge": "🎪 Festival",
+                "text": f"{af['name']} at {af.get('venue_name') or 'town'} — {af['weather_note']}",
+                "agent_id": af.get("winner_agent_id"),
+                "place_id": af.get("venue_id"),
+                "time": f"Day {cur_day + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import museum
+        exs = museum.list_exhibits(conn, limit=1)
+        if exs:
+            ex = exs[0]
+            items.append({
+                "badge": "🏛️ Museum",
+                "text": f"Exhibit: {ex['title']} ({ex['category']}, {ex['visitors_count']} visitors)",
+                "agent_id": ex.get("subject_agent_id") or ex.get("donor_agent_id"),
+                "place_id": ex.get("place_id"),
+                "time": f"Day {int(ex['day_curated']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import market
+        mkt = market.get_market_day(conn, cur_day)
+        if mkt and (mkt["cpi_index"] >= market.CPI_HIGH_THRESHOLD or mkt["cpi_index"] <= market.CPI_LOW_THRESHOLD):
+            badge = "📈 Market CPI" if mkt["cpi_index"] >= market.CPI_HIGH_THRESHOLD else "📉 Market CPI"
+            items.insert(0, {
+                "badge": badge,
+                "text": f"Cost-of-living index at {mkt['cpi_index']:.1f} ({mkt['driver_note']})",
+                "agent_id": None,
+                "place_id": None,
+                "time": f"Day {cur_day + 1}",
             })
     except Exception:
         pass
@@ -985,6 +1047,8 @@ def tv_director_snapshot(conn: sqlite3.Connection,
         "date": seasons.fmt_date(day),
         "season": season,
         "weather": weather.today(conn, day),
+        "festival": _safe_active_festival(conn, day),
+        "market": _safe_market_day(conn, day),
         "holiday": holiday.name if holiday else None,
         "sky": _sky_state(tod, season),
         "vitality": {

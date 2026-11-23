@@ -18,7 +18,39 @@ async function status() {
 }
 
 async function feed() {
-  const [rows, arcRes] = await Promise.all([api("/api/feed?limit=60"), api("/api/arcs?status=active&limit=6")]);
+  const [rows, arcRes, festRes] = await Promise.all([
+    api("/api/feed?limit=60"),
+    api("/api/arcs?status=active&limit=6"),
+    api("/api/festivals?limit=4").catch(() => ({})),
+  ]);
+  const festBox = $("#feed-festival");
+  if (festBox) {
+    const f = festRes?.active || (festRes?.festivals && festRes.festivals[0]) || null;
+    festBox.hidden = !f;
+    if (f) {
+      const winnerLink = f.winner_agent_id
+        ? ` · Winner: <a class="click-link" onclick="mvPick({id:${f.winner_agent_id}})"><b>${esc(f.winner_agent_name || "#" + f.winner_agent_id)}</b></a>`
+        : "";
+      const statusBadge = f.status === "active"
+        ? `<span class="badge-pass">Live Now</span>`
+        : `<span class="muted">${esc(f.status)}</span>`;
+      festBox.innerHTML = `
+        <div class="fest-card">
+          <div class="fest-head">
+            <span>🎪 <b>${esc(f.name)}</b> <span class="muted">(${esc(f.season)} · Year ${f.year})</span></span>
+            <span>${statusBadge}</span>
+          </div>
+          <div class="fest-meta">
+            📍 ${esc(f.venue_name || "Town Fairgrounds")} · Days ${f.start_day + 1}–${f.end_day + 1} ·
+            ${f.attendance_count ?? 0} attending · ${money(f.revenue_cents)} booth/prize flow${winnerLink}
+          </div>
+          ${f.weather_note ? `<div class="fest-note">🌦️ ${esc(f.weather_note)}</div>` : ""}
+          ${f.summary ? `<div class="fest-note">${esc(f.summary)}</div>` : ""}
+        </div>`;
+    } else {
+      festBox.innerHTML = "";
+    }
+  }
   const arcs = (arcRes && arcRes.arcs) || [];
   const arcBox = $("#feed-arcs");
   if (arcBox) {
@@ -238,7 +270,10 @@ const money = (c) => "$" + ((c ?? 0) / 100).toLocaleString(undefined,
   { maximumFractionDigits: 0 });
 
 async function economy() {
-  const r = await api("/api/economy");
+  const [r, mkt] = await Promise.all([
+    api("/api/economy"),
+    api("/api/market?days=14").catch(() => ({})),
+  ]);
   const s = r.stats;
   $("#econ-stats").innerHTML =
     `<div class="stat"><b>${money(s.money_supply_cents)}</b><span>in circulation</span></div>
@@ -250,6 +285,26 @@ async function economy() {
      <div class="stat"><b>${s.in_debt}</b><span>in debt</span></div>
      <div class="stat"><b>${money(s.town_purse_cents)}</b><span>town purse</span></div>
      <div class="stat"><b>${money(s.public_payroll_week_cents)}</b><span>public payroll /wk</span></div>`;
+  const mktBox = $("#econ-market");
+  if (mktBox) {
+    const td = mkt?.today || (mkt?.history && mkt.history[0]) || null;
+    mktBox.hidden = !td;
+    if (td) {
+      const cpi = Number(td.cpi_index ?? 100);
+      const cpiCls = cpi >= 105 ? "cpi-high" : (cpi <= 95 ? "cpi-low" : "cpi-steady");
+      mktBox.innerHTML = `
+        <div class="market-row">
+          <span class="cpi-badge ${cpiCls}">📊 CPI ${cpi.toFixed(1)}</span>
+          <span class="stat"><b>${Number(td.food_mult ?? 1).toFixed(2)}x</b><span>Groceries</span></span>
+          <span class="stat"><b>${Number(td.dining_mult ?? 1).toFixed(2)}x</b><span>Dining</span></span>
+          <span class="stat"><b>${Number(td.goods_mult ?? 1).toFixed(2)}x</b><span>Goods</span></span>
+          <span class="stat"><b>${Number(td.leisure_mult ?? 1).toFixed(2)}x</b><span>Leisure</span></span>
+        </div>
+        ${td.driver_note ? `<div class="muted market-note">${esc(td.driver_note)}</div>` : ""}`;
+    } else {
+      mktBox.innerHTML = "";
+    }
+  }
   $("#econ-body").innerHTML = r.businesses.map(b =>
     `<tr><td>${esc(b.name)}${b.founded_tick != null ? ` <span class="muted">(new ${esc(b.concept || "")})</span>` : ""}</td>
      <td>${b.owner_id ? `<a class="click-link" onclick="mvPick({id: ${b.owner_id}})">${esc(b.owner_name)}</a>` : `<span class="muted">—</span>`}</td>
@@ -381,7 +436,11 @@ async function council() {
 
 
 async function individual() {
-  const [r, dynRes] = await Promise.all([api("/api/individual"), api("/api/dynasties")]);
+  const [r, dynRes, musRes] = await Promise.all([
+    api("/api/individual"),
+    api("/api/dynasties"),
+    api("/api/museum?limit=24").catch(() => ({})),
+  ]);
   const chronos = r.chronotypes || {};
   const order = ["early_bird", "morning", "day_walker", "evening", "night_owl"];
   const labels = {
@@ -490,6 +549,36 @@ async function individual() {
       <td><b>${c.appreciations ?? 0}</b></td>
     </tr>`
   ).join("") : `<tr><td colspan="5" class="muted">No works exhibited yet</td></tr>`;
+
+  const mus = musRes || {};
+  const musCats = Object.entries(mus.by_category || {})
+    .map(([k, n]) => `<span class="cat-pill">${esc(k)}: <b>${n}</b></span>`).join(" ");
+  const feat = mus.featured;
+  $("#ind-museum-meta").innerHTML = `
+    <div class="stat"><b>${mus.total_exhibits ?? 0}</b><span>curated exhibits</span></div>
+    <div class="stat"><b>${mus.total_visitors ?? 0}</b><span>total visitors (${mus.today_visitors ?? 0} today)</span></div>
+    <div class="stat"><b>${money(mus.total_donations_cents ?? 0)}</b><span>visitor donations</span></div>
+    ${feat ? `<div class="stat active-policy museum-featured-card"><b>🏛️ ${esc(feat.title)}</b><span>Featured (${esc(feat.category)}) · ${feat.visitors_count ?? 0} visitors</span></div>` : ""}
+    ${musCats ? `<div class="stat"><div>${musCats}</div><span>by category</span></div>` : ""}`;
+  const exs = mus.exhibits || [];
+  $("#ind-museum").innerHTML = exs.length ? exs.map(ex => {
+    const subj = ex.subject_agent_id
+      ? `<a class="click-link" onclick="mvPick({id: ${ex.subject_agent_id}})">${esc(ex.subject_name || "#" + ex.subject_agent_id)}</a>`
+      : `<span class="muted">—</span>`;
+    const donor = ex.donor_agent_id
+      ? `<a class="click-link" onclick="mvPick({id: ${ex.donor_agent_id}})">${esc(ex.donor_name || "#" + ex.donor_agent_id)}</a>`
+      : `<span class="muted">—</span>`;
+    const badge = ex.featured ? ` <span class="badge-pass">Featured</span>` : "";
+    return `<tr>
+      <td><b>${esc(ex.title)}</b>${badge}<br><small class="muted">${esc(ex.description)}</small></td>
+      <td>${esc(ex.category)}</td>
+      <td>Yr ${ex.year_curated} · Day ${ex.day_curated + 1}</td>
+      <td>${subj}</td>
+      <td>${donor}</td>
+      <td>${esc(ex.place_name || "Museum")}</td>
+      <td><b>${ex.visitors_count ?? 0}</b></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="7" class="muted">No museum exhibits curated yet</td></tr>`;
 
   const projs = r.civic_projects || [];
   $("#ind-projects").innerHTML = projs.length ? projs.map(p => {

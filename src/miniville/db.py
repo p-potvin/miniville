@@ -709,6 +709,59 @@ CREATE TABLE IF NOT EXISTS story_arcs (
 );
 CREATE INDEX IF NOT EXISTS idx_story_arcs_status ON story_arcs(status, heat DESC);
 
+CREATE TABLE IF NOT EXISTS festivals (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    season             TEXT NOT NULL,
+    year               INTEGER NOT NULL,
+    name               TEXT NOT NULL,
+    venue_id           INTEGER REFERENCES places(id),
+    start_day          INTEGER NOT NULL,
+    end_day            INTEGER NOT NULL,
+    status             TEXT NOT NULL DEFAULT 'active',
+    attendance_count   INTEGER NOT NULL DEFAULT 0,
+    revenue_cents      INTEGER NOT NULL DEFAULT 0,
+    winner_agent_id    INTEGER REFERENCES agents(id),
+    winner_business_id INTEGER REFERENCES places(id),
+    weather_note       TEXT NOT NULL DEFAULT '',
+    summary            TEXT NOT NULL DEFAULT '',
+    UNIQUE(season, year)
+);
+CREATE INDEX IF NOT EXISTS idx_festivals_days ON festivals(start_day, end_day);
+CREATE INDEX IF NOT EXISTS idx_festivals_status ON festivals(status);
+
+CREATE TABLE IF NOT EXISTS museum_exhibits (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    day_curated        INTEGER NOT NULL,
+    year_curated       INTEGER NOT NULL,
+    category           TEXT NOT NULL,
+    title              TEXT NOT NULL,
+    description        TEXT NOT NULL,
+    donor_agent_id     INTEGER REFERENCES agents(id),
+    subject_agent_id   INTEGER REFERENCES agents(id),
+    place_id           INTEGER REFERENCES places(id),
+    visitors_count     INTEGER NOT NULL DEFAULT 0,
+    featured           INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_museum_exhibits_day ON museum_exhibits(day_curated DESC);
+
+CREATE TABLE IF NOT EXISTS museum_days (
+    day                 INTEGER PRIMARY KEY,
+    visitors            INTEGER NOT NULL DEFAULT 0,
+    donations_cents     INTEGER NOT NULL DEFAULT 0,
+    weather_condition   TEXT NOT NULL DEFAULT 'clear',
+    featured_exhibit_id INTEGER REFERENCES museum_exhibits(id)
+);
+
+CREATE TABLE IF NOT EXISTS market_days (
+    day          INTEGER PRIMARY KEY,
+    cpi_index    REAL,
+    food_mult    REAL,
+    dining_mult  REAL,
+    goods_mult   REAL,
+    leisure_mult REAL,
+    driver_note  TEXT
+);
+
 """
 
 

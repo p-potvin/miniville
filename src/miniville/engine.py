@@ -13,6 +13,7 @@ from . import (
     economy,
     enterprise,
     events,
+    festivals,
     groups,
     growth,
     book_club,
@@ -43,7 +44,9 @@ from . import (
     milestones,
     neighborhood,
     jobs,
+    market,
     memory,
+    museum,
     politics,
     press,
     reputation,
@@ -128,6 +131,9 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         stats["opinion"] = press.update(conn, tick)
 
     stats["weather"] = weather.due(conn, tick, seed)
+    stats["market"] = market.daily_market(conn, day_of(tick), seed)
+    stats["festivals"] = festivals.due(conn, tick, seed)
+    stats["museum"] = museum.daily_museum(conn, day_of(tick), seed)
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)
     stats["life_events"] = daily_life_lottery(conn, tick, seed)

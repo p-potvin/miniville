@@ -977,6 +977,72 @@ def cmd_weather(args) -> int:
     return 0
 
 
+def cmd_festivals(args) -> int:
+    from . import festivals
+    from .timekeeper import day_of
+    conn = dbmod.connect(args.db)
+    tick = int(dbmod.get_meta(conn, "tick", "0") or 0)
+    active = festivals.active_festival(conn, day_of(tick))
+    if active:
+        print(f"Active: {active['name']} at {active.get('venue_name') or 'town'} — {active['weather_note']}")
+    rows = festivals.list_festivals(conn, limit=args.limit)
+    if not rows:
+        print("no festivals recorded yet")
+        return 0
+    print(f"{'year':>4} {'season':<7} {'name':<28} {'status':<7} {'att':>4} {'rev':>8}  winner")
+    for r in rows:
+        win = r.get("winner_agent_name") or "-"
+        print(f"{r['year']:>4} {r['season']:<7} {r['name'][:26]:<28} {r['status']:<7} "
+              f"{r['attendance_count']:>4} ${r['revenue_cents']/100:>6,.0f}  {win}")
+    return 0
+
+
+def cmd_museum(args) -> int:
+    from . import museum
+    conn = dbmod.connect(args.db)
+    summ = museum.museum_summary(conn)
+    print(
+        f"Miniville Museum: {summ['total_exhibits']} exhibits · "
+        f"{summ['total_visitors']} total visitors ({summ['today_visitors']} today) · "
+        f"${summ['total_donations_cents']/100:,.2f} donations"
+    )
+    exhibits = museum.list_exhibits(conn, limit=args.limit)
+    if not exhibits:
+        print("no exhibits curated yet")
+        return 0
+    print(f"\n{'day':>5} {'category':<12} {'vis':>5}  {'title':<36} subject")
+    for ex in exhibits:
+        subj = ex.get("subject_name") or ex.get("donor_name") or "-"
+        star = "* " if ex.get("featured") else "  "
+        print(f"{ex['day_curated'] + 1:>5} {ex['category']:<12} {ex['visitors_count']:>5}  "
+              f"{star}{ex['title'][:34]:<34} {subj}")
+    return 0
+
+
+def cmd_cpi(args) -> int:
+    from . import market
+    from .timekeeper import day_of
+    conn = dbmod.connect(args.db)
+    tick = int(dbmod.get_meta(conn, "tick", "0") or 0)
+    cur = market.get_market_day(conn, day_of(tick))
+    if cur:
+        print(
+            f"Today (day {cur['day'] + 1}): CPI {cur['cpi_index']:.1f} · "
+            f"food {cur['food_mult']:.2f}x · dining {cur['dining_mult']:.2f}x · "
+            f"goods {cur['goods_mult']:.2f}x · leisure {cur['leisure_mult']:.2f}x "
+            f"({cur['driver_note']})"
+        )
+    hist = market.market_history(conn, days=args.days)
+    if not hist:
+        print("no market history recorded yet")
+        return 0
+    print(f"\n{'day':>5} {'CPI':>6} {'food':>6} {'dining':>7} {'goods':>6} {'leisure':>8}  driver")
+    for r in hist:
+        print(f"{r['day'] + 1:>5} {r['cpi_index']:>6.1f} {r['food_mult']:>6.2f} "
+              f"{r['dining_mult']:>7.2f} {r['goods_mult']:>6.2f} {r['leisure_mult']:>8.2f}  {r['driver_note']}")
+    return 0
+
+
 def cmd_loans(args) -> int:
     from . import banking
     conn = dbmod.connect(args.db)
@@ -1289,6 +1355,15 @@ def main(argv=None) -> int:
     pwth = sub.add_parser("weather", help="Show today's weather and 14-day climate log")
     pwth.add_argument("--limit", type=int, default=14)
     pwth.set_defaults(fn=cmd_weather)
+    pfest = sub.add_parser("festivals", help="List seasonal town festivals and winners")
+    pfest.add_argument("--limit", type=int, default=12)
+    pfest.set_defaults(fn=cmd_festivals)
+    pmus = sub.add_parser("museum", help="Show Miniville Museum exhibits and visitor stats")
+    pmus.add_argument("--limit", type=int, default=24)
+    pmus.set_defaults(fn=cmd_museum)
+    pcpi = sub.add_parser("cpi", help="Show town CPI and sector price multipliers")
+    pcpi.add_argument("--days", type=int, default=14)
+    pcpi.set_defaults(fn=cmd_cpi)
     plon = sub.add_parser("loans", help="List peer-backed Credit Union loans")
     plon.add_argument("--status", choices=["active", "repaid", "defaulted", "all"], default="all")
     plon.add_argument("--limit", type=int, default=40)

@@ -686,11 +686,13 @@ class TVDirector {
     const vit = data.vitality || {};
     const vitEl = document.getElementById("tv-vitality");
     if (vitEl) {
+      const cpiHtml = data.market ? `<span>📊 CPI <b>${Number(data.market.cpi_index).toFixed(1)}</b></span>` : "";
+      const festHtml = data.festival ? `<span>🎪 <b>${tvEsc(data.festival.name)}</b></span>` : "";
       vitEl.innerHTML = `
         <span>👥 <b>${vit.population ?? 0}</b> residents (${vit.awake ?? 0} awake)</span>
         <span>💼 <b>${vit.employed ?? 0}</b> employed</span>
         <span>🏛️ <b>$${(vit.treasury_dollars ?? 0).toLocaleString()}</b> treasury</span>
-        <span>📰 <b>${(data.stories || []).length}</b> stories today</span>`;
+        <span>📰 <b>${(data.stories || []).length}</b> stories today</span>${cpiHtml}${festHtml}`;
     }
 
     this._renderSpotlightCards(data);
@@ -747,9 +749,17 @@ class TVDirector {
       const occs = (sv.occupants || []).slice(0, 5)
         .map(o => `<span class="tv-occ-chip" data-aid="${o.id}">${tvEsc(o.name)} <i>(${tvEsc(o.activity)})</i></span>`)
         .join(" ");
-      const progHtml = (data.progression || [])
-        .map(p => `<div class="tv-prog-item"><small>${tvEsc(p.category)}</small><b>${tvEsc(p.title)}</b><span>${tvEsc(p.detail)}</span></div>`)
-        .join("");
+      const progItems = (data.progression || [])
+        .map(p => `<div class="tv-prog-item"><small>${tvEsc(p.category)}</small><b>${tvEsc(p.title)}</b><span>${tvEsc(p.detail)}</span></div>`);
+      if (data.festival) {
+        const f = data.festival;
+        progItems.unshift(`<div class="tv-prog-item"><small>🎪 Festival (${tvEsc(f.status)})</small><b>${tvEsc(f.name)}</b><span>${tvEsc(f.venue_name || "Fairgrounds")} · ${f.attendance_count ?? 0} attending</span></div>`);
+      }
+      if (data.market) {
+        const m = data.market;
+        progItems.push(`<div class="tv-prog-item"><small>📊 Market CPI ${Number(m.cpi_index).toFixed(1)}</small><b>Food ${Number(m.food_mult).toFixed(2)}x · Dining ${Number(m.dining_mult).toFixed(2)}x</b><span>Goods ${Number(m.goods_mult).toFixed(2)}x · Leisure ${Number(m.leisure_mult).toFixed(2)}x</span></div>`);
+      }
+      const progHtml = progItems.join("");
       svEl.innerHTML = `
         <div class="tv-card-head">
           <span class="tv-card-kicker">ACTIVE VENUE &amp; VILLAGE PROGRESSION</span>
