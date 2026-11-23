@@ -138,11 +138,11 @@ class TownMap {
     for (const m of this.moversData) {
       const tag = new PIXI.Text(`${m.name.split(" ")[0]} → ${m.to_label}`, {
         fontFamily: "Consolas, monospace",
-        fontSize: 11,
+        fontSize: this.tvMode ? 14 : 11,
         fontWeight: "bold",
         fill: 0xfff3c4,
         stroke: 0x0b0e17,
-        strokeThickness: 3,
+        strokeThickness: this.tvMode ? 4 : 3,
       });
       tag.anchor.set(0.5, 1.35);
       tag.eventMode = "static";
@@ -319,7 +319,7 @@ class TownMap {
           .drawRoundedRect(d.x + 8, d.y + d.h - 78, d.w - 16, 70, 8).endFill();
         this.staticLayer.addChild(hb);
         const ht = new PIXI.Text(`homes · ${d.homes}`, {
-          fontFamily: "Consolas, monospace", fontSize: 11, fill: 0x66707f,
+          fontFamily: "Consolas, monospace", fontSize: this.tvMode ? 13 : 11, fill: 0x66707f,
         });
         ht.position.set(d.x + 14, d.y + d.h - 24);
         this.staticLayer.addChild(ht);
@@ -330,13 +330,13 @@ class TownMap {
         const info = new PIXI.Text(
           `rent $${Math.round(p.rent_cents / 100)}/wk · ${p.residents} res · ` +
           `median savings $${Math.round(p.median_savings_cents / 100).toLocaleString()}`, {
-            fontFamily: "Consolas, monospace", fontSize: 11, fill: 0xb8a65a,
+            fontFamily: "Consolas, monospace", fontSize: this.tvMode ? 13 : 11, fill: 0xb8a65a,
           });
         info.position.set(d.x + 110, d.y + d.h - 24);
         this.staticLayer.addChild(info);
       }
       const name = new PIXI.Text(d.name.toUpperCase(), {
-        fontFamily: "Consolas, monospace", fontSize: 15,
+        fontFamily: "Consolas, monospace", fontSize: this.tvMode ? 18 : 15,
         fontWeight: "bold", fill: 0x7784a0,
       });
       name.position.set(d.x + 10, d.y + 8);
@@ -368,7 +368,8 @@ class TownMap {
       this.staticLayer.addChild(vg);
       const label = new PIXI.Text(
         (p.closed ? "🔥 " : "") + p.name, {
-          fontFamily: "Consolas, monospace", fontSize: 12,
+          fontFamily: "Consolas, monospace", fontSize: this.tvMode ? 15 : 12,
+          fontWeight: this.tvMode ? "bold" : "normal",
           fill: p.closed ? 0xe08a8a : MV_LABEL,
         });
       label.anchor.set(0.5, 0);
@@ -390,7 +391,7 @@ class TownMap {
       if (!v) continue;
       if (list.length) {
         const n = new PIXI.Text(String(list.length), {
-          fontFamily: "Consolas, monospace", fontSize: 13,
+          fontFamily: "Consolas, monospace", fontSize: this.tvMode ? 16 : 13,
           fontWeight: "bold", fill: 0xffffff,
           stroke: 0x000000, strokeThickness: 4,
         });

@@ -55,9 +55,11 @@ try {
         $startedAt = Get-Date
         Push-Location -LiteralPath $root
         try {
+            # -WindowStyle Hidden: a console child started from a hidden parent
+            # (conhost --headless) otherwise gets its own visible window.
             $proc = Start-Process -FilePath $python `
                 -ArgumentList @('-u', '-m', 'miniville.cli', 'serve', '--host', '100.71.101.21', '--port', "$port", '--live-step', '8') `
-                -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
+                -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru -WindowStyle Hidden
         }
         catch {
             Write-LauncherLog "could not start server ($python): $($_.Exception.Message); giving up"
