@@ -197,3 +197,30 @@ def test_municipal_deficit_shifts_opinion_toward_austerity(conn):
     assert target["dividend_share"] < 0
     assert target["rent_multiplier"] > 0.5
     assert target["levy_rate"] == 1.0
+
+
+def test_gazette_endorsements_favor_aligned_candidate_and_fade_on_zero_cred(conn):
+    """Business Gazette endorses wealthier/owner candidates and boosts their votes;
+    a discredited paper makes no endorsement."""
+    _give_jobs(conn, 20)
+    # Give candidate 5 (lower standing than candidate 12) high wealth + business ownership
+    place = conn.execute("SELECT id FROM places WHERE name='Miniville Grocer'").fetchone()["id"]
+    conn.execute("UPDATE agent_state SET money_cents=5000000 WHERE agent_id=5")
+    conn.execute("INSERT INTO businesses(place_id, balance_cents, owner_id) VALUES(?, 100000, 5)", (place,))
+    _profile(conn, "business", 1.0)
+    cands = [
+        {"id": 5, "district": "Downtown", "standing": 12},
+        {"id": 12, "district": "Downtown", "standing": 24},
+    ]
+    endorsed = press.endorse_candidates(conn, cands)
+    assert endorsed == {"Downtown": 5}
+
+    _profile(conn, "business", 0.0)
+    assert press.endorse_candidates(conn, cands) == {}
+
+    # Restore credibility and confirm hold_election records endorsements_json
+    _profile(conn, "business", 1.0)
+    out = politics.hold_election(conn, tick=0, seed="test")
+    assert out["endorsements"]
+    row = conn.execute("SELECT endorsements_json FROM elections ORDER BY id DESC LIMIT 1").fetchone()
+    assert row and "{" in row["endorsements_json"]

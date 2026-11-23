@@ -163,3 +163,77 @@ def update(conn: sqlite3.Connection, tick: int) -> dict[str, float]:
         _set(conn, policy, nxt)
         out[policy] = round(nxt, 4)
     return out
+
+
+ENDORSEMENT_BOOST = 1.6
+
+
+def endorse_candidates(conn: sqlite3.Connection,
+                       candidates: list[dict]) -> dict[str, int]:
+    """Return {district: candidate_id} endorsed by the Gazette for this election.
+
+    A discredited paper (`credibility <= 0`) or a town without an active paper
+    profile makes no endorsement.
+    """
+    profile = conn.execute(
+        "SELECT editorial_line, credibility FROM newspaper_profile WHERE id=1"
+    ).fetchone()
+    if not profile or float(profile["credibility"] or 0.0) <= 0.0 or not candidates:
+        return {}
+    line = profile["editorial_line"] or "community"
+    cids = [int(c["id"]) for c in candidates if c.get("id") is not None]
+    if not cids:
+        return {}
+    ph = ",".join("?" * len(cids))
+    wallets = {
+        int(r["agent_id"]): int(r["money_cents"] or 0)
+        for r in conn.execute(
+            f"SELECT agent_id, money_cents FROM agent_state WHERE agent_id IN ({ph})",
+            tuple(cids),
+        ).fetchall()
+    }
+    owners = {
+        int(r["owner_id"])
+        for r in conn.execute(
+            f"SELECT DISTINCT owner_id FROM businesses WHERE owner_id IN ({ph}) AND status='open'",
+            tuple(cids),
+        ).fetchall()
+        if r["owner_id"] is not None
+    }
+    incumbents = {
+        int(r["agent_id"])
+        for r in conn.execute("SELECT agent_id FROM council WHERE agent_id IS NOT NULL").fetchall()
+    }
+    group_counts: dict[int, int] = {
+        int(r["agent_id"]): int(r["n"])
+        for r in conn.execute(
+            f"SELECT agent_id, COUNT(*) n FROM memberships WHERE agent_id IN ({ph}) GROUP BY agent_id",
+            tuple(cids),
+        ).fetchall()
+    }
+
+    by_dist: dict[str, list[dict]] = {}
+    for c in candidates:
+        d = c.get("district") or "Downtown"
+        by_dist.setdefault(d, []).append(c)
+
+    endorsed: dict[str, int] = {}
+    for dist, group in by_dist.items():
+        def _score(cand: dict) -> tuple:
+            cid = int(cand["id"])
+            st = int(cand.get("standing") or 0)
+            w = wallets.get(cid, 0)
+            own = 1 if cid in owners else 0
+            inc = 1 if cid in incumbents else 0
+            gc = group_counts.get(cid, 0)
+            if line == "business":
+                return (own, w, st, -cid)
+            if line == "working":
+                return (0 if own else 1, -w, st, -cid)
+            if line == "establishment":
+                return (inc, st, w, -cid)
+            return (gc, st, -cid)
+
+        pick = max(group, key=_score)
+        endorsed[dist] = int(pick["id"])
+    return endorsed

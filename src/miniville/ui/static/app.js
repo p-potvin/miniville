@@ -254,13 +254,18 @@ async function council() {
     ` · 5 district seats · policy levers directly influence town books, rent, and wages.`;
 
   const pressInfo = r.press || {};
+  const endMap = r.endorsements || pressInfo.endorsements || {};
+  const endEntries = Object.entries(endMap);
+  const endNote = endEntries.length
+    ? ` Latest endorsements: ${endEntries.map(([d, n]) => `${d}: ${n}`).join(", ")}.`
+    : "";
   if (pressInfo.readers != null) {
     $("#council-press").textContent =
       `The Gazette (${pressInfo.editorial_line || "no line"}) is read by ` +
       `${pressInfo.readers.toLocaleString()} of ${pressInfo.adults.toLocaleString()} adults ` +
       `(${Math.round((pressInfo.reach || 0) * 100)}% reach, credibility ` +
       `${Math.round((pressInfo.credibility || 0) * 100)}%). Reach is how far the paper ` +
-      `can move the town's opinion — and a caught lie shrinks it.`;
+      `can move the town's opinion — and a caught lie shrinks it.` + endNote;
   }
 
   const polKeys = Object.keys(policies).sort();

@@ -172,3 +172,37 @@ def test_a_wage_floor_lifts_the_lowest_paid(conn):
     conn.execute("UPDATE agent_state SET money_cents=0 WHERE agent_id=1")
     db.set_meta(conn, "policy_min_wage", "0.5")
     assert economy.pay_wages(conn, 30) == int(0.5 * economy.WAGE_MAX_CENTS)
+
+
+def test_election_counts_only_working_age_unemployment_and_by_election_fills_seat(conn):
+    """Retirees (65+) must not inflate backers_unemployed, and by_election_due fills
+    a missing district seat without resetting next_election_day."""
+    dt_ids = [
+        r["id"]
+        for r in conn.execute(
+            "SELECT a.id FROM agents a JOIN places p ON p.id=a.home_place_id "
+            "WHERE p.district='Downtown' ORDER BY a.id"
+        ).fetchall()
+    ]
+    assert len(dt_ids) == 4
+    conn.execute("UPDATE agents SET age=72 WHERE id=?", (dt_ids[0],))
+    place = conn.execute("SELECT id FROM places WHERE name='Miniville Grocer'").fetchone()["id"]
+    for aid in dt_ids[1:]:
+        conn.execute(
+            "INSERT INTO jobs(agent_id,place_id,role,wage_cents,shift_start,shift_end,work_days) "
+            "VALUES(?,?,'clerk',10000,16,30,62)", (aid, place))
+    conn.commit()
+
+    politics.hold_election(conn, tick=0, seed="test")
+    dt = conn.execute("SELECT * FROM council WHERE district='Downtown'").fetchone()
+    assert dt is not None and dt["backers_unemployed"] == 0.0
+
+    # Remove Seat 3 (simulate missing district seat) and advance to a monthly check (day 30)
+    old_next = politics.next_election_day(conn)
+    conn.execute("DELETE FROM council WHERE seat=3")
+    conn.commit()
+    out = politics.due(conn, tick=30 * 48)
+    assert "by_elections" in out and len(out["by_elections"]) == 1
+    assert conn.execute("SELECT COUNT(*) n FROM council").fetchone()["n"] == politics.SEATS
+    assert politics.next_election_day(conn) == old_next
+    assert conn.execute("SELECT 1 FROM events WHERE data LIKE '%by_election%'").fetchone()

@@ -288,7 +288,8 @@ CREATE TABLE IF NOT EXISTS elections (
     tick INTEGER NOT NULL,
     day INTEGER NOT NULL,
     turnout INTEGER NOT NULL,
-    summary TEXT NOT NULL
+    summary TEXT NOT NULL,
+    endorsements_json TEXT NOT NULL DEFAULT '{}'
 );
 CREATE TABLE IF NOT EXISTS motions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -784,6 +785,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE motions ADD COLUMN support REAL NOT NULL DEFAULT 0")
         if "press_swing" not in mcols:
             conn.execute("ALTER TABLE motions ADD COLUMN press_swing INTEGER NOT NULL DEFAULT 0")
+
+    if _has_table(conn, "elections"):
+        ecols = {r["name"] for r in conn.execute("PRAGMA table_info(elections)")}
+        if "endorsements_json" not in ecols:
+            conn.execute("ALTER TABLE elections ADD COLUMN endorsements_json TEXT NOT NULL DEFAULT '{}'")
 
     # careers: tenure and rank on the post. Existing worlds start accruing
     # tenure from now rather than instantly promoting everyone.

@@ -135,6 +135,9 @@ def hold_election(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     # influence compounds: a councillor who already has money, a seat and a
     # flock is harder to unseat than a well-liked newcomer
     infl = {c["id"]: influence_of(conn, c["id"]) for c in candidates}
+    endorsed = press.endorse_candidates(conn, candidates)
+    endorse_reach = press.reach(conn)
+    endorsed_ids = set(endorsed.values())
     tally: dict[int, list[int]] = {c["id"]: [] for c in candidates}
     turnout = 0
     for v in voters:
@@ -151,6 +154,8 @@ def hold_election(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
                 score += 1.0                      # the neighbour
             if (v["occupation"] or "") and v["occupation"] == c["occupation"]:
                 score += 0.5
+            if c["id"] in endorsed_ids:
+                score += press.ENDORSEMENT_BOOST * endorse_reach
             score += r.random() * 0.8             # the unpredictable voter
             if score > best_score:
                 best, best_score = c["id"], score
@@ -195,11 +200,13 @@ def hold_election(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         med = wallets[len(wallets) // 2] if wallets else median
         district_adults = conn.execute(
             """SELECT COUNT(*) n FROM agents a LEFT JOIN places p ON p.id=a.home_place_id
-               WHERE a.alive=1 AND a.is_child=0 AND p.district=?""",
+               WHERE a.alive=1 AND a.is_child=0 AND a.age >= 18 AND a.age < 65
+                 AND p.district=?""",
             (c.get("district"),)).fetchone()["n"]
         out_of_work = conn.execute(
             """SELECT COUNT(*) n FROM agents a LEFT JOIN places p ON p.id=a.home_place_id
-               WHERE a.alive=1 AND a.is_child=0 AND p.district=?
+               WHERE a.alive=1 AND a.is_child=0 AND a.age >= 18 AND a.age < 65
+                 AND p.district=?
                  AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.agent_id=a.id)""",
             (c.get("district"),)).fetchone()["n"]
         conn.execute(
@@ -229,16 +236,22 @@ def hold_election(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
 
     set_meta(conn, "next_election_day", str(day + TERM_DAYS))
     summary = "; ".join(f"{s['name']} ({s['votes']} votes)" for s in seated)
+    endorse_named = {
+        d: by_id[cid]["name"]
+        for d, cid in endorsed.items()
+        if cid in by_id
+    }
     conn.execute(
-        "INSERT INTO elections(tick,day,turnout,summary) VALUES(?,?,?,?)",
-        (tick, day, turnout, summary))
+        "INSERT INTO elections(tick,day,turnout,summary,endorsements_json) VALUES(?,?,?,?,?)",
+        (tick, day, turnout, summary, json.dumps(endorse_named)))
     # short enough to read in a narrative; the tally lives in the data
     emit(conn, tick, "town_event", importance=HISTORIC,
          text=(f"the town went to the polls and returned {len(seated)} "
                f"councillors, {seated[0]['name']} leading with "
                f"{seated[0]['votes']} votes"),
-         tag="election", turnout=turnout, seats=seated, summary=summary)
-    return {"turnout": turnout, "seated": seated}
+         tag="election", turnout=turnout, seats=seated, summary=summary,
+         endorsements=endorse_named)
+    return {"turnout": turnout, "seated": seated, "endorsements": endorse_named}
 
 
 # --- motions -------------------------------------------------------------------
@@ -361,6 +374,115 @@ def consider_motion(conn: sqlite3.Connection, tick: int, seed: str) -> dict | No
             "support": round(support, 4), "press_swing": swing}
 
 
+def by_election_due(conn: sqlite3.Connection, tick: int, seed: str) -> list[dict]:
+    """Fill any district missing a living councillor without resetting the full term."""
+    existing = council(conn)
+    if not existing:
+        return []
+    districts = [r["district"] for r in conn.execute(
+        "SELECT DISTINCT district FROM places WHERE district IS NOT NULL ORDER BY district"
+    )][:SEATS]
+    covered = {m["district"]: m for m in existing if m.get("district")}
+    taken_seats = {int(m["seat"]) for m in existing}
+    open_seats = [s for s in range(1, SEATS + 1) if s not in taken_seats]
+    day = day_of(tick)
+    filled: list[dict] = []
+
+    for dist in districts:
+        if dist in covered:
+            continue
+        if not open_seats:
+            break
+        seat = open_seats.pop(0)
+        cands = [dict(c) for c in conn.execute(
+            """SELECT a.id, a.name, a.occupation, a.standing, p.district
+               FROM agents a LEFT JOIN places p ON p.id = a.home_place_id
+               WHERE a.alive=1 AND a.is_child=0 AND a.age >= 18
+                 AND p.district = ?
+               ORDER BY a.standing DESC, a.id LIMIT ?""",
+            (dist, MAX_CANDIDATES),
+        ).fetchall()]
+        if not cands:
+            continue
+        voters = conn.execute(
+            """SELECT a.id, a.occupation FROM agents a
+               LEFT JOIN places p ON p.id = a.home_place_id
+               WHERE a.alive=1 AND a.is_child=0 AND a.age >= 18 AND p.district=?""",
+            (dist,),
+        ).fetchall()
+        if not voters:
+            voters = conn.execute(
+                "SELECT id, occupation FROM agents WHERE alive=1 AND is_child=0 AND age >= 18"
+            ).fetchall()
+        r = rng_for(seed, "by_election", f"{day}:{dist}")
+        endorsed = press.endorse_candidates(conn, cands)
+        reach = press.reach(conn)
+        endorsed_ids = set(endorsed.values())
+        tally: dict[int, int] = {int(c["id"]): 0 for c in cands}
+        for v in voters:
+            best_cid, best_s = None, -1.0
+            for c in cands:
+                cid = int(c["id"])
+                if cid == int(v["id"]) and len(cands) > 1:
+                    continue
+                s = 0.5 + float(c["standing"] or 0) / 40.0 + r.random() * 0.8
+                if v["occupation"] and v["occupation"] == c["occupation"]:
+                    s += 0.5
+                if cid in endorsed_ids:
+                    s += press.ENDORSEMENT_BOOST * reach
+                if s > best_s:
+                    best_cid, best_s = cid, s
+            if best_cid is not None:
+                tally[best_cid] += 1
+        ranked = sorted(cands, key=lambda c: (-tally[int(c["id"])], -int(c["standing"] or 0), int(c["id"])))
+        win = ranked[0]
+        win_id = int(win["id"])
+        votes = tally[win_id]
+        wallets = sorted(
+            int(w["m"] or 0)
+            for w in conn.execute(
+                """SELECT s.money_cents m FROM agent_state s JOIN agents a ON a.id=s.agent_id
+                   LEFT JOIN places p ON p.id=a.home_place_id
+                   WHERE a.alive=1 AND a.is_child=0 AND p.district=?""",
+                (dist,),
+            ).fetchall()
+        )
+        med = wallets[len(wallets) // 2] if wallets else 0
+        d_adults = conn.execute(
+            """SELECT COUNT(*) n FROM agents a LEFT JOIN places p ON p.id=a.home_place_id
+               WHERE a.alive=1 AND a.is_child=0 AND a.age >= 18 AND a.age < 65 AND p.district=?""",
+            (dist,),
+        ).fetchone()["n"]
+        d_unemp = conn.execute(
+            """SELECT COUNT(*) n FROM agents a LEFT JOIN places p ON p.id=a.home_place_id
+               WHERE a.alive=1 AND a.is_child=0 AND a.age >= 18 AND a.age < 65 AND p.district=?
+                 AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.agent_id=a.id)""",
+            (dist,),
+        ).fetchone()["n"]
+        conn.execute(
+            """INSERT OR REPLACE INTO council(seat, agent_id, elected_tick, district,
+                   backers, backers_wallet, backers_unemployed)
+               VALUES(?,?,?,?,?,?,?)""",
+            (seat, win_id, tick, dist, votes, med, d_unemp / max(1, d_adults)),
+        )
+        if len(ranked) >= 2:
+            lose_id = int(ranked[1]["id"])
+            lo, hi = min(win_id, lose_id), max(win_id, lose_id)
+            conn.execute(
+                """INSERT INTO relationships(a_id,b_id,familiarity,affinity,romance,label)
+                   VALUES(?,?,?,?,0,'rival')
+                   ON CONFLICT(a_id,b_id) DO UPDATE SET
+                     affinity = MIN(-25.0, relationships.affinity - 10.0),
+                     label = 'rival'""",
+                (lo, hi, 20.0, -25.0),
+            )
+        emit(conn, tick, "town_event", importance=NOTABLE,
+             text=f"{win['name']} won a {dist} by-election to take Seat {seat} with {votes} votes",
+             tag="by_election", seat=seat, district=dist, agent_id=win_id, votes=votes)
+        filled.append({"seat": seat, "district": dist, "agent_id": win_id, "name": win["name"], "votes": votes})
+    return filled
+
+
 def due(conn: sqlite3.Connection, tick: int) -> dict:
     """Run whatever the calendar says is due: elections, then motions."""
     out: dict = {}
@@ -384,7 +506,11 @@ def due(conn: sqlite3.Connection, tick: int) -> dict:
         out["election"] = hold_election(conn, tick, seed_for(conn))
         return out
     if day % 30 == 0:
-        m = consider_motion(conn, tick, seed_for(conn))
+        seed = seed_for(conn)
+        by_el = by_election_due(conn, tick, seed)
+        if by_el:
+            out["by_elections"] = by_el
+        m = consider_motion(conn, tick, seed)
         if m:
             out["motion"] = m
     return out

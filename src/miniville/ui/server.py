@@ -610,6 +610,16 @@ def create_app(db_path: str | None = None) -> FastAPI:
                                    JOIN places p ON p.id=b.place_id
                                    ORDER BY b.started_day DESC""")
             elections = _rows(c, "SELECT * FROM elections ORDER BY id DESC LIMIT 5")
+            latest_endorsements: dict = {}
+            for el in elections:
+                raw_e = el.get("endorsements_json") or "{}"
+                try:
+                    parsed_e = json.loads(raw_e)
+                except ValueError:
+                    parsed_e = {}
+                el["endorsements"] = parsed_e
+                if not latest_endorsements and isinstance(parsed_e, dict):
+                    latest_endorsements = parsed_e
             profile = c.execute("SELECT * FROM newspaper_profile WHERE id=1").fetchone()
             return {
                 "seats": council(c),
@@ -623,7 +633,9 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     "reach": round(press.reach(c), 4),
                     "credibility": round(press.credibility(c), 4),
                     "editorial_line": profile["editorial_line"] if profile else None,
+                    "endorsements": latest_endorsements,
                 },
+                "endorsements": latest_endorsements,
                 "next_election_day": next_election_day(c),
                 "motions": _rows(c, "SELECT * FROM motions ORDER BY id DESC LIMIT 20"),
                 "boycotts": boycotts,
