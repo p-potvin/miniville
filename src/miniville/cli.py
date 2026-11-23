@@ -62,11 +62,7 @@ def cmd_init(args) -> int:
 def cmd_economy(args) -> int:
     from . import economy
     conn = dbmod.connect(args.db)
-    from . import individual
-    from . import ambitions
     economy.ensure_businesses(conn)
-    individual.ensure_profiles(conn, args.seed)
-    ambitions.assign_ambitions(conn, 0, args.seed)
     conn.commit()
     s = economy.economy_stats(conn)
     print(f"money supply:    ${s['money_supply_cents'] / 100:,.0f}")

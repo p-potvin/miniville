@@ -481,10 +481,18 @@ def weekly_levy(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     if levied <= 0:
         return {"levied": 0, "dividend": 0, "residents": 0}
 
+    # if the town purse is in deficit, the levy pays down municipal debt first
+    # rather than handing out cash dividends while the town is in the red
+    deficit = max(0, -town_balance(conn))
+    to_debt = min(levied, deficit)
+    if to_debt:
+        town_credit(conn, to_debt)
+    available_levy = levied - to_debt
+    pot = int(available_levy * dividend_share)
     # the rest of the levy is what the town runs on — the hospital, the school,
     # the town hall — so it goes into the purse that pays their payroll
-    town_credit(conn, levied - int(levied * dividend_share))
-    pot = int(levied * dividend_share)
+    if available_levy - pot:
+        town_credit(conn, available_levy - pot)
     # the purse keeps a few weeks of payroll in hand; anything above that is
     # the residents' money sitting in a drawer, so it goes back out with the
     # dividend. Without this valve the purse swallowed rent forever and every

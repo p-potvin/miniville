@@ -182,3 +182,18 @@ def test_opinion_swings_a_close_vote_but_not_a_landslide(conn):
     dependent = {"backers_wallet": 5_000, "backers_unemployed": 0.60}
     assert politics._votes_yes("levy_rate", +1, dependent, 20_000, 0.5, 0.0)
     assert not politics._votes_yes("levy_rate", +1, dependent, 20_000, 0.5, -0.9)
+
+
+def test_municipal_deficit_shifts_opinion_toward_austerity(conn):
+    """When the town purse is deeply negative, material interest pushes for
+    lower pensions/dividends and higher rent/levy rather than a deficit spiral."""
+    _give_jobs(conn, 20)
+    # make a quarter of adults retired so senior_share > 0
+    conn.execute("UPDATE agents SET age=70 WHERE id BETWEEN 31 AND 40")
+    conn.execute("UPDATE town_account SET balance_cents=-50000000 WHERE id=1")
+    conn.commit()
+    target = press.material_target(conn)
+    assert target["pension"] < 0
+    assert target["dividend_share"] < 0
+    assert target["rent_multiplier"] > 0.5
+    assert target["levy_rate"] == 1.0

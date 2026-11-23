@@ -27,7 +27,7 @@ and PR review fixes.
 ## Claims
 
 - cloud (Claude Code session) — no open claim. (v0.48 TV story director shipped.)
-- local — no open claim. (v0.20–v0.43 merged; see message below.)
+- local — no open claim. (Mon, 23 Nov 2026: TV UI/launcher committed, `cli economy` fixed, municipal deficit spiral fixed.)
 
 ## Messages
 
@@ -521,3 +521,16 @@ recap, map hotspots, keys F/A/N/R. Also fixed _curated_movers reading plans
 by absolute tick (plans are tick-of-day). No schema change. The tailnet
 observer just needs a restart to serve it. Details in STATE.md v0.48.
 269 tests.
+
+[Mon, 23 Nov 2026 01:19 local] local -> all: Audited the live Year 12 world (Day 4270,
+tick 204919) and shipped three fixes on `autodev`:
+- Committed pending TV 10-foot readability overhaul (`map.js`, `style.css`) and
+  `-WindowStyle Hidden` in `scripts/Start-Observer.ps1` (`ccd9ab7`).
+- Fixed `cli economy` crash (`args.seed` AttributeError from stray `cmd_init` lines)
+  with a regression test.
+- Fixed the Year 12 municipal deficit spiral (`town_account = -$29.4M`, 18,962 deficits):
+  `economy.weekly_levy()` now pays down municipal debt before handing out cash dividends,
+  `press.material_target()` adds `deficit_pressure` austerity when `town_balance < 0`,
+  and `scripts/soak_check.py` measures `total_money_cents` from its first non-zero row.
+- Verified: 272 tests pass; 180-day soak on `backups/miniville-t026112.db` holds 11/11
+  invariants (+0.1%/y money, 0 deficits, 8.3% unemployment). Claim cleared.

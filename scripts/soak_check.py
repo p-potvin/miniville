@@ -70,13 +70,23 @@ def run_checks(conn: sqlite3.Connection, r: Report) -> None:
     # draws and estates move money between those three, which is not a leak.
     # Older soaks only have the wallet total.
     series = _series(conn)
-    key = ("total_money_cents" if series and "total_money_cents" in series[0].keys()
-           and series[0]["total_money_cents"] else "money_supply_cents")
-    if len(series) >= 2:
-        start, end = series[0][key], series[-1][key]
-        drift = (end - start) / max(1, start) / max(0.01, years)
+    total_series = [
+        row for row in series
+        if "total_money_cents" in row.keys() and row["total_money_cents"]
+    ]
+    if len(total_series) >= 2:
+        key = "total_money_cents"
+        m_series = total_series
+        m_years = max(0.01, (m_series[-1]["day"] - m_series[0]["day"]) / 365)
+    else:
+        key = "money_supply_cents"
+        m_series = series
+        m_years = max(0.01, years)
+    if len(m_series) >= 2:
+        start, end = m_series[0][key], m_series[-1][key]
+        drift = (end - start) / max(1, start) / m_years
         r.check(abs(drift) < 0.10, "money is conserved",
-                f"{'total' if key.startswith('total') else 'wallets'} {start/100:,.0f} -> {end/100:,.0f} over {years:.1f}y "
+                f"{'total' if key.startswith('total') else 'wallets'} {start/100:,.0f} -> {end/100:,.0f} over {m_years:.1f}y "
                 f"({drift*100:+.1f}%/y)")
     else:
         r.check(False, "money is conserved", "no economy_days rows to read")

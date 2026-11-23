@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Thu, 15 Oct 2026 05:15
+Last updated: Mon, 23 Nov 2026 01:19
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -1184,6 +1184,17 @@ overlap failed instantly. Fixes applied:
    truncated) + launcher.log (append-only launcher events). Verified live:
    give-up path, auto-restart after a hard kill, mutex arbitration.
    (Fix for the "Open risk" noted below.)
+
+Status updates (Mon, 23 Nov 2026, workstation): **Committed pending TV UI/launcher fixes, fixed `cli economy` crash, and fixed the Year 12 municipal deficit spiral.**
+
+- Committed & pushed uncommitted local changes from Oct 21/25 (`ccd9ab7`): TV 10-foot readability overhaul (`map.js`, `style.css`) and `-WindowStyle Hidden` on `scripts/Start-Observer.ps1`.
+- Fixed `miniville.cli economy` crash (`AttributeError: 'Namespace' object has no attribute 'seed'` from stale `cmd_init` lines pasted into `cmd_economy` during the v0.20–v0.43 merge); added regression test in `tests/test_economy.py`.
+- Live world audit at **Day 4270 (Sep 12, Year 12, tick 204919)** uncovered a 10-year municipal deficit spiral (`town_account = -$29.42M`, 18,962 deficits, wallets `$39.3M` while `total_money_cents` stayed conserved at `$9.72M`, `+0.0%/y`):
+  1. `economy.weekly_levy()` now pays down municipal deficit (`town_balance < 0`) before distributing cash dividends.
+  2. `press.material_target()` now incorporates `deficit_pressure` when `town_balance < 0`, pulling opinion toward lower pensions/dividends and higher rent/levy so the council cannot remain locked in a permanent deficit spiral.
+  3. `scripts/soak_check.py` now tracks `total_money_cents` from its first non-zero recorded day instead of falling back to wallet-only supply on pre-v0.14 databases.
+- Verified: **272 unit tests pass** (3 new tests), and a **180-day soak** (`backups/miniville-t026112.db`) holds **11/11 invariants** (`+0.1%/y` total money, 0 deficits, 8.3% unemployment, 0.0% miserable/hungry).
+- Note: `\VaultWares\Miniville Observer` is running on `100.71.101.21:8751` (Year 12); restart it to pick up the fiscal and TV UI fixes.
 
 Open items:
 

@@ -522,3 +522,40 @@ def test_a_household_already_in_the_flats_is_not_downsized_again():
     assert second["missed"] == 1 and second["downsized"] == 0
     assert conn.execute("SELECT COUNT(*) n FROM events WHERE data LIKE '%\"downsize\"%'"
                         ).fetchone()["n"] == 0
+
+
+def test_cli_economy_runs_without_seed_arg(tmp_path, capsys):
+    from miniville import cli
+    db_file = tmp_path / "econ_cli.db"
+    conn = mvdb.connect(db_file)
+    create_world(conn)
+    conn.commit()
+    conn.close()
+    rc = cli.main(["--db", str(db_file), "economy", "--days", "1"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "money supply:" in out
+    assert "town purse:" in out
+
+
+def test_weekly_levy_pays_down_deficit_before_paying_dividends():
+    conn = _world()
+    home = _place(conn, "Town Hall")
+    grocer = _place(conn, "Miniville Grocer")
+    _add_adult(conn, 1, home, 100_000)
+    conn.execute("UPDATE businesses SET balance_cents=1000000 WHERE place_id=?", (grocer,))
+    # town is deeply in deficit (-$1,000); 5% levy is $500 -> all goes to debt, $0 dividend
+    conn.execute("UPDATE town_account SET balance_cents=-100000 WHERE id=1")
+    def _total():
+        w = conn.execute("SELECT COALESCE(SUM(money_cents),0) FROM agent_state").fetchone()[0]
+        t = conn.execute("SELECT COALESCE(SUM(balance_cents),0) FROM businesses").fetchone()[0]
+        return w + t + economy.town_balance(conn)
+    before_total = _total()
+
+    res = economy.weekly_levy(conn, 7 * DAY, "s")
+    assert res["levied"] == 50_000
+    assert res["dividend"] == 0
+    assert economy.town_balance(conn) == -50_000
+    assert conn.execute("SELECT money_cents FROM agent_state WHERE agent_id=1"
+                        ).fetchone()["money_cents"] == 100_000
+    assert _total() == before_total

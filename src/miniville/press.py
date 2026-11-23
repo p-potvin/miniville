@@ -124,15 +124,19 @@ def material_target(conn: sqlite3.Connection) -> dict[str, float]:
     buffer = economy.PURSE_BUFFER_WEEKS * (
         economy.public_payroll_week(conn) + economy.pension_bill_week(conn))
     purse_ratio = economy.town_balance(conn) / max(1, buffer)
+    # when the town purse is negative, fiscal stress pushes opinion toward
+    # austerity (lower pensions/dividends, higher rent/levy) so the council
+    # cannot stay locked in a permanent deficit spiral
+    deficit_pressure = max(0.0, min(1.0, -purse_ratio))
     arrears = conn.execute("SELECT COUNT(*) n FROM rent_arrears").fetchone()["n"]
     households = conn.execute("SELECT COUNT(*) n FROM households").fetchone()["n"]
     arrears_share = arrears / max(1, households)
     return {
         "min_wage": _clamp((u - 0.08) / 0.10),
-        "dividend_share": _clamp((u - 0.05) / 0.12),
-        "pension": _clamp(senior_share / 0.30),
+        "dividend_share": _clamp(_clamp((u - 0.05) / 0.12) - 1.5 * deficit_pressure),
+        "pension": _clamp(_clamp(senior_share / 0.30) - 1.5 * deficit_pressure),
         "levy_rate": _clamp(1.0 - purse_ratio),
-        "rent_multiplier": _clamp((0.02 - arrears_share) / 0.05),
+        "rent_multiplier": _clamp(_clamp((0.02 - arrears_share) / 0.05) + 1.5 * deficit_pressure),
     }
 
 
