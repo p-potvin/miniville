@@ -159,7 +159,7 @@ def due(conn: sqlite3.Connection, tick: int, seed: str = "miniville") -> dict[st
             "heatwave": f"a sweltering heatwave settled over town ({w['temp_f']}°F)",
             "blizzard": f"a fierce winter blizzard blanketed the streets ({w['temp_f']}°F)",
         }
-        txt = desc_map.get(w["condition"], f"severe weather struck Miniville ({w['label']}, {w['temp_f']}°F)")
+        txt = desc_map.get(w["condition"], f"severe weather struck Miniville ({enriched['label']}, {w['temp_f']}°F)")
         emit(
             conn, tick, "town_event", importance=NOTABLE,
             text=txt, tag="weather_alert",
