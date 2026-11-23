@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Mon, 23 Nov 2026 05:06
+Last updated: Mon, 23 Nov 2026 11:42
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -582,6 +582,14 @@ the receipt. Current live issue had no false claim, so the misreport path is
 tested with a deliberately opposed council vote. A 90-day press soak is
 running to see whether routine politics produces claims and how credibility
 moves.
+
+## v0.60–v0.62 — Town Expansion, Regional Trade & Real Estate Deeds (Mon, 23 Nov 2026, workstation)
+
+- **v0.60 (`expansion.py`)**: Dynamic Town Expansion, Lot Zoning & New Venue Construction (`town_expansions`) every 30–45 days when `town_account >= 600_000`¢ — builds up to 5 new public landmarks (`PUBLIC_TAGS`) or `wing_addition` capacity upgrades (`+4` to `+8` capacity) with 100% conserved `town_account -> builders/suppliers` transfers, `town_expansion` events, `cli expansion`, `/api/expansion`, and Feed Expansion banner (`#feed-expansion`).
+- **v0.61 (`regional.py`)**: Neighboring Sister Towns (`Oakhaven`, `Port Meridian`, `Ironforge`), Tourism Waves & Conserved Regional Trade (`regional_days`) coupled with `festivals`, `weather_days`, and `museum_exhibits`; 100% conserved 3-way transfers across `agent_state <-> businesses <-> town_account`, rate-limited `regional_caravan`/`tourism_wave` events, `cli regional`, `/api/regional`, and Economy Regional strip (`#econ-regional`).
+- **v0.62 (`real_estate.py`)**: Real Estate Deeds, Mortgages & Dynasty Home Inheritance (`home_deeds`) with bounded deed purchases (`25_000`¢ down payment) and weekly `2_500`¢ mortgage installments (`agent_state.money_cents -> town_account`), multi-generation heir inheritance (`home_inherited`, `generation` increment) or no-heir release, `cli deeds`, `/api/deeds`, and Individualism Home Deeds table (`#ind-deeds`).
+- **Performance & Live Observer**: Added `idx_events_json_tag` expression index + single-pass `town_individualism_stats` query in `individual.py`, delivering a 49x `/api/individual` speedup (`27.5s -> 0.56s`); restarted live `:8751` observer fixing all 404s.
+- **Verified**: `325 passed` in pytest; 180-day soak (`backups/miniville-t026112.db`) holds 11/11 invariants (-8.1%/y money, 0 deficits, 6.6% unemployment); Patchright UI verified with 0 console/page errors.
 
 ## v0.57–v0.59 — Town Transit, Civic Honors & Community Potlucks (Mon, 23 Nov 2026, workstation)
 

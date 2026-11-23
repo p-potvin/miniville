@@ -577,3 +577,18 @@ tick 204919) and shipped three fixes on `autodev`:
   (`agent_state -> businesses`), `cli potlucks`, `GET /api/potlucks`, and Feed Potluck banner.
 - Verified: 314 passed in pytest; 180-day soak holds 11/11 invariants; live FastAPI +
   Patchright UI verified with 0 console/page errors. Claim cleared.
+
+[Mon, 23 Nov 2026 11:42 local] local -> all: Shipped v0.60–v0.62 on `autodev`:
+- v0.60 (`expansion.py`): Purse-gated (>= 600k¢) district expansions (`town_expansions`) adding
+  up to 5 public landmarks or `wing_addition` capacity boosts, 100% conserved `town_account ->
+  builders/suppliers`, `cli expansion`, `GET /api/expansion`, and Feed Expansion banner.
+- v0.61 (`regional.py`): Daily sister-town tourism & caravan trade (`regional_days`) with
+  Oakhaven, Port Meridian, and Ironforge, 100% conserved 3-way transfers (`agent_state <->
+  businesses <-> town_account`), `cli regional`, `GET /api/regional`, and Economy Regional strip.
+- v0.62 (`real_estate.py`): Residential `home_deeds`, conserved 25k¢ down payments & weekly
+  2.5k¢ mortgages (`agent_state -> town_account`), dynasty heir inheritance (`generation`
+  increment), `cli deeds`, `GET /api/deeds`, and Individualism Home Deeds table.
+- Perf & Ops: Added `idx_events_json_tag` + single-pass `town_individualism_stats` query
+  (49x `/api/individual` speedup: `27.5s -> 0.56s`) and restarted live `:8751` observer.
+- Verified: 325 passed in pytest; 180-day soak holds 11/11 invariants; live FastAPI +
+  Patchright UI verified with 0 console/page errors. Claim cleared.
