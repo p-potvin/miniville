@@ -28,7 +28,7 @@ _TAG_CLASS: dict[str, tuple[str, int, bool]] = {
     "cohabitation":            ("romance",     2, False),
     "marriage":                ("romance",     3, True),
     "birth":                   ("romance",     2, False),
-    "mentorship_started":      ("mentorship",  1, False),
+    "mentorship_started":      ("mentorship",  2, False),
     "apprenticeship_completed":("mentorship",  3, True),
     "loan_issued":             ("turnaround",  2, False),
     "loan_repaid":             ("turnaround",  3, True),
@@ -44,6 +44,9 @@ _TAG_CLASS: dict[str, tuple[str, int, bool]] = {
     "civic_project_completed": ("civic_drama", 2, True),
 }
 
+_VENUE_SCOPED_KINDS = ("turnaround", "civic_drama")
+MAX_PER_KIND = 2
+
 
 def _classify(ev: sqlite3.Row) -> tuple[str, int, bool] | None:
     kind = ev["kind"]
@@ -54,7 +57,7 @@ def _classify(ev: sqlite3.Row) -> tuple[str, int, bool] | None:
     tag = str(data.get("tag") or "")
     if tag in _TAG_CLASS:
         return _TAG_CLASS[tag]
-    if kind in ("betrayal", "affair"):
+    if kind == "betrayal":
         return ("feud", 2, False)
     if kind == "conflict":
         return ("feud", 2, False)
@@ -101,11 +104,9 @@ def _matches(arc: sqlite3.Row, arc_kind: str,
     ev_agents = {x for x in (a_id, b_id) if x is not None}
     if arc_agents and ev_agents and (arc_agents & ev_agents):
         return True
-    if p_id is not None and arc["place_id"] is not None and int(p_id) == int(arc["place_id"]):
+    if arc_kind in _VENUE_SCOPED_KINDS and p_id is not None and arc["place_id"] is not None and int(p_id) == int(arc["place_id"]):
         return True
-    if arc_kind == "civic_drama" and not ev_agents and not p_id:
-        return True
-    if arc_kind == "civic_drama" and not arc_agents and not arc["place_id"]:
+    if arc_kind == "civic_drama" and not ev_agents and not p_id and not arc_agents and not arc["place_id"]:
         return True
     return False
 
@@ -189,22 +190,28 @@ def due(conn: sqlite3.Connection, tick: int, seed: str = "miniville") -> dict[st
     )
     resolved += int(cur_stale.rowcount or 0)
 
-    # Cap active arcs at MAX_ACTIVE_ARCS
-    active_ids = [
-        int(r["id"])
-        for r in conn.execute(
-            "SELECT id FROM story_arcs WHERE status = 'active' "
-            "ORDER BY heat DESC, last_day DESC, id DESC"
-        ).fetchall()
-    ]
-    if len(active_ids) > MAX_ACTIVE_ARCS:
-        trim = active_ids[MAX_ACTIVE_ARCS:]
-        ph = ",".join("?" * len(trim))
+    # Keep variety across arc kinds (`MAX_PER_KIND`) and cap total at `MAX_ACTIVE_ARCS`
+    active_rows_after = conn.execute(
+        "SELECT id, kind FROM story_arcs WHERE status = 'active' "
+        "ORDER BY heat DESC, last_day DESC, id DESC"
+    ).fetchall()
+    kind_counts: dict[str, int] = {}
+    kept_ids: list[int] = []
+    trim_ids: list[int] = []
+    for r in active_rows_after:
+        k = r["kind"]
+        if len(kept_ids) < MAX_ACTIVE_ARCS and kind_counts.get(k, 0) < MAX_PER_KIND:
+            kind_counts[k] = kind_counts.get(k, 0) + 1
+            kept_ids.append(int(r["id"]))
+        else:
+            trim_ids.append(int(r["id"]))
+    if trim_ids:
+        ph = ",".join("?" * len(trim_ids))
         conn.execute(
             f"UPDATE story_arcs SET status = 'resolved' WHERE id IN ({ph})",
-            tuple(trim),
+            tuple(trim_ids),
         )
-        resolved += len(trim)
+        resolved += len(trim_ids)
 
     return {"opened": opened, "progressed": progressed, "resolved": resolved}
 

@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Mon, 23 Nov 2026 01:19
+Last updated: Mon, 23 Nov 2026 02:22
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -1195,6 +1195,15 @@ Status updates (Mon, 23 Nov 2026, workstation): **Committed pending TV UI/launch
   3. `scripts/soak_check.py` now tracks `total_money_cents` from its first non-zero recorded day instead of falling back to wallet-only supply on pre-v0.14 databases.
 - Verified: **272 unit tests pass** (3 new tests), and a **180-day soak** (`backups/miniville-t026112.db`) holds **11/11 invariants** (`+0.1%/y` total money, 0 deficits, 8.3% unemployment, 0.0% miserable/hungry).
 - Note: `\VaultWares\Miniville Observer` is running on `100.71.101.21:8751` (Year 12); restart it to pick up the fiscal and TV UI fixes.
+
+Status updates (Mon, 23 Nov 2026, workstation): **Shipped five cross-system expansions (v0.49–v0.53) on `autodev`.**
+
+- **v0.49 (`b16d9f8`) — Council By-Elections, Gazette Endorsements & Working-Age District Metrics:** Added `press.endorse_candidates()` (respecting editorial line and credibility, weighted by paper reach into `politics.hold_election`), persisted `elections.endorsements_json`, fixed `backers_unemployed` to count only working-age adults (`18 <= age < 65`), and added monthly `by_election_due()` to fill any missing/vacant district seat without resetting the two-year term.
+- **v0.50 (`weather.py`, `368b964` / `421b255`) — Town Weather & Micro-Climate System:** Added deterministic seasonal Markov weather in `weather_days` (`clear`, `breezy`, `overcast`, `fog`, `rain`, `storm`, `heatwave`, `snow`, `blizzard`), severe `weather_alert` events, isolated `weather_plan` outdoor shelter shifts in `schedules.py`, `cli weather`, `/api/weather`, and live temp/condition badges in header `#status` and `#tv-clock`.
+- **v0.51 (`banking.py`, `ff72663`) — Peer-Backed Credit Union & Loans:** Added `loans` table for 100%-money-conserving peer micro-credit (`wallets + tills + purse` strictly invariant): wealthy residents extend working-capital loans to negative-till business owners (`businesses.balance_cents`) and household loans to distressed workers, with weekly collections, repayment affinity/standing rewards, 6-miss default penalties, `cli loans`, `/api/loans`, and Credit Union table on the IOUs tab.
+- **v0.52 (`genealogy.py`, `95c47ac`) — Genealogy, Family Trees & Town Dynasties:** Added `parent_a_id`/`parent_b_id` to `agents`, wired `growth.births()`, added idempotent `backfill_lineage()` (`lineage_v1`), `family_tree()` / `top_dynasties()`, `cli tree <who>` & `cli dynasties`, `/api/genealogy/{id}` & `/api/dynasties`, clickable Family Lineage on resident cards, and Top Town Dynasties table on the Individualism tab.
+- **v0.53 (`arcs.py`, `8017acd`) — Emergent Multi-Day Story Arcs:** Added `story_arcs` threading events across `feud`, `romance`, `turnaround`, `mentorship`, and `civic_drama` (capped at `MAX_ACTIVE_ARCS = 8`, `MAX_PER_KIND = 2`, auto-retiring after 21 quiet days), wired into `tv.py` ticker + snapshot, `/api/arcs`, `cli arcs`, and Active Town Storylines cards at the top of the Feed tab.
+- **Verification:** **284/284 unit tests pass** (`pytest -q`); **180-day soak** (`data/soak-v053.db` from `backups/miniville-t026112.db`) holds **11/11 invariants** (`+0.1%/y` total money, 0 municipal deficits, 8.3% unemployment, 0 venues below half staff, 0.2% miserable/hungry, 351 events/day, 21 active/repaid Credit Union loans, blizzard/snow/fog weather, Gen-2 dynasties, multi-kind story arcs); Patchright live UI verified with **0 console errors**.
 
 Open items:
 

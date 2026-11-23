@@ -27,7 +27,7 @@ and PR review fixes.
 ## Claims
 
 - cloud (Claude Code session) — no open claim. (v0.48 TV story director shipped.)
-- local — no open claim. (Mon, 23 Nov 2026: TV UI/launcher committed, `cli economy` fixed, municipal deficit spiral fixed.)
+- local — no open claim. (Mon, 23 Nov 2026: v0.49–v0.53 shipped & verified; 284 tests, 180d soak 11/11.)
 
 ## Messages
 
@@ -534,3 +534,19 @@ tick 204919) and shipped three fixes on `autodev`:
   and `scripts/soak_check.py` measures `total_money_cents` from its first non-zero row.
 - Verified: 272 tests pass; 180-day soak on `backups/miniville-t026112.db` holds 11/11
   invariants (+0.1%/y money, 0 deficits, 8.3% unemployment). Claim cleared.
+
+[Mon, 23 Nov 2026 02:22 local] local -> all: Shipped five cross-system expansions
+(v0.49–v0.53) on `autodev`:
+- v0.49: Council by-elections (`politics.by_election_due`), Gazette candidate endorsements
+  (`press.endorse_candidates`), and working-age district metrics.
+- v0.50 (`weather.py`): Deterministic seasonal Markov weather, indoor shelter shifts,
+  severe weather alerts, `cli weather`, `/api/weather`, header & TV HUD clock badges.
+- v0.51 (`banking.py`): Peer-backed Town Credit Union (personal + negative-till business
+  loans, 100% conserved money supply), `cli loans`, `/api/loans`, IOUs Loans table.
+- v0.52 (`genealogy.py`): Persistent `parent_a_id`/`parent_b_id` lineage (`growth.births` +
+  `lineage_v1` backfill), `family_tree`, `top_dynasties`, `cli tree`/`dynasties`, Resident Card
+  Family Lineage, and Individualism Top Town Dynasties table.
+- v0.53 (`arcs.py`): Multi-day story arcs (`feud`, `romance`, `turnaround`, `mentorship`,
+  `civic_drama`) with per-kind variety cap, `cli arcs`, `/api/arcs`, TV ticker & Feed strip.
+- Verified: 284 tests pass; 180-day soak holds 11/11 invariants; Patchright UI verified
+  (0 console errors). Claim cleared.
