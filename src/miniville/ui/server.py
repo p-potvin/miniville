@@ -72,8 +72,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "SELECT COUNT(*) n FROM agents WHERE alive=1").fetchone()["n"]
             day = day_of(tick)
             holiday = holiday_for(c, day)
+            from .. import weather
             return {"tick": tick, "day": day + 1, "date": fmt_date(day),
                     "season": season_of(day),
+                    "weather": weather.today(c, day),
                     "holiday": holiday.name if holiday else None,
                     "time": fmt_tick(tick), "population": pop, "moods": moods}
         finally:
@@ -813,6 +815,15 @@ def create_app(db_path: str | None = None) -> FastAPI:
         try:
             from .. import sabbaticals
             return sabbaticals.sabbaticals_summary(c)
+        finally:
+            c.close()
+
+    @app.get("/api/weather")
+    def weather_view():
+        c = conn()
+        try:
+            from .. import weather
+            return weather.summary(c)
         finally:
             c.close()
 

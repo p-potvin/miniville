@@ -8,8 +8,9 @@ let curDay = null;
 async function status() {
   const s = await api("/api/status");
   curDay = s.day;
+  const w = s.weather ? ` · ${esc(s.weather.icon || "")} ${s.weather.temp_f}°F ${esc(s.weather.label || "")}` : "";
   $("#status").innerHTML =
-    `Day ${s.day} · ${esc(s.date)} · ${esc(s.season)}${s.holiday ? ` · ${esc(s.holiday)}` : ""} · ` +
+    `Day ${s.day} · ${esc(s.date)} · ${esc(s.season)}${w}${s.holiday ? ` · ${esc(s.holiday)}` : ""} · ` +
     `${esc(s.time)} · ${s.population} residents · ` +
     Object.entries(s.moods).map(([m, n]) => `${m} ${n}`).join(" · ");
   $("#feed-day").textContent = `day ${s.day}`;

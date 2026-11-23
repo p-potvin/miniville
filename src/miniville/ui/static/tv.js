@@ -677,9 +677,10 @@ class TVDirector {
     const clockEl = document.getElementById("tv-clock");
     if (clockEl) {
       const hol = data.holiday ? ` · 🎉 ${tvEsc(data.holiday)}` : "";
+      const w = data.weather ? ` · ${tvEsc(data.weather.icon || "")} ${data.weather.temp_f}°F ${tvEsc(data.weather.label || "")}` : "";
       clockEl.innerHTML = `
         <div class="tv-date">${tvEsc(data.date)} · <span class="tv-time">${tvEsc(data.time)}</span></div>
-        <div class="tv-sky">${tvEsc(data.sky?.label || data.season)}${hol} · Day ${data.day}</div>`;
+        <div class="tv-sky">${tvEsc(data.sky?.label || data.season)}${w}${hol} · Day ${data.day}</div>`;
     }
 
     const vit = data.vitality || {};

@@ -77,6 +77,7 @@ def _plan_ctx(conn: sqlite3.Connection) -> dict:
             "SELECT agent_id FROM ambitions WHERE status='active' AND kind='save_nest_egg'"
         ).fetchall()
     }
+    default_leisure = _by_tags(venues, LEISURE_TAGS)
     return {
         "venues": venues,
         "venues_by_id": venues_by_id,
@@ -87,7 +88,8 @@ def _plan_ctx(conn: sqlite3.Connection) -> dict:
         "savers": savers,
         "food_venues": _by_tags(venues, ["food"], DINING_KINDS),
         "shop_venues": _by_tags(venues, SHOP_TAGS, SHOP_KINDS),
-        "default_leisure": _by_tags(venues, LEISURE_TAGS),
+        "default_leisure": default_leisure,
+        "indoor_leisure": [v for v in default_leisure if not (v["tags"] & OUTDOOR_TAGS)],
         "leisure_cache": {},
     }
 
@@ -189,6 +191,30 @@ def _apply_personal_habits(agent: sqlite3.Row, day: int, seed: str,
                 p_fav = max(0.15, min(0.55, 0.35 - 0.15 * curiosity))
                 if hr.random() < p_fav:
                     plan[t] = (fav_venue["id"], "leisure")
+
+
+def _apply_weather_shelter(plan: dict[int, tuple[int, str]], ctx: dict,
+                           home: int, aid: int, day: int, seed: str,
+                           penalty: float) -> None:
+    """Redirect outdoor leisure indoors during rain/storm/blizzard/heatwave."""
+    if penalty <= 0.0:
+        return
+    venues_by_id = ctx.get("venues_by_id") or {v["id"]: v for v in ctx["venues"]}
+    indoor = ctx.get("indoor_leisure") or [
+        v for v in (ctx.get("default_leisure") or []) if not (v["tags"] & OUTDOOR_TAGS)
+    ]
+    wr = rng_for(seed, "weather_plan", aid, day)
+    for t, (pid, act) in list(plan.items()):
+        if act != "leisure":
+            continue
+        v = venues_by_id.get(pid)
+        if v and (v["tags"] & OUTDOOR_TAGS) and wr.random() < penalty:
+            opts = [iv for iv in indoor if iv["open_tick"] <= t <= iv["close_tick"]]
+            if opts:
+                pick = wr.choice(opts)
+                plan[t] = (pick["id"], "leisure")
+            else:
+                plan[t] = (home, "home")
 
 
 def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str,
@@ -298,6 +324,12 @@ def build_plan(conn: sqlite3.Connection, agent: sqlite3.Row, day: int, seed: str
 
     _apply_personal_habits(agent, day, seed, plan, ctx, leisure_venues, season)
 
+    w_pen = ctx.get("weather_penalty")
+    if w_pen is None:
+        from . import weather
+        w_pen = weather.today(conn, day)["outdoor_penalty"]
+    _apply_weather_shelter(plan, ctx, home, agent["id"], day, seed, float(w_pen))
+
     meeting = ctx.get("meetings", {}).get(agent["id"])
     if meeting:
         venue_id, meet_tick, _name = meeting
@@ -326,6 +358,8 @@ def rebuild_day_plans(conn: sqlite3.Connection, day: int, seed: str) -> int:
     agents = conn.execute("SELECT * FROM agents WHERE alive=1").fetchall()
     ctx = _plan_ctx(conn)
     ctx["holiday"] = holiday_for(conn, day)
+    from . import weather
+    ctx["weather_penalty"] = weather.today(conn, day)["outdoor_penalty"]
     from .groups import meetings_today
     ctx["meetings"] = meetings_today(conn, day)
     rows = []

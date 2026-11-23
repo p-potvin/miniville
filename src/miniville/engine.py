@@ -48,6 +48,7 @@ from . import (
     newspaper,
     seasons,
     shocks,
+    weather,
 )
 from .db import get_meta, set_meta
 from .deviations import apply_deviations
@@ -121,6 +122,7 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
         # own conditions and the Gazette's reach pull it in different directions
         stats["opinion"] = press.update(conn, tick)
 
+    stats["weather"] = weather.due(conn, tick, seed)
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)
     stats["life_events"] = daily_life_lottery(conn, tick, seed)

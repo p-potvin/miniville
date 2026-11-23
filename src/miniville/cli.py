@@ -964,6 +964,19 @@ def cmd_tv(args) -> int:
     return 0
 
 
+def cmd_weather(args) -> int:
+    from . import weather
+    conn = dbmod.connect(args.db)
+    cur = weather.today(conn)
+    print(f"Today (day {cur['day'] + 1}): {cur['icon']} {cur['label']} ({cur['temp_f']}°F, severity {cur['severity']})")
+    hist = weather.recent(conn, limit=args.limit)
+    if hist:
+        print(f"\n{'day':>5} {'temp':>6} {'severity':>8}  condition")
+        for r in hist:
+            print(f"{r['day'] + 1:>5} {r['temp_f']:>4}°F {r['severity']:>8}  {r['icon']} {r['label']}")
+    return 0
+
+
 def cmd_benchmark(args) -> int:
     """Clone the live DB to a temp file and time N days of ticks."""
     import shutil
@@ -1204,6 +1217,9 @@ def main(argv=None) -> int:
     ptv = sub.add_parser("tv", help="Inspect the 10-foot TV Director snapshot")
     ptv.add_argument("--movers", type=int, default=10)
     ptv.set_defaults(fn=cmd_tv)
+    pwth = sub.add_parser("weather", help="Show today's weather and 14-day climate log")
+    pwth.add_argument("--limit", type=int, default=14)
+    pwth.set_defaults(fn=cmd_weather)
 
     args = p.parse_args(argv)
     return args.fn(args)

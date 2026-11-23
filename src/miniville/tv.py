@@ -23,7 +23,7 @@ import json
 import sqlite3
 from typing import Any
 
-from . import ambitions, economy, engine, individual, seasons, timekeeper
+from . import ambitions, economy, engine, individual, seasons, timekeeper, weather
 from .db import get_meta, set_meta
 from .events import describe
 from .ui.server import _district_layout, _venue_xy
@@ -960,6 +960,7 @@ def tv_director_snapshot(conn: sqlite3.Connection,
         "time": timekeeper.fmt_tick(tick),
         "date": seasons.fmt_date(day),
         "season": season,
+        "weather": weather.today(conn, day),
         "holiday": holiday.name if holiday else None,
         "sky": _sky_state(tod, season),
         "vitality": {

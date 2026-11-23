@@ -670,6 +670,13 @@ CREATE TABLE IF NOT EXISTS sabbaticals (
 );
 CREATE INDEX IF NOT EXISTS idx_sabbaticals_day ON sabbaticals(day);
 
+CREATE TABLE IF NOT EXISTS weather_days (
+    day        INTEGER PRIMARY KEY,
+    condition  TEXT NOT NULL,
+    temp_f     INTEGER NOT NULL,
+    severity   INTEGER NOT NULL DEFAULT 0
+);
+
 """
 
 
