@@ -677,6 +677,21 @@ CREATE TABLE IF NOT EXISTS weather_days (
     severity   INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS loans (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    lender_id            INTEGER NOT NULL REFERENCES agents(id),
+    borrower_id          INTEGER NOT NULL REFERENCES agents(id),
+    place_id             INTEGER REFERENCES places(id),
+    principal_cents      INTEGER NOT NULL,
+    remaining_cents      INTEGER NOT NULL,
+    weekly_payment_cents INTEGER NOT NULL,
+    started_tick         INTEGER NOT NULL DEFAULT 0,
+    missed_weeks         INTEGER NOT NULL DEFAULT 0,
+    status               TEXT NOT NULL DEFAULT 'active',
+    closed_tick          INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_loans_status ON loans(status);
+
 """
 
 

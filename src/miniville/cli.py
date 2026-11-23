@@ -977,6 +977,21 @@ def cmd_weather(args) -> int:
     return 0
 
 
+def cmd_loans(args) -> int:
+    from . import banking
+    conn = dbmod.connect(args.db)
+    rows = banking.list_loans(conn, status=args.status, limit=args.limit)
+    if not rows:
+        print("no Credit Union loans matching filter")
+        return 0
+    print(f"{'borrower':<22} {'lender':<22} {'purpose':<22} {'rem':>8} {'status':<10}")
+    for r in rows:
+        purp = r["place_name"] or "household"
+        print(f"  {r['borrower_name'][:20]:<20} {r['lender_name'][:20]:<20} "
+              f"{purp[:20]:<20} ${r['remaining_cents']/100:>6,.0f} {r['status']:<10}")
+    return 0
+
+
 def cmd_benchmark(args) -> int:
     """Clone the live DB to a temp file and time N days of ticks."""
     import shutil
@@ -1220,6 +1235,10 @@ def main(argv=None) -> int:
     pwth = sub.add_parser("weather", help="Show today's weather and 14-day climate log")
     pwth.add_argument("--limit", type=int, default=14)
     pwth.set_defaults(fn=cmd_weather)
+    plon = sub.add_parser("loans", help="List peer-backed Credit Union loans")
+    plon.add_argument("--status", choices=["active", "repaid", "defaulted", "all"], default="all")
+    plon.add_argument("--limit", type=int, default=40)
+    plon.set_defaults(fn=cmd_loans)
 
     args = p.parse_args(argv)
     return args.fn(args)

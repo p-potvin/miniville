@@ -827,6 +827,18 @@ def create_app(db_path: str | None = None) -> FastAPI:
         finally:
             c.close()
 
+    @app.get("/api/loans")
+    def loans_view(status: str = "all", limit: int = Query(50, le=200)):
+        c = conn()
+        try:
+            from .. import banking
+            return {
+                "counts": banking.loans_summary(c)["counts"],
+                "loans": banking.list_loans(c, status=status, limit=limit),
+            }
+        finally:
+            c.close()
+
     @app.get("/api/tv")
     def tv_view(
         agent_id: int | None = None,

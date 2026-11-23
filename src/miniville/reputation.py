@@ -74,6 +74,8 @@ WEIGHTS = {
     "plaque_dedicated": 2,
     "masterclass_taught": 2,
     "memoir_published": 2,
+    "loan_repaid": 1,
+    "loan_default": -2,
     "marriage": 3,
     "birth": 2,
     "coming_of_age": 1,
@@ -134,7 +136,7 @@ def accrue(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
             continue
         # the subject of the event gets the full weight; the other party to a
         # betrayal or a split gets the sympathy of the wronged
-        pairs = ((r["a_id"], weight), (r["b_id"], weight)) if tag in ("apprenticeship_completed", "mentorship_started") else (((r["a_id"], weight),) if tag in ("good_turn", "caregiven", "keepsake_gifted", "heirloom_inherited", "mutual_aid", "block_party", "coming_of_age_gift", "milestone_birthday", "wedding_anniversary", "retirement_sendoff", "acclaimed_work", "competition_won", "shared_roots", "civic_petition", "civic_donation", "civic_volunteer", "civic_project_completed", "medical_treatment", "wellness_checkup") else ((r["a_id"], weight), (r["b_id"], -weight)))
+        pairs = ((r["a_id"], weight), (r["b_id"], weight)) if tag in ("apprenticeship_completed", "mentorship_started") else (((r["a_id"], weight),) if tag in ("good_turn", "caregiven", "keepsake_gifted", "heirloom_inherited", "mutual_aid", "block_party", "coming_of_age_gift", "milestone_birthday", "wedding_anniversary", "retirement_sendoff", "acclaimed_work", "competition_won", "shared_roots", "civic_petition", "civic_donation", "civic_volunteer", "civic_project_completed", "medical_treatment", "wellness_checkup", "loan_repaid", "loan_default") else ((r["a_id"], weight), (r["b_id"], -weight)))
         for aid, delta in pairs:
             if not aid:
                 continue

@@ -5,6 +5,7 @@ import sqlite3
 
 from . import (
     ambitions,
+    banking,
     chronicle,
     conflict,
     crime,
@@ -111,6 +112,7 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     stats["levy"] = economy.weekly_levy(conn, tick, seed)
     stats["labour"] = economy.wage_dynamics(conn, tick, seed)
     stats["enterprise"] = enterprise.due(conn, tick, seed)
+    stats["banking"] = banking.due(conn, tick, seed)
     stats["shocks"] = shocks.apply_due(conn, tick, seed)
     stats["retirements"] = len(jobs.retirements(conn, tick, seed))
     if day_of(tick) % 7 == 0:

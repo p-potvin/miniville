@@ -121,6 +121,19 @@ async function debts() {
   $("#debts-list").innerHTML = rows.map(d =>
     `<li>${esc(d.debtor)} owes ${esc(d.creditor)} — ${esc(d.kind)}
      <span class="t">${d.repaid_tick ? "settled" : "open"} · t${d.created_tick}</span></li>`).join("");
+  const loanRes = await api("/api/loans?status=" + ($("#debts-all").checked ? "all" : "active"));
+  const loans = loanRes.loans || [];
+  $("#loans-body").innerHTML = loans.length ? loans.map(l => {
+    const statusCls = l.status === "repaid" ? "badge-pass" : (l.status === "defaulted" ? "badge-fail" : "muted");
+    return `<tr>
+      <td><a class="click-link" onclick="mvPick({id: ${l.borrower_id}})"><b>${esc(l.borrower_name)}</b></a></td>
+      <td><a class="click-link" onclick="mvPick({id: ${l.lender_id}})">${esc(l.lender_name)}</a></td>
+      <td>${esc(l.place_name || "household expenses")}</td>
+      <td>${money(l.principal_cents)}</td>
+      <td>${money(l.remaining_cents)}</td>
+      <td><span class="${statusCls}">${esc(l.status)}</span></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="6" class="muted">No Credit Union loans matching filter</td></tr>`;
 }
 
 async function rels() {
