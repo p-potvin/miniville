@@ -72,8 +72,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "SELECT COUNT(*) n FROM agents WHERE alive=1").fetchone()["n"]
             day = day_of(tick)
             holiday = holiday_for(c, day)
-            from .. import festivals, market, museum, weather
+            from .. import awards, festivals, market, museum, potlucks, transit, weather
             ms = museum.museum_summary(c)
+            ts = transit.transit_summary(c, days=1)
+            aws = awards.list_awards(c, limit=4)
+            pks = potlucks.list_potlucks(c, limit=1)
             return {"tick": tick, "day": day + 1, "date": fmt_date(day),
                     "season": season_of(day),
                     "weather": weather.today(c, day),
@@ -84,6 +87,9 @@ def create_app(db_path: str | None = None) -> FastAPI:
                         "today_visitors": ms["today_visitors"],
                         "featured": ms["featured"],
                     },
+                    "transit": ts["today"],
+                    "awards": aws,
+                    "potluck": pks[0] if pks else None,
                     "holiday": holiday.name if holiday else None,
                     "time": fmt_tick(tick), "population": pop, "moods": moods}
         finally:
@@ -872,6 +878,39 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "today": market.get_market_day(c, day_of(tick)),
                 "history": market.market_history(c, days=days),
             }
+        finally:
+            c.close()
+
+    @app.get("/api/transit")
+    def transit_view(days: int = Query(14, le=90)):
+        c = conn()
+        try:
+            from .. import transit
+            return transit.transit_summary(c, days=days)
+        finally:
+            c.close()
+
+    @app.get("/api/awards")
+    def awards_view(limit: int = Query(20, le=100)):
+        c = conn()
+        try:
+            from .. import awards
+            summ = awards.awards_summary(c)
+            if limit != 20:
+                summ["awards"] = awards.list_awards(c, limit=limit)
+            return summ
+        finally:
+            c.close()
+
+    @app.get("/api/potlucks")
+    def potlucks_view(limit: int = Query(16, le=100)):
+        c = conn()
+        try:
+            from .. import potlucks
+            summ = potlucks.potlucks_summary(c)
+            if limit != 16:
+                summ["potlucks"] = potlucks.list_potlucks(c, limit=limit)
+            return summ
         finally:
             c.close()
 

@@ -1043,6 +1043,73 @@ def cmd_cpi(args) -> int:
     return 0
 
 
+def cmd_transit(args) -> int:
+    from . import transit
+    conn = dbmod.connect(args.db)
+    summ = transit.transit_summary(conn, days=args.days)
+    print(
+        f"Miniville Bus Loop: {summ['total_rides']:,} total rides "
+        f"({summ['total_storm_rides']:,} storm/rain) · "
+        f"${summ['total_revenue_cents']/100:,.2f} fares · "
+        f"{summ['avg_on_time_pct']:.1f}% avg on-time"
+    )
+    hist = summ["history"]
+    if not hist:
+        print("no transit days recorded yet")
+        return 0
+    print(f"\n{'day':>5} {'rides':>6} {'storm':>6} {'on_time':>8} {'fares':>8}  top_route")
+    for r in hist:
+        print(
+            f"{r['day'] + 1:>5} {r['total_rides']:>6} {r['storm_rides']:>6} "
+            f"{r['on_time_pct']:>7.1f}% ${r['fare_revenue_cents']/100:>6,.2f}  {r['top_route']}"
+        )
+    return 0
+
+
+def cmd_awards(args) -> int:
+    from . import awards
+    conn = dbmod.connect(args.db)
+    summ = awards.awards_summary(conn)
+    print(
+        f"Town Awards & Civic Honors: {summ['total_awards']} awards · "
+        f"${summ['total_stipends_cents']/100:,.2f} stipends"
+    )
+    rows = awards.list_awards(conn, limit=args.limit)
+    if not rows:
+        print("no awards conferred yet")
+        return 0
+    print(f"\n{'day':>5} {'season':<7} {'category':<22} {'recipient':<22} {'stipend':>8}")
+    for r in rows:
+        rec = r.get("recipient_name") or "-"
+        print(
+            f"{r['day'] + 1:>5} {r['season']:<7} {r['category'][:20]:<22} "
+            f"{rec[:20]:<22} ${r['stipend_cents']/100:>6,.2f}"
+        )
+    return 0
+
+
+def cmd_potlucks(args) -> int:
+    from . import potlucks
+    conn = dbmod.connect(args.db)
+    summ = potlucks.potlucks_summary(conn)
+    print(
+        f"Community Potlucks: {summ['total_potlucks']} gatherings · "
+        f"{summ['total_attendees']} attendees · "
+        f"${summ['total_supply_cents']/100:,.2f} local supply kitty"
+    )
+    rows = potlucks.list_potlucks(conn, limit=args.limit)
+    if not rows:
+        print("no potlucks hosted yet")
+        return 0
+    print(f"\n{'day':>5} {'district':<17} {'att':>4} {'mode':<20}  theme")
+    for r in rows:
+        print(
+            f"{r['day'] + 1:>5} {r['district'][:15]:<17} {r['attendees_count']:>4} "
+            f"{r['weather_mode'][:18]:<20}  {r['theme']} ({r['signature_dish']})"
+        )
+    return 0
+
+
 def cmd_loans(args) -> int:
     from . import banking
     conn = dbmod.connect(args.db)
@@ -1364,6 +1431,15 @@ def main(argv=None) -> int:
     pcpi = sub.add_parser("cpi", help="Show town CPI and sector price multipliers")
     pcpi.add_argument("--days", type=int, default=14)
     pcpi.set_defaults(fn=cmd_cpi)
+    ptrn = sub.add_parser("transit", help="Show Town Transit & Bus Loop ridership and punctuality")
+    ptrn.add_argument("--days", type=int, default=14)
+    ptrn.set_defaults(fn=cmd_transit)
+    pawd = sub.add_parser("awards", help="Show Town Awards & Civic Honors recipients")
+    pawd.add_argument("--limit", type=int, default=20)
+    pawd.set_defaults(fn=cmd_awards)
+    ppot = sub.add_parser("potlucks", help="Show Community Potlucks & Block Parties")
+    ppot.add_argument("--limit", type=int, default=16)
+    ppot.set_defaults(fn=cmd_potlucks)
     plon = sub.add_parser("loans", help="List peer-backed Credit Union loans")
     plon.add_argument("--status", choices=["active", "repaid", "defaulted", "all"], default="all")
     plon.add_argument("--limit", type=int, default=40)

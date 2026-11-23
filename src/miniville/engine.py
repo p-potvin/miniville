@@ -6,6 +6,7 @@ import sqlite3
 from . import (
     ambitions,
     arcs,
+    awards,
     banking,
     chronicle,
     conflict,
@@ -48,12 +49,14 @@ from . import (
     memory,
     museum,
     politics,
+    potlucks,
     press,
     reputation,
     mortality,
     newspaper,
     seasons,
     shocks,
+    transit,
     weather,
 )
 from .db import get_meta, set_meta
@@ -134,6 +137,9 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     stats["market"] = market.daily_market(conn, day_of(tick), seed)
     stats["festivals"] = festivals.due(conn, tick, seed)
     stats["museum"] = museum.daily_museum(conn, day_of(tick), seed)
+    stats["transit"] = transit.daily_transit(conn, day_of(tick), seed)
+    stats["awards"] = awards.daily_awards(conn, day_of(tick), seed)
+    stats["potlucks"] = potlucks.daily_potlucks(conn, day_of(tick), seed)
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)
     stats["life_events"] = daily_life_lottery(conn, tick, seed)

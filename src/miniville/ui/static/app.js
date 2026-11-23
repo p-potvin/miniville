@@ -18,11 +18,40 @@ async function status() {
 }
 
 async function feed() {
-  const [rows, arcRes, festRes] = await Promise.all([
+  const [rows, arcRes, festRes, potRes] = await Promise.all([
     api("/api/feed?limit=60"),
     api("/api/arcs?status=active&limit=6"),
     api("/api/festivals?limit=4").catch(() => ({})),
+    api("/api/potlucks?limit=16").catch(() => ({})),
   ]);
+  const potBox = $("#feed-potluck");
+  if (potBox) {
+    const p = potRes?.latest || (potRes?.potlucks && potRes.potlucks[0]) || null;
+    potBox.hidden = !p;
+    if (p) {
+      const hostLink = p.host_agent_id
+        ? `<a class="click-link" onclick="mvPick({id:${p.host_agent_id}})"><b>${esc(p.host_name || "#" + p.host_agent_id)}</b></a>`
+        : `<span class="muted">Community</span>`;
+      const modeBadge = p.weather_mode === "indoor_potluck"
+        ? `<span class="muted">🏠 Indoor Potluck</span>`
+        : `<span class="badge-pass">🌳 Outdoor Block Party</span>`;
+      potBox.innerHTML = `
+        <div class="potluck-card">
+          <div class="fest-head">
+            <span>🍲 <b>${esc(p.theme)}</b> <span class="muted">(${esc(p.district)} · Day ${p.day + 1})</span></span>
+            <span>${modeBadge}</span>
+          </div>
+          <div class="fest-meta">
+            📍 ${esc(p.venue_name || p.district)} · Host: ${hostLink} ·
+            Signature dish: <b>${esc(p.signature_dish)}</b> ·
+            ${p.attendees_count ?? 0} attending · ${money(p.supply_cents)} supply kitty
+          </div>
+          ${p.summary ? `<div class="fest-note">${esc(p.summary)}</div>` : ""}
+        </div>`;
+    } else {
+      potBox.innerHTML = "";
+    }
+  }
   const festBox = $("#feed-festival");
   if (festBox) {
     const f = festRes?.active || (festRes?.festivals && festRes.festivals[0]) || null;
@@ -270,9 +299,10 @@ const money = (c) => "$" + ((c ?? 0) / 100).toLocaleString(undefined,
   { maximumFractionDigits: 0 });
 
 async function economy() {
-  const [r, mkt] = await Promise.all([
+  const [r, mkt, trRes] = await Promise.all([
     api("/api/economy"),
     api("/api/market?days=14").catch(() => ({})),
+    api("/api/transit?days=14").catch(() => ({})),
   ]);
   const s = r.stats;
   $("#econ-stats").innerHTML =
@@ -303,6 +333,27 @@ async function economy() {
         ${td.driver_note ? `<div class="muted market-note">${esc(td.driver_note)}</div>` : ""}`;
     } else {
       mktBox.innerHTML = "";
+    }
+  }
+  const trBox = $("#econ-transit");
+  if (trBox) {
+    const tr = trRes?.today || (trRes?.history && trRes.history[0]) || null;
+    trBox.hidden = !tr;
+    if (tr) {
+      const driverLink = tr.driver_agent_id
+        ? `<a class="click-link" onclick="mvPick({id:${tr.driver_agent_id}})">${esc(tr.driver_name || "#" + tr.driver_agent_id)}</a>`
+        : `<span class="muted">—</span>`;
+      trBox.innerHTML = `
+        <div class="market-row">
+          <span class="cpi-badge cpi-steady">🚌 Transit Day ${tr.day + 1}</span>
+          <span class="stat"><b>${tr.total_rides ?? 0}</b><span>rides (${tr.storm_rides ?? 0} storm)</span></span>
+          <span class="stat"><b>${Number(tr.on_time_pct ?? 100).toFixed(1)}%</b><span>on-time</span></span>
+          <span class="stat"><b>${money(tr.fare_revenue_cents ?? 0)}</b><span>fare revenue</span></span>
+          <span class="stat"><b>${esc(tr.top_route || "Line 1")}</b><span>top route · driver ${driverLink}</span></span>
+        </div>
+        ${tr.note ? `<div class="muted market-note">${esc(tr.note)}</div>` : ""}`;
+    } else {
+      trBox.innerHTML = "";
     }
   }
   $("#econ-body").innerHTML = r.businesses.map(b =>
@@ -436,10 +487,11 @@ async function council() {
 
 
 async function individual() {
-  const [r, dynRes, musRes] = await Promise.all([
+  const [r, dynRes, musRes, awRes] = await Promise.all([
     api("/api/individual"),
     api("/api/dynasties"),
     api("/api/museum?limit=24").catch(() => ({})),
+    api("/api/awards?limit=20").catch(() => ({})),
   ]);
   const chronos = r.chronotypes || {};
   const order = ["early_bird", "morning", "day_walker", "evening", "night_owl"];
@@ -579,6 +631,32 @@ async function individual() {
       <td><b>${ex.visitors_count ?? 0}</b></td>
     </tr>`;
   }).join("") : `<tr><td colspan="7" class="muted">No museum exhibits curated yet</td></tr>`;
+
+  const aw = awRes || {};
+  const awCats = Object.entries(aw.by_category || {})
+    .map(([k, n]) => `<span class="cat-pill">${esc(k)}: <b>${n}</b></span>`).join(" ");
+  $("#ind-awards-meta").innerHTML = `
+    <div class="stat"><b>${aw.total_awards ?? 0}</b><span>civic honours awarded</span></div>
+    <div class="stat"><b>${money(aw.total_stipends_cents ?? 0)}</b><span>total stipends</span></div>
+    ${aw.latest_season ? `<div class="stat active-policy"><b>🏅 ${esc(aw.latest_season)} Yr ${aw.latest_year}</b><span>latest ceremony (Day ${(aw.latest_day ?? 0) + 1})</span></div>` : ""}
+    ${awCats ? `<div class="stat"><div>${awCats}</div><span>by category</span></div>` : ""}`;
+  const awList = aw.awards || [];
+  $("#ind-awards").innerHTML = awList.length ? awList.map(a => {
+    const rec = a.recipient_agent_id
+      ? `<a class="click-link" onclick="mvPick({id: ${a.recipient_agent_id}})"><b>${esc(a.recipient_name || "#" + a.recipient_agent_id)}</b></a>`
+      : `<span class="muted">—</span>`;
+    const stipend = (a.stipend_cents ?? 0) > 0
+      ? `<span class="badge-pass">${money(a.stipend_cents)}</span>`
+      : `<span class="muted">Honorary</span>`;
+    return `<tr>
+      <td>${esc(a.season)} Yr ${a.year}</td>
+      <td><b>${esc(a.category)}</b></td>
+      <td>${rec}</td>
+      <td>${esc(a.business_name || "—")}</td>
+      <td>${stipend}</td>
+      <td>${esc(a.citation)}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="6" class="muted">No seasonal awards conferred yet</td></tr>`;
 
   const projs = r.civic_projects || [];
   $("#ind-projects").innerHTML = projs.length ? projs.map(p => {

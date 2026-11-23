@@ -624,3 +624,14 @@ body.tv-mode #map-host canvas {
 
 .cat-pill { display: inline-block; font-size: .8rem; margin-right: .35rem; color: var(--fg); }
 .museum-featured-card { min-width: 240px; }
+
+/* v0.57-v0.59 Transit, Awards & Potlucks */
+.potluck-banner { margin-bottom: 1rem; }
+.potluck-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid #6bd48e;
+  border-radius: 8px;
+  padding: .7rem .95rem;
+}
+.transit-strip { margin-bottom: 1rem; }

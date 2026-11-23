@@ -510,6 +510,31 @@ def _safe_market_day(conn: sqlite3.Connection, day: int) -> dict[str, Any] | Non
         return None
 
 
+def _safe_transit_today(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        from . import transit
+        return transit.transit_summary(conn, days=1).get("today")
+    except Exception:
+        return None
+
+
+def _safe_latest_awards(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    try:
+        from . import awards
+        return awards.list_awards(conn, limit=4)
+    except Exception:
+        return []
+
+
+def _safe_latest_potluck(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        from . import potlucks
+        rows = potlucks.list_potlucks(conn, limit=1)
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
 def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any]]:
     """Build a 10-foot lower-third broadcast ticker with clickable items."""
     items: list[dict[str, Any]] = []
@@ -614,6 +639,50 @@ def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any
                 "agent_id": None,
                 "place_id": None,
                 "time": f"Day {cur_day + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import awards
+        aws = awards.list_awards(conn, limit=1)
+        if aws and int(aws[0]["day"]) >= cur_day - 7:
+            aw = aws[0]
+            items.insert(0, {
+                "badge": "🏅 Civic Honor",
+                "text": f"{aw['category']}: {aw.get('recipient_name') or 'Resident'} — {aw['citation']}",
+                "agent_id": aw.get("recipient_agent_id"),
+                "place_id": aw.get("recipient_business_id"),
+                "time": f"Day {int(aw['day']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import potlucks
+        pks = potlucks.list_potlucks(conn, limit=1)
+        if pks and int(pks[0]["day"]) >= cur_day - 7:
+            pk = pks[0]
+            items.append({
+                "badge": "🍲 Potluck",
+                "text": f"{pk['theme']} in {pk['district']} ({pk['attendees_count']} neighbors, {pk['signature_dish']})",
+                "agent_id": pk.get("host_agent_id"),
+                "place_id": None,
+                "time": f"Day {int(pk['day']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import transit
+        tr = transit.transit_summary(conn, days=1).get("today")
+        if tr:
+            items.append({
+                "badge": "🚌 Transit",
+                "text": f"{tr['total_rides']} bus rides ({tr['on_time_pct']:.1f}% on-time · {tr['top_route']})",
+                "agent_id": tr.get("driver_agent_id"),
+                "place_id": None,
+                "time": f"Day {int(tr['day']) + 1}",
             })
     except Exception:
         pass
@@ -1049,6 +1118,9 @@ def tv_director_snapshot(conn: sqlite3.Connection,
         "weather": weather.today(conn, day),
         "festival": _safe_active_festival(conn, day),
         "market": _safe_market_day(conn, day),
+        "transit": _safe_transit_today(conn),
+        "awards": _safe_latest_awards(conn),
+        "potluck": _safe_latest_potluck(conn),
         "holiday": holiday.name if holiday else None,
         "sky": _sky_state(tod, season),
         "vitality": {

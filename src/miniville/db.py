@@ -762,6 +762,46 @@ CREATE TABLE IF NOT EXISTS market_days (
     driver_note  TEXT
 );
 
+CREATE TABLE IF NOT EXISTS transit_days (
+    day                INTEGER PRIMARY KEY,
+    total_rides        INTEGER NOT NULL DEFAULT 0,
+    storm_rides        INTEGER NOT NULL DEFAULT 0,
+    fare_revenue_cents INTEGER NOT NULL DEFAULT 0,
+    on_time_pct        REAL NOT NULL DEFAULT 100.0,
+    top_route          TEXT NOT NULL DEFAULT '',
+    driver_agent_id    INTEGER REFERENCES agents(id),
+    note               TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS town_awards (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    day                   INTEGER NOT NULL,
+    year                  INTEGER NOT NULL,
+    season                TEXT NOT NULL,
+    category              TEXT NOT NULL,
+    recipient_agent_id    INTEGER REFERENCES agents(id),
+    recipient_business_id INTEGER REFERENCES places(id),
+    stipend_cents         INTEGER NOT NULL DEFAULT 0,
+    citation              TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_town_awards_day ON town_awards(day DESC);
+
+CREATE TABLE IF NOT EXISTS potlucks (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    day             INTEGER,
+    year            INTEGER,
+    district        TEXT,
+    host_agent_id   INTEGER,
+    venue_name      TEXT,
+    theme           TEXT,
+    signature_dish  TEXT,
+    attendees_count INTEGER,
+    supply_cents    INTEGER,
+    weather_mode    TEXT,
+    summary         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_potlucks_day ON potlucks(day);
+
 """
 
 

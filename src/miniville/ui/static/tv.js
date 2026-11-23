@@ -688,11 +688,12 @@ class TVDirector {
     if (vitEl) {
       const cpiHtml = data.market ? `<span>📊 CPI <b>${Number(data.market.cpi_index).toFixed(1)}</b></span>` : "";
       const festHtml = data.festival ? `<span>🎪 <b>${tvEsc(data.festival.name)}</b></span>` : "";
+      const trHtml = data.transit ? `<span>🚌 <b>${data.transit.total_rides ?? 0}</b> rides (${Math.round(data.transit.on_time_pct ?? 100)}%)</span>` : "";
       vitEl.innerHTML = `
         <span>👥 <b>${vit.population ?? 0}</b> residents (${vit.awake ?? 0} awake)</span>
         <span>💼 <b>${vit.employed ?? 0}</b> employed</span>
         <span>🏛️ <b>$${(vit.treasury_dollars ?? 0).toLocaleString()}</b> treasury</span>
-        <span>📰 <b>${(data.stories || []).length}</b> stories today</span>${cpiHtml}${festHtml}`;
+        <span>📰 <b>${(data.stories || []).length}</b> stories today</span>${cpiHtml}${festHtml}${trHtml}`;
     }
 
     this._renderSpotlightCards(data);
@@ -758,6 +759,18 @@ class TVDirector {
       if (data.market) {
         const m = data.market;
         progItems.push(`<div class="tv-prog-item"><small>📊 Market CPI ${Number(m.cpi_index).toFixed(1)}</small><b>Food ${Number(m.food_mult).toFixed(2)}x · Dining ${Number(m.dining_mult).toFixed(2)}x</b><span>Goods ${Number(m.goods_mult).toFixed(2)}x · Leisure ${Number(m.leisure_mult).toFixed(2)}x</span></div>`);
+      }
+      if (data.transit) {
+        const tr = data.transit;
+        progItems.push(`<div class="tv-prog-item"><small>🚌 Town Transit</small><b>${tvEsc(tr.top_route || "Line 1")}</b><span>${tr.total_rides ?? 0} rides · ${Math.round(tr.on_time_pct ?? 100)}% on-time</span></div>`);
+      }
+      if (data.potluck) {
+        const p = data.potluck;
+        progItems.push(`<div class="tv-prog-item"><small>🍲 Potluck (${tvEsc(p.district)})</small><b>${tvEsc(p.theme)}</b><span>${p.attendees_count ?? 0} attending · ${tvEsc(p.signature_dish)}</span></div>`);
+      }
+      if (data.awards && data.awards.length) {
+        const aw = data.awards[0];
+        progItems.push(`<div class="tv-prog-item"><small>🏅 ${tvEsc(aw.season)} Honor</small><b>${tvEsc(aw.category)}</b><span>${tvEsc(aw.recipient_name || "Honoree")}</span></div>`);
       }
       const progHtml = progItems.join("");
       svEl.innerHTML = `
