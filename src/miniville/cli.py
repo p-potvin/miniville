@@ -1032,6 +1032,20 @@ def cmd_dynasties(args) -> int:
     return 0
 
 
+def cmd_arcs(args) -> int:
+    from . import arcs
+    conn = dbmod.connect(args.db)
+    rows = arcs.list_arcs(conn, status=args.status, limit=args.limit)
+    if not rows:
+        print("no story arcs matching filter")
+        return 0
+    for ar in rows:
+        print(f"[{ar['status']}:{ar['kind']}] {ar['title']} (days {ar['started_day']+1}-{ar['last_day']+1}, heat={ar['heat']})")
+        for ch in ar["chapters"][-3:]:
+            print(f"  d{ch['day']}: {ch['text']}")
+    return 0
+
+
 def cmd_benchmark(args) -> int:
     """Clone the live DB to a temp file and time N days of ticks."""
     import shutil
@@ -1285,6 +1299,10 @@ def main(argv=None) -> int:
     pdyn = sub.add_parser("dynasties", help="List top generational family dynasties")
     pdyn.add_argument("--limit", type=int, default=15)
     pdyn.set_defaults(fn=cmd_dynasties)
+    parc = sub.add_parser("arcs", help="List emergent multi-day story arcs")
+    parc.add_argument("--status", choices=["active", "resolved", "all"], default="all")
+    parc.add_argument("--limit", type=int, default=15)
+    parc.set_defaults(fn=cmd_arcs)
 
     args = p.parse_args(argv)
     return args.fn(args)

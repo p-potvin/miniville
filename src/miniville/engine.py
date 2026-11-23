@@ -5,6 +5,7 @@ import sqlite3
 
 from . import (
     ambitions,
+    arcs,
     banking,
     chronicle,
     conflict,
@@ -168,6 +169,7 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     acted = conflict.due(conn, tick, seed)
     if acted:
         stats["conflict"] = acted
+    stats["arcs"] = arcs.due(conn, tick, seed)
     return stats
 
 

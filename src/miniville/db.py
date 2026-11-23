@@ -694,6 +694,21 @@ CREATE TABLE IF NOT EXISTS loans (
 );
 CREATE INDEX IF NOT EXISTS idx_loans_status ON loans(status);
 
+CREATE TABLE IF NOT EXISTS story_arcs (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind               TEXT NOT NULL,
+    title              TEXT NOT NULL,
+    primary_agent_id   INTEGER REFERENCES agents(id),
+    secondary_agent_id INTEGER REFERENCES agents(id),
+    place_id           INTEGER REFERENCES places(id),
+    started_day        INTEGER NOT NULL,
+    last_day           INTEGER NOT NULL,
+    status             TEXT NOT NULL DEFAULT 'active',
+    chapters_json      TEXT NOT NULL DEFAULT '[]',
+    heat               INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_story_arcs_status ON story_arcs(status, heat DESC);
+
 """
 
 

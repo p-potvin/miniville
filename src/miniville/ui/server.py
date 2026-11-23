@@ -866,6 +866,15 @@ def create_app(db_path: str | None = None) -> FastAPI:
         finally:
             c.close()
 
+    @app.get("/api/arcs")
+    def arcs_view(status: str = "active", limit: int = Query(15, le=50)):
+        c = conn()
+        try:
+            from .. import arcs
+            return {"arcs": arcs.list_arcs(c, status=status, limit=limit)}
+        finally:
+            c.close()
+
     @app.get("/api/tv")
     def tv_view(
         agent_id: int | None = None,

@@ -18,7 +18,24 @@ async function status() {
 }
 
 async function feed() {
-  const rows = await api("/api/feed?limit=60");
+  const [rows, arcRes] = await Promise.all([api("/api/feed?limit=60"), api("/api/arcs?status=active&limit=6")]);
+  const arcs = (arcRes && arcRes.arcs) || [];
+  const arcBox = $("#feed-arcs");
+  if (arcBox) {
+    arcBox.hidden = arcs.length === 0;
+    arcBox.innerHTML = arcs.length ? `<h3>Active Town Storylines</h3><div class="arcs-cards">` +
+      arcs.map(ar => {
+        const ch = (ar.chapters || []).slice(-1)[0];
+        const link = ar.primary_agent_id
+          ? `<a class="click-link" onclick="mvPick({id:${ar.primary_agent_id}})">${esc(ar.primary_name || "Cast")}</a>`
+          : "";
+        return `<div class="arc-card">
+          <div class="arc-meta"><span class="arc-kind">${esc(ar.kind.replace(/_/g, " "))}</span> · Day ${ar.started_day + 1}–${ar.last_day + 1} · ${(ar.chapters || []).length} ch</div>
+          <div class="arc-title">${esc(ar.title)} ${link}</div>
+          ${ch ? `<div class="arc-chap">${esc(ch.text)}</div>` : ""}
+        </div>`;
+      }).join("") + `</div>` : "";
+  }
   $("#feed-list").innerHTML = rows.map(e =>
     `<li class="imp${e.importance}"><b>${e.kind}</b> ${esc(e.text)}
      <span class="t">t${e.tick_of_day}</span></li>`).join("");

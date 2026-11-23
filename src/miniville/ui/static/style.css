@@ -87,6 +87,13 @@ li.click:hover { background: var(--panel); }
 .prog-bar { display: inline-block; width: 110px; height: 8px; background: #262d38; border-radius: 4px; overflow: hidden; vertical-align: middle; margin-right: .35rem; }
 .prog-fill { height: 100%; background: var(--accent); }
 #ind-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.2rem; margin-bottom: 1.4rem; }
+.arcs-strip { margin-bottom: 1.2rem; }
+.arcs-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .75rem; }
+.arc-card { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; padding: .6rem .8rem; font-size: .88rem; }
+.arc-meta { color: var(--dim); font-size: .76rem; text-transform: uppercase; letter-spacing: .04em; margin-bottom: .2rem; }
+.arc-kind { color: var(--accent); font-weight: bold; }
+.arc-title { font-weight: 600; margin-bottom: .25rem; }
+.arc-chap { color: var(--dim); font-size: .82rem; }
 
 
 /* --- 10-Foot Living TV & Ambient Director Mode (v0.46 - v0.47) --- */

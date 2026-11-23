@@ -540,6 +540,22 @@ def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any
             "time": timekeeper.fmt_tick(int(e["tick"])),
         })
 
+    # Active multi-day story arcs
+    try:
+        from . import arcs
+        for ar in arcs.list_arcs(conn, status="active", limit=2):
+            ch = ar["chapters"][-1] if ar["chapters"] else None
+            detail = f" — {ch['text']}" if ch else ""
+            items.insert(0, {
+                "badge": f"📖 Arc ({ar['kind']})",
+                "text": f"{ar['title']}{detail}",
+                "agent_id": ar.get("primary_agent_id"),
+                "place_id": ar.get("place_id"),
+                "time": f"Day {int(ar['last_day']) + 1}",
+            })
+    except Exception:
+        pass
+
     return items[:12]
 
 
@@ -868,6 +884,14 @@ def follow_venue_view(conn: sqlite3.Connection, place_id: int, tick: int,
             "occupants": [dict(o) for o in inside], "today": today}
 
 
+def _safe_arcs(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    try:
+        from . import arcs
+        return arcs.list_arcs(conn, status="active", limit=6)
+    except Exception:
+        return []
+
+
 def tv_director_snapshot(conn: sqlite3.Connection,
                          focus_agent_id: int | None = None,
                          focus_place_id: int | None = None,
@@ -977,6 +1001,7 @@ def tv_director_snapshot(conn: sqlite3.Connection,
         "progression": _progression_cards(conn),
         "ticker": _broadcast_ticker(conn, tick),
         "stories": stories,
+        "arcs": _safe_arcs(conn),
         "breaking": breaking,
         "latest_event_id": int(latest),
         "hotspots": hotspots(conn, tick, places_by_id, vcoords),
