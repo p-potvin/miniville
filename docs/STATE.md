@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Mon, 23 Nov 2026 03:25
+Last updated: Mon, 23 Nov 2026 05:06
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -582,6 +582,13 @@ the receipt. Current live issue had no false claim, so the misreport path is
 tested with a deliberately opposed council vote. A 90-day press soak is
 running to see whether routine politics produces claims and how credibility
 moves.
+
+## v0.57–v0.59 — Town Transit, Civic Honors & Community Potlucks (Mon, 23 Nov 2026, workstation)
+
+- **v0.57 (`transit.py`)**: Daily Town Transit & Bus Loop (`transit_days`) across `Line 1: Crosstown Express` and `Line 2: Lakeshore & Mill Shuttle` for cross-district commuters and storm/festival riders, weather-affected `on_time_pct`, conserved 150¢ fare (`agent_state.money_cents -> town_account`, free for youth `<18` and elders `>=65`), rate-limited `transit_milestone`/`transit_delay` events, `cli transit`, `/api/transit`, and Economy Transit strip (`#econ-transit`).
+- **v0.58 (`awards.py`)**: Seasonal Town Awards & Civic Honors (`town_awards`) selecting `Citizen of the Season`, `Merchant of the Season`, `Good Neighbor Award`, and `Master Artisan` from town state, deficit-safe conserved stipends (`town_account -> agent_state.money_cents` only when purse `>= 500_000`¢), importance-4 `town_award` events, `cli awards`, `/api/awards`, and Individualism Awards table (`#ind-awards`).
+- **v0.59 (`potlucks.py`)**: Weekend Community Potlucks & Block Parties (`potlucks`) every 14–21 days, weather-aware `outdoor_block_party` vs `indoor_potluck` mode, social/fun/stress boost and neighbor affinity warmth, 100% conserved supply kitty (`agent_state.money_cents -> businesses.balance_cents`), `potluck_hosted` events, `cli potlucks`, `/api/potlucks`, and Feed Potluck banner (`#feed-potluck`).
+- **Verified**: `314 passed` in pytest; 180-day soak (`backups/miniville-t026112.db`) holds 11/11 invariants (+0.1%/y money, 0 deficits, 7.3% unemployment); Patchright UI verified with 0 console/page errors.
 
 ## v0.54–v0.56 — Town Festivals, Museum & Market CPI (Mon, 23 Nov 2026, workstation)
 

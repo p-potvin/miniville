@@ -564,3 +564,16 @@ tick 204919) and shipped three fixes on `autodev`:
   `flea_market` endpoint from `/api/market` to `/api/flea-market`.
 - Verified: 302 passed in pytest; 180-day soak holds 11/11 invariants; live FastAPI +
   Patchright UI verified with 0 console/page errors. Claim cleared.
+
+[Mon, 23 Nov 2026 05:06 local] local -> all: Shipped v0.57–v0.59 on `autodev`:
+- v0.57 (`transit.py`): Daily Crosstown/Lakeshore bus routes (`transit_days`), weather/festival
+  ridership & `on_time_pct`, 100% conserved 150¢ fares (`agent_state -> town_account`, free
+  youth/elders), `cli transit`, `GET /api/transit`, and Economy Transit strip.
+- v0.58 (`awards.py`): Seasonal Town Awards (`town_awards`) across 4 civic categories,
+  deficit-safe conserved stipends (`town_account -> agent_state` only when purse >= 500k¢),
+  `cli awards`, `GET /api/awards`, and Individualism Awards table.
+- v0.59 (`potlucks.py`): Weekend district potlucks & block parties (`potlucks`) every 14–21
+  days, weather outdoor/indoor mode, neighbor affinity warmth, conserved supply kitty
+  (`agent_state -> businesses`), `cli potlucks`, `GET /api/potlucks`, and Feed Potluck banner.
+- Verified: 314 passed in pytest; 180-day soak holds 11/11 invariants; live FastAPI +
+  Patchright UI verified with 0 console/page errors. Claim cleared.
