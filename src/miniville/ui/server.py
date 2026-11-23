@@ -206,6 +206,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             from ..groups import memberships_of
             from ..conflict import influence_of
             from ..enterprise import owned_by
+            from ..genealogy import family_tree
             from ..individual import resident_summary
             a = dict(a)
             a["influence"] = influence_of(c, agent_id)
@@ -215,7 +216,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     "relationships": rels, "recent": recent, "memories": mems,
                     "groups": memberships_of(c, agent_id),
                     "owns": [dict(b) for b in owned_by(c, agent_id)],
-                    "individual": resident_summary(c, agent_id)}
+                    "individual": resident_summary(c, agent_id),
+                    "family": family_tree(c, agent_id)}
         finally:
             c.close()
 
@@ -836,6 +838,31 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "counts": banking.loans_summary(c)["counts"],
                 "loans": banking.list_loans(c, status=status, limit=limit),
             }
+        finally:
+            c.close()
+
+    @app.get("/api/genealogy/{agent_id}")
+    def genealogy_view(agent_id: int):
+        c = conn()
+        try:
+            from .. import genealogy
+            genealogy.backfill_lineage(c)
+            c.commit()
+            tree = genealogy.family_tree(c, agent_id)
+            if not tree:
+                raise HTTPException(404, "no such resident")
+            return tree
+        finally:
+            c.close()
+
+    @app.get("/api/dynasties")
+    def dynasties_view(limit: int = Query(15, le=50)):
+        c = conn()
+        try:
+            from .. import genealogy
+            genealogy.backfill_lineage(c)
+            c.commit()
+            return {"dynasties": genealogy.top_dynasties(c, limit=limit)}
         finally:
             c.close()
 

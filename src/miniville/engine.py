@@ -17,6 +17,7 @@ from . import (
     book_club,
     commons_library,
     fire_brigade,
+    genealogy,
     plaques,
     sabbaticals,
     theater,
@@ -102,6 +103,7 @@ def _pay_and_spend(conn: sqlite3.Connection, tick: int) -> dict:
 def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     """Settle yesterday's books, age the town, then build today."""
     stats: dict = {"birthdays": seasons.birthdays(conn, tick, seed)}
+    genealogy.backfill_lineage(conn)
     individual.ensure_profiles(conn, seed)
 
     economy.ensure_businesses(conn)

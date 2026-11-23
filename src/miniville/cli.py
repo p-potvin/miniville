@@ -992,6 +992,46 @@ def cmd_loans(args) -> int:
     return 0
 
 
+def cmd_tree(args) -> int:
+    from . import genealogy
+    conn = dbmod.connect(args.db)
+    genealogy.backfill_lineage(conn)
+    a = conn.execute(
+        "SELECT id FROM agents WHERE name LIKE ? OR id=?",
+        (f"%{args.who}%", args.who if str(args.who).isdigit() else -1),
+    ).fetchone()
+    if not a:
+        print("no such agent")
+        return 1
+    tr = genealogy.family_tree(conn, int(a["id"]))
+    assert tr is not None
+    print(f"{tr['name']} · Gen {tr['generation']} ({tr['surname']})")
+    if tr["household_tradition"]:
+        print(f"  tradition: {tr['household_tradition']}")
+    if tr["parents"]:
+        print("  parents:   " + ", ".join(p["name"] for p in tr["parents"]))
+    if tr["spouse"]:
+        print(f"  {tr['spouse']['label']}:    {tr['spouse']['name']}")
+    if tr["siblings"]:
+        print("  siblings:  " + ", ".join(s["name"] for s in tr["siblings"]))
+    if tr["children"]:
+        print("  children:  " + ", ".join(f"{c['name']} ({c['age']})" for c in tr["children"]))
+    return 0
+
+
+def cmd_dynasties(args) -> int:
+    from . import genealogy
+    conn = dbmod.connect(args.db)
+    genealogy.backfill_lineage(conn)
+    rows = genealogy.top_dynasties(conn, limit=args.limit)
+    print(f"{'surname':<20} {'living':>6} {'dec':>5} {'gen':>4} {'wealth':>12}  notables")
+    for d in rows:
+        notes = ", ".join(n["name"] for n in d["notables"])
+        print(f"  {d['surname'][:18]:<18} {d['living']:>6} {d['deceased']:>5} "
+              f"{d['generations']:>4} ${d['total_wealth_cents']/100:>10,.0f}  {notes}")
+    return 0
+
+
 def cmd_benchmark(args) -> int:
     """Clone the live DB to a temp file and time N days of ticks."""
     import shutil
@@ -1239,6 +1279,12 @@ def main(argv=None) -> int:
     plon.add_argument("--status", choices=["active", "repaid", "defaulted", "all"], default="all")
     plon.add_argument("--limit", type=int, default=40)
     plon.set_defaults(fn=cmd_loans)
+    ptree = sub.add_parser("tree", help="Print family tree for a resident")
+    ptree.add_argument("who", help="resident name (substring) or id")
+    ptree.set_defaults(fn=cmd_tree)
+    pdyn = sub.add_parser("dynasties", help="List top generational family dynasties")
+    pdyn.add_argument("--limit", type=int, default=15)
+    pdyn.set_defaults(fn=cmd_dynasties)
 
     args = p.parse_args(argv)
     return args.fn(args)

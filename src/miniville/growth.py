@@ -228,12 +228,13 @@ def births(conn: sqlite3.Connection, tick: int, seed: str) -> int:
         cname = f"{r.choice(_CHILD_FIRST)} {surname}"
         cur = conn.execute(
             """INSERT INTO agents(uuid,name,sex,age,marital_status,education_level,
-               occupation,persona,household_id,home_place_id,is_child,birth_day)
-               VALUES(?,?,?,?,?,?,?,?,?,?,1,?)""",
+               occupation,persona,household_id,home_place_id,is_child,birth_day,
+               parent_a_id,parent_b_id)
+               VALUES(?,?,?,?,?,?,?,?,?,?,1,?,?,?)""",
             (f"born-{c['a_id']}-{c['b_id']}-{tick}", cname,
              r.choice(["Male", "Female"]), 0, "never_married", "none", "child",
              f"{cname}, born in Miniville.", parent["household_id"],
-             parent["home_place_id"], day_of(tick)))
+             parent["home_place_id"], day_of(tick), c["a_id"], c["b_id"]))
         aid = int(cur.lastrowid or 0)
         conn.execute(
             "INSERT INTO agent_state(agent_id, place_id, money_cents) VALUES(?,?,0)",

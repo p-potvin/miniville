@@ -43,7 +43,9 @@ CREATE TABLE IF NOT EXISTS agents (
     standing INTEGER NOT NULL DEFAULT 0,
     -- tradition parsed from the persona's cultural background (groups.py)
     faith TEXT,
-    favorite_place_id INTEGER
+    favorite_place_id INTEGER,
+    parent_a_id INTEGER,
+    parent_b_id INTEGER
 );
 
 -- Mutable per-agent state, updated every tick
@@ -755,6 +757,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE agents ADD COLUMN faith TEXT")
     if "favorite_place_id" not in cols:
         conn.execute("ALTER TABLE agents ADD COLUMN favorite_place_id INTEGER")
+    if "parent_a_id" not in cols:
+        conn.execute("ALTER TABLE agents ADD COLUMN parent_a_id INTEGER")
+    if "parent_b_id" not in cols:
+        conn.execute("ALTER TABLE agents ADD COLUMN parent_b_id INTEGER")
 
     if _has_table(conn, "households"):
         hcols = {r["name"] for r in conn.execute("PRAGMA table_info(households)")}

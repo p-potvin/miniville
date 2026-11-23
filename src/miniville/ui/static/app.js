@@ -82,6 +82,14 @@ async function residentCard(id) {
         <div class="prog-bar"><div class="prog-fill" style="width:${Math.round((r.individual.ambition.progress || 0) * 100)}%"></div></div>
       </div>` : ""}
     </div>` : ""}
+    ${r.family && (r.family.parents.length || r.family.children.length || r.family.siblings.length || r.family.spouse) ? `
+    <h4>Family Lineage · Gen ${r.family.generation} (${esc(r.family.surname)})</h4>
+    <ul>
+      ${r.family.parents.length ? `<li><b>Parents:</b> ${r.family.parents.map(p => `<a class="click-link" onclick="mvPick({id:${p.id}})">${esc(p.name)}</a>${p.alive ? "" : " (dec.)"}`).join(", ")}</li>` : ""}
+      ${r.family.spouse ? `<li><b>${esc(r.family.spouse.label)}:</b> <a class="click-link" onclick="mvPick({id:${r.family.spouse.id}})">${esc(r.family.spouse.name)}</a>${r.family.spouse.alive ? "" : " (dec.)"}</li>` : ""}
+      ${r.family.siblings.length ? `<li><b>Siblings:</b> ${r.family.siblings.map(s => `<a class="click-link" onclick="mvPick({id:${s.id}})">${esc(s.name)}</a>${s.alive ? "" : " (dec.)"}`).join(", ")}</li>` : ""}
+      ${r.family.children.length ? `<li><b>Children:</b> ${r.family.children.map(ch => `<a class="click-link" onclick="mvPick({id:${ch.id}})">${esc(ch.name)}</a> (${ch.age}${ch.alive ? "" : ", dec."})`).join(", ")}</li>` : ""}
+    </ul>` : ''}
     ${r.debts && (r.debts.owes.length || r.debts.owed.length) ? `
     <h4>IOUs</h4>
     <ul>${r.debts.owes.map(d => `<li>owes ${esc(d.creditor)} — ${esc(d.kind)}</li>`).join("")}
@@ -356,7 +364,7 @@ async function council() {
 
 
 async function individual() {
-  const r = await api("/api/individual");
+  const [r, dynRes] = await Promise.all([api("/api/individual"), api("/api/dynasties")]);
   const chronos = r.chronotypes || {};
   const order = ["early_bird", "morning", "day_walker", "evening", "night_owl"];
   const labels = {
@@ -417,6 +425,21 @@ async function individual() {
   $("#ind-traditions").innerHTML = trads.length ? trads.map(t =>
     `<tr><td><b>${esc(t.tradition)}</b></td><td>${t.households}</td><td>${t.residents}</td></tr>`
   ).join("") : `<tr><td colspan="3" class="muted">No household traditions yet</td></tr>`;
+
+  const dyns = (dynRes && dynRes.dynasties) || [];
+  $("#ind-dynasties").innerHTML = dyns.length ? dyns.map(d => {
+    const notes = (d.notables || []).map(n =>
+      `<a class="click-link" onclick="mvPick({id:${n.id}})">${esc(n.name)}</a>`
+    ).join(", ");
+    return `<tr>
+      <td><b>${esc(d.surname)}</b></td>
+      <td>${d.living}</td>
+      <td>${d.deceased}</td>
+      <td>Gen ${d.generations}</td>
+      <td>${money(d.total_wealth_cents)}</td>
+      <td>${notes || `<span class="muted">—</span>`}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="6" class="muted">No multi-member families yet</td></tr>`;
 
   const keeps = r.keepsakes || [];
   $("#ind-keepsakes").innerHTML = keeps.length ? keeps.map(k =>
