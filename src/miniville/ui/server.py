@@ -72,11 +72,14 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "SELECT COUNT(*) n FROM agents WHERE alive=1").fetchone()["n"]
             day = day_of(tick)
             holiday = holiday_for(c, day)
-            from .. import awards, festivals, market, museum, potlucks, transit, weather
+            from .. import awards, expansion, festivals, market, museum, potlucks, real_estate, regional, transit, weather
             ms = museum.museum_summary(c)
             ts = transit.transit_summary(c, days=1)
             aws = awards.list_awards(c, limit=4)
             pks = potlucks.list_potlucks(c, limit=1)
+            exps = expansion.list_expansions(c, limit=1)
+            rg = regional.regional_summary(c, days=1)
+            re_summ = real_estate.real_estate_summary(c)
             return {"tick": tick, "day": day + 1, "date": fmt_date(day),
                     "season": season_of(day),
                     "weather": weather.today(c, day),
@@ -90,6 +93,13 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     "transit": ts["today"],
                     "awards": aws,
                     "potluck": pks[0] if pks else None,
+                    "expansion": exps[0] if exps else None,
+                    "regional": rg["today"],
+                    "real_estate": {
+                        "total_deeds": re_summ["total_deeds"],
+                        "active_mortgages": re_summ["active_mortgages"],
+                        "max_generation": re_summ["max_generation"],
+                    },
                     "holiday": holiday.name if holiday else None,
                     "time": fmt_tick(tick), "population": pop, "moods": moods}
         finally:
@@ -910,6 +920,39 @@ def create_app(db_path: str | None = None) -> FastAPI:
             summ = potlucks.potlucks_summary(c)
             if limit != 16:
                 summ["potlucks"] = potlucks.list_potlucks(c, limit=limit)
+            return summ
+        finally:
+            c.close()
+
+    @app.get("/api/expansion")
+    def expansion_view(limit: int = Query(20, le=100)):
+        c = conn()
+        try:
+            from .. import expansion
+            summ = expansion.expansion_summary(c)
+            if limit != 20:
+                summ["expansions"] = expansion.list_expansions(c, limit=limit)
+            return summ
+        finally:
+            c.close()
+
+    @app.get("/api/regional")
+    def regional_view(days: int = Query(14, le=90)):
+        c = conn()
+        try:
+            from .. import regional
+            return regional.regional_summary(c, days=days)
+        finally:
+            c.close()
+
+    @app.get("/api/deeds")
+    def deeds_view(limit: int = Query(25, le=100)):
+        c = conn()
+        try:
+            from .. import real_estate
+            summ = real_estate.real_estate_summary(c)
+            if limit != 25:
+                summ["deeds"] = real_estate.list_deeds(c, limit=limit)
             return summ
         finally:
             c.close()

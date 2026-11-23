@@ -535,6 +535,37 @@ def _safe_latest_potluck(conn: sqlite3.Connection) -> dict[str, Any] | None:
         return None
 
 
+def _safe_latest_expansion(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        from . import expansion
+        rows = expansion.list_expansions(conn, limit=1)
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def _safe_regional_today(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        from . import regional
+        return regional.regional_summary(conn, days=1).get("today")
+    except Exception:
+        return None
+
+
+def _safe_real_estate_summary(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        from . import real_estate
+        summ = real_estate.real_estate_summary(conn)
+        return {
+            "total_deeds": summ["total_deeds"],
+            "active_mortgages": summ["active_mortgages"],
+            "max_generation": summ["max_generation"],
+            "latest_deed": summ["deeds"][0] if summ["deeds"] else None,
+        }
+    except Exception:
+        return None
+
+
 def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any]]:
     """Build a 10-foot lower-third broadcast ticker with clickable items."""
     items: list[dict[str, Any]] = []
@@ -683,6 +714,50 @@ def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any
                 "agent_id": tr.get("driver_agent_id"),
                 "place_id": None,
                 "time": f"Day {int(tr['day']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import expansion
+        exps = expansion.list_expansions(conn, limit=1)
+        if exps and int(exps[0]["day"]) >= cur_day - 14:
+            ex = exps[0]
+            items.insert(0, {
+                "badge": "🏗️ Expansion",
+                "text": f"{ex['place_name']} ({ex['district']}) — {ex['summary']}",
+                "agent_id": None,
+                "place_id": ex.get("place_id"),
+                "time": f"Day {int(ex['day']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import regional
+        rg = regional.regional_summary(conn, days=1).get("today")
+        if rg:
+            items.append({
+                "badge": "🚂 Sister Town",
+                "text": f"{rg['sister_town']}: {rg['visitors_count']} visitors · {rg['top_export']} <-> {rg['top_import']}",
+                "agent_id": rg.get("envoy_agent_id"),
+                "place_id": None,
+                "time": f"Day {int(rg['day']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import real_estate
+        deeds = real_estate.list_deeds(conn, limit=1)
+        if deeds and int(deeds[0]["acquired_day"]) >= cur_day - 7:
+            d = deeds[0]
+            items.append({
+                "badge": "🏡 Real Estate",
+                "text": f"{d.get('owner_name') or d['surname']} holds {d.get('place_name') or 'home'} (Gen {d['generation']})",
+                "agent_id": d.get("owner_agent_id"),
+                "place_id": d.get("place_id"),
+                "time": f"Day {int(d['acquired_day']) + 1}",
             })
     except Exception:
         pass
@@ -1121,6 +1196,9 @@ def tv_director_snapshot(conn: sqlite3.Connection,
         "transit": _safe_transit_today(conn),
         "awards": _safe_latest_awards(conn),
         "potluck": _safe_latest_potluck(conn),
+        "expansion": _safe_latest_expansion(conn),
+        "regional": _safe_regional_today(conn),
+        "real_estate": _safe_real_estate_summary(conn),
         "holiday": holiday.name if holiday else None,
         "sky": _sky_state(tod, season),
         "vitality": {

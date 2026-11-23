@@ -689,11 +689,12 @@ class TVDirector {
       const cpiHtml = data.market ? `<span>📊 CPI <b>${Number(data.market.cpi_index).toFixed(1)}</b></span>` : "";
       const festHtml = data.festival ? `<span>🎪 <b>${tvEsc(data.festival.name)}</b></span>` : "";
       const trHtml = data.transit ? `<span>🚌 <b>${data.transit.total_rides ?? 0}</b> rides (${Math.round(data.transit.on_time_pct ?? 100)}%)</span>` : "";
+      const regHtml = data.regional ? `<span>🚂 <b>${tvEsc(data.regional.sister_town)}</b> (${data.regional.visitors_count ?? 0} visitors)</span>` : "";
       vitEl.innerHTML = `
         <span>👥 <b>${vit.population ?? 0}</b> residents (${vit.awake ?? 0} awake)</span>
         <span>💼 <b>${vit.employed ?? 0}</b> employed</span>
         <span>🏛️ <b>$${(vit.treasury_dollars ?? 0).toLocaleString()}</b> treasury</span>
-        <span>📰 <b>${(data.stories || []).length}</b> stories today</span>${cpiHtml}${festHtml}${trHtml}`;
+        <span>📰 <b>${(data.stories || []).length}</b> stories today</span>${cpiHtml}${festHtml}${trHtml}${regHtml}`;
     }
 
     this._renderSpotlightCards(data);
@@ -771,6 +772,19 @@ class TVDirector {
       if (data.awards && data.awards.length) {
         const aw = data.awards[0];
         progItems.push(`<div class="tv-prog-item"><small>🏅 ${tvEsc(aw.season)} Honor</small><b>${tvEsc(aw.category)}</b><span>${tvEsc(aw.recipient_name || "Honoree")}</span></div>`);
+      }
+      if (data.expansion) {
+        const ex = data.expansion;
+        progItems.push(`<div class="tv-prog-item"><small>🏗️ Expansion (${tvEsc(ex.district)})</small><b>${tvEsc(ex.place_name)}</b><span>${ex.kind === "wing_addition" ? "Wing addition" : "New landmark"}</span></div>`);
+      }
+      if (data.regional) {
+        const rg = data.regional;
+        progItems.push(`<div class="tv-prog-item"><small>🚂 Sister Town</small><b>${tvEsc(rg.sister_town)}</b><span>${rg.visitors_count ?? 0} visitors · ${tvEsc(rg.top_export)}</span></div>`);
+      }
+      if (data.real_estate && (data.real_estate.total_deeds > 0 || data.latest_deed)) {
+        const ld = data.latest_deed;
+        const detail = ld ? `${tvEsc(ld.owner_name || "Resident")} · Gen ${ld.generation}` : `${data.real_estate.total_deeds} deeds`;
+        progItems.push(`<div class="tv-prog-item"><small>🏡 Real Estate</small><b>${data.real_estate.total_deeds ?? 0} Deeds (Gen ${data.real_estate.max_generation ?? 1})</b><span>${detail}</span></div>`);
       }
       const progHtml = progItems.join("");
       svEl.innerHTML = `

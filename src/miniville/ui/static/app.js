@@ -18,12 +18,35 @@ async function status() {
 }
 
 async function feed() {
-  const [rows, arcRes, festRes, potRes] = await Promise.all([
+  const [rows, arcRes, festRes, potRes, expRes] = await Promise.all([
     api("/api/feed?limit=60"),
-    api("/api/arcs?status=active&limit=6"),
+    api("/api/arcs?status=active&limit=6").catch(() => ({})),
     api("/api/festivals?limit=4").catch(() => ({})),
     api("/api/potlucks?limit=16").catch(() => ({})),
+    api("/api/expansion?limit=20").catch(() => ({})),
   ]);
+  const expBox = $("#feed-expansion");
+  if (expBox) {
+    const ex = expRes?.latest || (expRes?.expansions && expRes.expansions[0]) || null;
+    expBox.hidden = !ex;
+    if (ex) {
+      const kindLabel = ex.kind === "wing_addition" ? "Wing Addition" : "New Landmark";
+      expBox.innerHTML = `
+        <div class="expansion-card">
+          <div class="fest-head">
+            <span>🏗️ <b>${esc(ex.place_name)}</b> <span class="muted">(${esc(ex.district)} · Year ${ex.year} · Day ${ex.day + 1})</span></span>
+            <span class="badge-pass">${esc(kindLabel)}</span>
+          </div>
+          <div class="fest-meta">
+            Sponsor: <b>${esc(ex.sponsor_name || "Town Council")}</b> ·
+            Cost: ${money(ex.cost_cents)} · Builders paid: ${money(ex.builders_paid_cents)}
+          </div>
+          ${ex.summary ? `<div class="fest-note">${esc(ex.summary)}</div>` : ""}
+        </div>`;
+    } else {
+      expBox.innerHTML = "";
+    }
+  }
   const potBox = $("#feed-potluck");
   if (potBox) {
     const p = potRes?.latest || (potRes?.potlucks && potRes.potlucks[0]) || null;
@@ -299,10 +322,11 @@ const money = (c) => "$" + ((c ?? 0) / 100).toLocaleString(undefined,
   { maximumFractionDigits: 0 });
 
 async function economy() {
-  const [r, mkt, trRes] = await Promise.all([
+  const [r, mkt, trRes, regRes] = await Promise.all([
     api("/api/economy"),
     api("/api/market?days=14").catch(() => ({})),
     api("/api/transit?days=14").catch(() => ({})),
+    api("/api/regional?days=14").catch(() => ({})),
   ]);
   const s = r.stats;
   $("#econ-stats").innerHTML =
@@ -354,6 +378,28 @@ async function economy() {
         ${tr.note ? `<div class="muted market-note">${esc(tr.note)}</div>` : ""}`;
     } else {
       trBox.innerHTML = "";
+    }
+  }
+  const regBox = $("#econ-regional");
+  if (regBox) {
+    const rg = regRes?.today || (regRes?.history && regRes.history[0]) || null;
+    regBox.hidden = !rg;
+    if (rg) {
+      const envoyLink = rg.envoy_agent_id
+        ? `<a class="click-link" onclick="mvPick({id:${rg.envoy_agent_id}})">${esc(rg.envoy_name || "#" + rg.envoy_agent_id)}</a>`
+        : `<span class="muted">—</span>`;
+      regBox.innerHTML = `
+        <div class="market-row">
+          <span class="cpi-badge cpi-steady">🚂 ${esc(rg.sister_town)}</span>
+          <span class="stat"><b>${rg.visitors_count ?? 0}</b><span>sister-town visitors</span></span>
+          <span class="stat"><b>${money(rg.trade_volume_cents ?? 0)}</b><span>trade volume</span></span>
+          <span class="stat"><b>${money(rg.customs_cents ?? 0)}</b><span>customs</span></span>
+          <span class="stat"><b>${esc(rg.top_export)}</b><span>export · envoy ${envoyLink}</span></span>
+          <span class="stat"><b>${esc(rg.top_import)}</b><span>top import</span></span>
+        </div>
+        ${rg.summary ? `<div class="muted market-note">${esc(rg.summary)}</div>` : ""}`;
+    } else {
+      regBox.innerHTML = "";
     }
   }
   $("#econ-body").innerHTML = r.businesses.map(b =>
@@ -487,11 +533,12 @@ async function council() {
 
 
 async function individual() {
-  const [r, dynRes, musRes, awRes] = await Promise.all([
+  const [r, dynRes, musRes, awRes, deedsRes] = await Promise.all([
     api("/api/individual"),
-    api("/api/dynasties"),
+    api("/api/dynasties").catch(() => ({})),
     api("/api/museum?limit=24").catch(() => ({})),
     api("/api/awards?limit=20").catch(() => ({})),
+    api("/api/deeds?limit=25").catch(() => ({})),
   ]);
   const chronos = r.chronotypes || {};
   const order = ["early_bird", "morning", "day_walker", "evening", "night_owl"];
@@ -657,6 +704,35 @@ async function individual() {
       <td>${esc(a.citation)}</td>
     </tr>`;
   }).join("") : `<tr><td colspan="6" class="muted">No seasonal awards conferred yet</td></tr>`;
+
+  const dd = deedsRes || {};
+  $("#ind-deeds-meta").innerHTML = `
+    <div class="stat"><b>${dd.total_deeds ?? 0}</b><span>home deeds</span></div>
+    <div class="stat"><b>${dd.active_mortgages ?? 0}</b><span>active mortgages</span></div>
+    <div class="stat"><b>${money(dd.total_mortgage_cents ?? 0)}</b><span>mortgage balance</span></div>
+    <div class="stat active-policy"><b>Gen ${dd.max_generation ?? 0}</b><span>oldest dynasty home</span></div>`;
+  const deedsList = dd.deeds || [];
+  $("#ind-deeds").innerHTML = deedsList.length ? deedsList.map(d => {
+    const owner = d.owner_agent_id
+      ? `<a class="click-link" onclick="mvPick({id: ${d.owner_agent_id}})"><b>${esc(d.owner_name || "#" + d.owner_agent_id)}</b></a>`
+      : `<span class="muted">Unclaimed</span>`;
+    const genBadge = (d.generation ?? 1) > 1
+      ? `<span class="badge-pass">Gen ${d.generation} Heirloom</span>`
+      : `<span class="muted">Gen ${d.generation ?? 1}</span>`;
+    const mort = (d.mortgage_cents ?? 0) > 0
+      ? money(d.mortgage_cents)
+      : `<span class="badge-pass">Paid Off</span>`;
+    return `<tr>
+      <td><b>${esc(d.place_name || "#" + d.place_id)}</b></td>
+      <td>${esc(d.district || "—")}</td>
+      <td>${owner}</td>
+      <td>${esc(d.surname || "—")}</td>
+      <td>${genBadge}</td>
+      <td>${money(d.price_cents)}</td>
+      <td>${mort}</td>
+      <td><small class="muted">${esc(d.note || "")}</small></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="8" class="muted">No home deeds recorded yet</td></tr>`;
 
   const projs = r.civic_projects || [];
   $("#ind-projects").innerHTML = projs.length ? projs.map(p => {

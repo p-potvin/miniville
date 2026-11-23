@@ -34,25 +34,24 @@ def _classify_window(conn: sqlite3.Connection, start_day: int,
     crafts = conn.execute(
         """SELECT COUNT(*) n FROM events
            WHERE day BETWEEN ? AND ?
-             AND (data LIKE '%"keepsake_created"%'
-                  OR data LIKE '%"keepsake_exhibited"%'
-                  OR data LIKE '%"competition_won"%')""",
+             AND json_extract(data, '$.tag') IN ('keepsake_created', 'keepsake_exhibited', 'competition_won')
+             AND json_extract(data, '$.tag') IS NOT NULL""",
         (start_day, end_day),
     ).fetchone()["n"]
 
     civic = conn.execute(
         """SELECT COUNT(*) n FROM events
            WHERE day BETWEEN ? AND ?
-             AND (data LIKE '%"civic_landmark_completed"%'
-                  OR data LIKE '%"block_party"%'
-                  OR data LIKE '%"mutual_aid"%')""",
+             AND json_extract(data, '$.tag') IN ('civic_landmark_completed', 'block_party', 'mutual_aid')
+             AND json_extract(data, '$.tag') IS NOT NULL""",
         (start_day, end_day),
     ).fetchone()["n"]
 
     weddings = conn.execute(
         """SELECT COUNT(*) n FROM events
            WHERE day BETWEEN ? AND ?
-             AND (data LIKE '%"marriage"%' OR data LIKE '%"birth"%')""",
+             AND json_extract(data, '$.tag') IN ('marriage', 'birth')
+             AND json_extract(data, '$.tag') IS NOT NULL""",
         (start_day, end_day),
     ).fetchone()["n"]
 

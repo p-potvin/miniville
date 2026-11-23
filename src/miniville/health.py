@@ -205,10 +205,14 @@ def health_stats(conn: sqlite3.Connection) -> dict[str, Any]:
            WHERE p.name = 'Miniville General Hospital' AND a.alive = 1"""
     ).fetchone()["n"]
     treatments = conn.execute(
-        "SELECT COUNT(*) n FROM events WHERE data LIKE ?", ('%"medical_treatment"%',)
+        "SELECT COUNT(*) n FROM events "
+        "WHERE json_extract(data, '$.tag') = 'medical_treatment' "
+        "AND json_extract(data, '$.tag') IS NOT NULL"
     ).fetchone()["n"]
     checkups = conn.execute(
-        "SELECT COUNT(*) n FROM events WHERE data LIKE ?", ('%"wellness_checkup"%',)
+        "SELECT COUNT(*) n FROM events "
+        "WHERE json_extract(data, '$.tag') = 'wellness_checkup' "
+        "AND json_extract(data, '$.tag') IS NOT NULL"
     ).fetchone()["n"]
     top_seniors = conn.execute(
         """SELECT a.id, a.name, a.age, ROUND(COALESCE(s.vitality, 60.0), 1) AS vitality

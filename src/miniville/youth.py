@@ -137,7 +137,8 @@ def award_scholarships(conn: sqlite3.Connection, tick: int,
            FROM events e
            JOIN agents a ON a.id = e.a_id
            WHERE e.day = ? AND e.kind = 'life_event'
-             AND e.data LIKE '%"coming_of_age"%'
+             AND json_extract(e.data, '$.tag') = 'coming_of_age'
+             AND json_extract(e.data, '$.tag') IS NOT NULL
              AND a.alive = 1
            ORDER BY a.id""",
         (day,),
@@ -156,7 +157,8 @@ def award_scholarships(conn: sqlite3.Connection, tick: int,
         already = conn.execute(
             """SELECT 1 FROM events
                WHERE a_id = ? AND kind = 'life_event'
-                 AND data LIKE '%"civic_scholarship"%' LIMIT 1""",
+                 AND json_extract(data, '$.tag') = 'civic_scholarship'
+                 AND json_extract(data, '$.tag') IS NOT NULL LIMIT 1""",
             (aid,),
         ).fetchone()
         if already:
@@ -217,17 +219,22 @@ def due(conn: sqlite3.Connection, tick: int,
 
 def youth_summary(conn: sqlite3.Connection) -> dict[str, Any]:
     disc_n = conn.execute(
-        'SELECT COUNT(*) n FROM events WHERE data LIKE \'%"youth_discovery"%\''
+        "SELECT COUNT(*) n FROM events "
+        "WHERE json_extract(data, '$.tag') = 'youth_discovery' "
+        "AND json_extract(data, '$.tag') IS NOT NULL"
     ).fetchone()["n"]
     schol_n = conn.execute(
-        'SELECT COUNT(*) n FROM events WHERE data LIKE \'%"civic_scholarship"%\''
+        "SELECT COUNT(*) n FROM events "
+        "WHERE json_extract(data, '$.tag') = 'civic_scholarship' "
+        "AND json_extract(data, '$.tag') IS NOT NULL"
     ).fetchone()["n"]
     recent = conn.execute(
         """SELECT e.tick, e.day, e.a_id, a.name, e.data
            FROM events e
            JOIN agents a ON a.id = e.a_id
            WHERE e.kind = 'life_event'
-             AND (e.data LIKE '%"youth_discovery"%' OR e.data LIKE '%"civic_scholarship"%')
+             AND json_extract(e.data, '$.tag') IN ('youth_discovery', 'civic_scholarship')
+             AND json_extract(e.data, '$.tag') IS NOT NULL
            ORDER BY e.id DESC LIMIT 20"""
     ).fetchall()
     items = []

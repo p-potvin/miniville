@@ -322,10 +322,14 @@ def pet_summary(conn: sqlite3.Connection) -> dict[str, Any]:
     cats = sum(1 for x in items if x["species"] == "cat")
     total = conn.execute("SELECT COUNT(*) n FROM pets").fetchone()["n"]
     walks = conn.execute(
-        'SELECT COUNT(*) n FROM events WHERE data LIKE \'%"pet_encounter"%\''
+        "SELECT COUNT(*) n FROM events "
+        "WHERE json_extract(data, '$.tag') = 'pet_encounter' "
+        "AND json_extract(data, '$.tag') IS NOT NULL"
     ).fetchone()["n"]
     reunions = conn.execute(
-        'SELECT COUNT(*) n FROM events WHERE data LIKE \'%"lost_pet_returned"%\''
+        "SELECT COUNT(*) n FROM events "
+        "WHERE json_extract(data, '$.tag') = 'lost_pet_returned' "
+        "AND json_extract(data, '$.tag') IS NOT NULL"
     ).fetchone()["n"]
     return {
         "total_pets": int(total),

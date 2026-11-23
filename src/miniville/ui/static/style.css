@@ -635,3 +635,14 @@ body.tv-mode #map-host canvas {
   padding: .7rem .95rem;
 }
 .transit-strip { margin-bottom: 1rem; }
+
+/* v0.60-v0.62 Expansion, Regional Trade & Real Estate */
+.expansion-banner { margin-bottom: 1rem; }
+.expansion-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid #61afef;
+  border-radius: 8px;
+  padding: .7rem .95rem;
+}
+.regional-strip { margin-bottom: 1rem; }

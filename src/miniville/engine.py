@@ -14,6 +14,7 @@ from . import (
     economy,
     enterprise,
     events,
+    expansion,
     festivals,
     groups,
     growth,
@@ -51,6 +52,8 @@ from . import (
     politics,
     potlucks,
     press,
+    real_estate,
+    regional,
     reputation,
     mortality,
     newspaper,
@@ -140,6 +143,9 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     stats["transit"] = transit.daily_transit(conn, day_of(tick), seed)
     stats["awards"] = awards.daily_awards(conn, day_of(tick), seed)
     stats["potlucks"] = potlucks.daily_potlucks(conn, day_of(tick), seed)
+    stats["expansion"] = expansion.daily_expansion(conn, day_of(tick), seed)
+    stats["regional"] = regional.daily_regional(conn, day_of(tick), seed)
+    stats["real_estate"] = real_estate.daily_real_estate(conn, day_of(tick), seed)
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)
     stats["life_events"] = daily_life_lottery(conn, tick, seed)

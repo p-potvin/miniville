@@ -983,14 +983,17 @@ def town_individualism_stats(conn: sqlite3.Connection) -> dict[str, Any]:
                      "letter_home", "care_package", "shared_roots", "competition_won",
                      "civic_petition", "civic_donation", "civic_volunteer",
                      "civic_project_completed", "medical_treatment", "wellness_checkup", "pet_encounter", "lost_pet_returned", "flea_market_sale", "youth_discovery", "civic_scholarship", "radio_broadcast", "guild_masterpiece", "coop_market_box", "harvest_basket_shared", "district_derby", "fire_drill", "brigade_rebuild_aid", "author_signing", "book_club_meeting", "home_renovation", "key_to_the_town", "theater_premiere", "tool_library_loan", "orchard_gleaning", "plaque_dedicated", "masterclass_taught", "memoir_published")
-    tag_counts: dict[str, int] = {}
-    for t in personal_tags:
-        c = conn.execute(
-            "SELECT COUNT(*) n FROM events WHERE data LIKE ?",
-            (f'%"tag": "{t}"%',),
-        ).fetchone()["n"]
-        if c:
-            tag_counts[t] = c
+    raw_tag_counts: dict[str, int] = {}
+    for row in conn.execute(
+        "SELECT json_extract(data, '$.tag') AS tag, COUNT(*) AS n "
+        "FROM events WHERE json_extract(data, '$.tag') IS NOT NULL "
+        "GROUP BY json_extract(data, '$.tag')"
+    ).fetchall():
+        if row["tag"]:
+            raw_tag_counts[str(row["tag"])] = int(row["n"])
+    tag_counts: dict[str, int] = {
+        t: raw_tag_counts[t] for t in personal_tags if raw_tag_counts.get(t, 0) > 0
+    }
     from .ambitions import AMBITION_LABELS, list_ambitions
     amb_counts = {
         AMBITION_LABELS.get(r["kind"], r["kind"]): r["n"]
@@ -999,9 +1002,7 @@ def town_individualism_stats(conn: sqlite3.Connection) -> dict[str, Any]:
             "WHERE a.alive=1 AND am.status='active' GROUP BY am.kind ORDER BY n DESC"
         ).fetchall()
     }
-    completed_amb = conn.execute(
-        "SELECT COUNT(*) n FROM events WHERE data LIKE ?", ("%\"ambition_achieved\"%",)
-    ).fetchone()["n"]
+    completed_amb = raw_tag_counts.get("ambition_achieved", 0)
     from .civic_projects import list_projects
     from .competitions import list_competitions
     from .correspondence import list_diaries

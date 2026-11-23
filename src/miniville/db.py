@@ -133,6 +133,7 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_day ON events(day);
 CREATE INDEX IF NOT EXISTS idx_events_agents ON events(a_id, b_id);
 CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind);
+CREATE INDEX IF NOT EXISTS idx_events_json_tag ON events(json_extract(data, '$.tag')) WHERE json_extract(data, '$.tag') IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS chronicle (
     day INTEGER PRIMARY KEY,
@@ -801,6 +802,46 @@ CREATE TABLE IF NOT EXISTS potlucks (
     summary         TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_potlucks_day ON potlucks(day);
+
+CREATE TABLE IF NOT EXISTS town_expansions (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    day                 INTEGER NOT NULL,
+    year                INTEGER NOT NULL,
+    district            TEXT NOT NULL,
+    kind                TEXT NOT NULL,
+    place_id            INTEGER REFERENCES places(id),
+    place_name          TEXT NOT NULL,
+    cost_cents          INTEGER NOT NULL DEFAULT 0,
+    sponsor_name        TEXT NOT NULL DEFAULT '',
+    builders_paid_cents INTEGER NOT NULL DEFAULT 0,
+    status              TEXT NOT NULL DEFAULT 'completed',
+    summary             TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_town_expansions_day ON town_expansions(day DESC);
+
+CREATE TABLE IF NOT EXISTS regional_days (
+    day                INTEGER PRIMARY KEY,
+    sister_town        TEXT NOT NULL,
+    visitors_count     INTEGER NOT NULL DEFAULT 0,
+    trade_volume_cents INTEGER NOT NULL DEFAULT 0,
+    customs_cents      INTEGER NOT NULL DEFAULT 0,
+    top_export         TEXT NOT NULL,
+    top_import         TEXT NOT NULL,
+    envoy_agent_id     INTEGER REFERENCES agents(id),
+    summary            TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS home_deeds (
+    place_id          INTEGER PRIMARY KEY,
+    owner_agent_id    INTEGER,
+    surname           TEXT,
+    acquired_day      INTEGER,
+    price_cents       INTEGER,
+    mortgage_cents    INTEGER,
+    renovations_count INTEGER,
+    generation        INTEGER,
+    note              TEXT
+);
 
 """
 

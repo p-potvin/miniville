@@ -1110,6 +1110,76 @@ def cmd_potlucks(args) -> int:
     return 0
 
 
+def cmd_expansion(args) -> int:
+    from . import expansion
+    conn = dbmod.connect(args.db)
+    summ = expansion.expansion_summary(conn)
+    print(
+        f"Town Expansions: {summ['total_expansions']} projects "
+        f"({summ['landmarks_built']} landmarks, {summ['wings_added']} wings) · "
+        f"${summ['total_cost_cents']/100:,.2f} invested"
+    )
+    rows = expansion.list_expansions(conn, limit=args.limit)
+    if not rows:
+        print("no town expansions recorded yet")
+        return 0
+    print(f"\n{'day':>5} {'kind':<14} {'district':<17} {'cost':>9}  place")
+    for r in rows:
+        print(
+            f"{r['day'] + 1:>5} {r['kind']:<14} {r['district'][:15]:<17} "
+            f"${r['cost_cents']/100:>7,.0f}  {r['place_name']}"
+        )
+    return 0
+
+
+def cmd_regional(args) -> int:
+    from . import regional
+    conn = dbmod.connect(args.db)
+    summ = regional.regional_summary(conn, days=args.days)
+    print(
+        f"Sister Towns & Regional Trade: {summ['total_days']} days · "
+        f"{summ['total_visitors']:,} visitors · "
+        f"${summ['total_trade_cents']/100:,.2f} trade · "
+        f"${summ['total_customs_cents']/100:,.2f} customs"
+    )
+    hist = summ["history"]
+    if not hist:
+        print("no regional days recorded yet")
+        return 0
+    print(f"\n{'day':>5} {'sister_town':<15} {'vis':>4} {'trade':>9}  exchange")
+    for r in hist:
+        print(
+            f"{r['day'] + 1:>5} {r['sister_town']:<15} {r['visitors_count']:>4} "
+            f"${r['trade_volume_cents']/100:>7,.2f}  {r['top_export']} <-> {r['top_import']}"
+        )
+    return 0
+
+
+def cmd_deeds(args) -> int:
+    from . import real_estate
+    conn = dbmod.connect(args.db)
+    summ = real_estate.real_estate_summary(conn)
+    print(
+        f"Real Estate Deeds: {summ['total_deeds']} deeds · "
+        f"{summ['active_mortgages']} active mortgages "
+        f"(${summ['total_mortgage_cents']/100:,.2f} remaining) · "
+        f"max Gen {summ['max_generation']}"
+    )
+    rows = real_estate.list_deeds(conn, limit=args.limit)
+    if not rows:
+        print("no home deeds recorded yet")
+        return 0
+    print(f"\n{'gen':>3} {'owner':<22} {'place':<22} {'mortgage':>10}  district")
+    for r in rows:
+        own = r.get("owner_name") or r["surname"] or "-"
+        pl = r.get("place_name") or f"#{r['place_id']}"
+        print(
+            f"{r['generation']:>3} {own[:20]:<22} {pl[:20]:<22} "
+            f"${r['mortgage_cents']/100:>8,.2f}  {r.get('district') or '-'}"
+        )
+    return 0
+
+
 def cmd_loans(args) -> int:
     from . import banking
     conn = dbmod.connect(args.db)
@@ -1440,6 +1510,15 @@ def main(argv=None) -> int:
     ppot = sub.add_parser("potlucks", help="Show Community Potlucks & Block Parties")
     ppot.add_argument("--limit", type=int, default=16)
     ppot.set_defaults(fn=cmd_potlucks)
+    pexp = sub.add_parser("expansion", help="Show Dynamic Town Expansions & new landmarks")
+    pexp.add_argument("--limit", type=int, default=20)
+    pexp.set_defaults(fn=cmd_expansion)
+    preg = sub.add_parser("regional", help="Show Sister Towns tourism & regional trade")
+    preg.add_argument("--days", type=int, default=14)
+    preg.set_defaults(fn=cmd_regional)
+    pded = sub.add_parser("deeds", help="Show Real Estate home deeds and mortgages")
+    pded.add_argument("--limit", type=int, default=25)
+    pded.set_defaults(fn=cmd_deeds)
     plon = sub.add_parser("loans", help="List peer-backed Credit Union loans")
     plon.add_argument("--status", choices=["active", "repaid", "defaulted", "all"], default="all")
     plon.add_argument("--limit", type=int, default=40)
