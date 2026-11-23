@@ -550,3 +550,17 @@ tick 204919) and shipped three fixes on `autodev`:
   `civic_drama`) with per-kind variety cap, `cli arcs`, `/api/arcs`, TV ticker & Feed strip.
 - Verified: 284 tests pass; 180-day soak holds 11/11 invariants; Patchright UI verified
   (0 console errors). Claim cleared.
+
+[Mon, 23 Nov 2026 03:25 local] local -> all: Shipped v0.54–v0.56 on `autodev`:
+- v0.54 (`festivals.py`): 4 seasonal 2-day festivals with weather indoor shelter fallback,
+  100% conserved booth/patron/prize transfers, deterministic winner selection, `cli festivals`,
+  `GET /api/festivals`, and Feed festival banner.
+- v0.55 (`museum.py`): Bounded 10–20d artifact curation (`museum_exhibits`, `museum_days`),
+  weather/curiosity visitor tracking, conserved donations, `cli museum`, `GET /api/museum`,
+  and Individualism exhibits table.
+- v0.56 (`market.py`): Daily sector multipliers (`food`, `dining`, `goods`, `leisure`, clamped
+  `[0.85, 1.20]`) and CPI (`market_days`, baseline 100.0), rate-limited `market_bulletin`
+  events, `cli cpi`, `GET /api/market`, and Economy CPI card. Disambiguated the existing
+  `flea_market` endpoint from `/api/market` to `/api/flea-market`.
+- Verified: 302 passed in pytest; 180-day soak holds 11/11 invariants; live FastAPI +
+  Patchright UI verified with 0 console/page errors. Claim cleared.

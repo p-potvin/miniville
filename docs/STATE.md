@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Mon, 23 Nov 2026 02:22
+Last updated: Mon, 23 Nov 2026 03:25
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -582,6 +582,13 @@ the receipt. Current live issue had no false claim, so the misreport path is
 tested with a deliberately opposed council vote. A 90-day press soak is
 running to see whether routine politics produces claims and how credibility
 moves.
+
+## v0.54–v0.56 — Town Festivals, Museum & Market CPI (Mon, 23 Nov 2026, workstation)
+
+- **v0.54 (`festivals.py`)**: Seasonal 2-day town festivals (Spring Blossom Fair, Lakeshore Summer Regatta, Autumn Harvest Jamboree, Winter Lantern Market) with weather-aware indoor shelter fallback, 100% conserved booth/patron/prize transfers across `agent_state`/`businesses`/`town_account`, deterministic competition winner selection, `cli festivals`, `/api/festivals`, and Feed festival banner (`#feed-festival`).
+- **v0.55 (`museum.py`)**: Town Museum & Artifact Curation (`museum_exhibits`, `museum_days`) curating notable town events/keepsakes/plaques/dynasties/elders every 10–20 days, weather- and curiosity-driven daily visitors, 100% conserved visitor donations (`agent_state.money_cents -> town_account`), `cli museum`, `/api/museum`, and Individualism exhibits table (`#ind-museum`).
+- **v0.56 (`market.py`)**: Daily Town Market Prices, Supply Waves & Cost-of-Living Index (`market_days`, baseline CPI 100.0) with deterministic `[0.85, 1.20]` sector multipliers (`food`, `dining`, `goods`, `leisure`) driven by weather, open business supply, seasonal cycles, and mild drift, rate-limited `market_bulletin` events, `cli cpi`, `/api/market` (flea-market moved to `/api/flea-market`), and Economy CPI card (`#econ-market`).
+- **Verified**: `302 passed` in pytest; 180-day soak (`backups/miniville-t026112.db`) holds 11/11 invariants (+0.1%/y money, 0 deficits, 8.6% unemployment); Patchright UI verified with 0 console/page errors.
 
 ## v0.48 — the TV director tells stories (Mon, 19 Oct 2026, cloud: Claude Code)
 
