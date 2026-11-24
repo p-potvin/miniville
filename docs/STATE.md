@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Mon, 23 Nov 2026 11:42
+Last updated: Tue, 24 Nov 2026 17:05
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -582,6 +582,14 @@ the receipt. Current live issue had no false claim, so the misreport path is
 tested with a deliberately opposed council vote. A 90-day press soak is
 running to see whether routine politics produces claims and how credibility
 moves.
+
+## v0.63–v0.66 — Town Courts, Life Chapters, Power Grid & Living 2D Map (Tue, 24 Nov 2026, workstation)
+
+- **v0.63 (`courts.py`)**: Town Courts, Civil Mediation & Jury Hearings (`court_cases`) every 10–18 days for bitter rivalries (`affinity <= -25`), defaulted loans, or crime/conflict events with high-standing judge + 3–5 jurors; 100% conserved restitution (`defendant -> plaintiff`) and fines (`defendant -> town_account`), mediation affinity healing, `court_verdict` events, `cli courts`, `/api/courts`, and Council Court Docket (`#council-courts`).
+- **v0.64 (`chapters.py`)**: Multi-Step Resident Life Chapters & Goal Chains (`life_chapters`, `chapters_days`) maintaining up to 14 active multi-month arcs across 5 types (`apprentice_to_master`, `civic_climber`, `entrepreneurs_ascent`, `homesteaders_dream`, `patron_of_arts`), advancing stages 1→2→3 from live DB state, closing deceased arcs, emitting `chapter_milestone`/`chapter_completed` events with zero mint/burn, `cli chapters`, `/api/chapters`, Resident Card chapters, and Individualism Life Chapters table (`#ind-chapters`).
+- **v0.65 (`utilities.py`)**: Town Utilities, Power Grid & Renewable Micro-Grid (`utility_days`) computing weather-coupled demand vs. `Old Mill Hydro` + `Greenhill Solar Array` + backup supply (`surplus`, `nominal`, `strained`, `brownout`); deficit-safe 100% conserved emergency repair (`town_account -> trades workers`) and weekly green-energy rebates (`town_account -> living adults`), rate-limited `grid_alert`/`green_rebate` events, `cli utilities`, `/api/utilities`, and Economy Power Grid strip (`#econ-utilities`).
+- **v0.66 (`map.js`, `/api/map`)**: Living 2D Town Map Overhaul enriching `/api/map` with `weather`, `festival`, `transit`, `utilities`, and `expansion_place_ids` overlays, plus `#map-overlay-hud`, weather/outage/bus/festival visuals, and clean animation lifecycle.
+- **Verified**: `337 passed` in pytest; 180-day soak (`backups/miniville-t026112.db`) holds 11/11 invariants (+0.1%/y money, 0 deficits, 6.3% unemployment); Patchright UI verified with 0 console/page errors.
 
 ## v0.60–v0.62 — Town Expansion, Regional Trade & Real Estate Deeds (Mon, 23 Nov 2026, workstation)
 

@@ -592,3 +592,18 @@ tick 204919) and shipped three fixes on `autodev`:
   (49x `/api/individual` speedup: `27.5s -> 0.56s`) and restarted live `:8751` observer.
 - Verified: 325 passed in pytest; 180-day soak holds 11/11 invariants; live FastAPI +
   Patchright UI verified with 0 console/page errors. Claim cleared.
+
+[Tue, 24 Nov 2026 17:05 local] local -> all: Shipped v0.63–v0.66 on `autodev`:
+- v0.63 (`courts.py`): Town Hall Hearings & Civil Mediation (`court_cases`) every 10–18 days
+  for rivalries/defaulted loans/crime, 100% conserved restitution (`defendant -> plaintiff`) &
+  fines (`defendant -> town_account`), `cli courts`, `GET /api/courts`, and Council Court Docket.
+- v0.64 (`chapters.py`): Up to 14 active multi-stage resident life chapters (`life_chapters`),
+  advancing stages 1→2→3 from real DB state, `cli chapters`, `GET /api/chapters`, Resident Card
+  chapters, and Individualism Life Chapters table.
+- v0.65 (`utilities.py`): Weather-coupled Power Grid & Renewable Micro-Grid (`utility_days`),
+  deficit-safe conserved maintenance & weekly green rebates (`town_account -> residents`),
+  `cli utilities`, `GET /api/utilities`, and Economy Power Grid strip.
+- v0.66 (`map.js`, `/api/map`): Living 2D Town Map Overhaul with weather, festival, transit,
+  utilities, and expansion landmark overlays (`#map-overlay-hud`).
+- Verified: 337 passed in pytest; 180-day soak holds 11/11 invariants (+0.1%/y money); live
+  FastAPI + Patchright UI verified with 0 console/page errors. Claim cleared.
