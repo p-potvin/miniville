@@ -8,8 +8,10 @@ from . import (
     arcs,
     awards,
     banking,
+    chapters,
     chronicle,
     conflict,
+    courts,
     crime,
     economy,
     enterprise,
@@ -60,6 +62,7 @@ from . import (
     seasons,
     shocks,
     transit,
+    utilities,
     weather,
 )
 from .db import get_meta, set_meta
@@ -146,6 +149,9 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     stats["expansion"] = expansion.daily_expansion(conn, day_of(tick), seed)
     stats["regional"] = regional.daily_regional(conn, day_of(tick), seed)
     stats["real_estate"] = real_estate.daily_real_estate(conn, day_of(tick), seed)
+    stats["courts"] = courts.daily_courts(conn, day_of(tick), seed)
+    stats["chapters"] = chapters.daily_chapters(conn, day_of(tick), seed)
+    stats["utilities"] = utilities.daily_utilities(conn, day_of(tick), seed)
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)
     stats["life_events"] = daily_life_lottery(conn, tick, seed)

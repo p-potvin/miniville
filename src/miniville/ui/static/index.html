@@ -39,6 +39,7 @@
     <h2 class="map-std-title">Town map <small id="map-hint" class="muted">drag to pan · scroll to zoom · click a dot for the resident · press T for 10-foot TV Mode</small></h2>
     <div id="map-stage-wrap">
       <div id="map-host"></div>
+      <div id="map-overlay-hud" class="map-overlay-hud" hidden></div>
       <div id="tv-hud" hidden>
         <div class="tv-top-bar">
           <div id="tv-clock" class="tv-glass"></div>
@@ -185,6 +186,11 @@
     <table><thead><tr><th>Home</th><th>District</th><th>Owner</th>
       <th>Surname</th><th>Generation</th><th>Price</th><th>Mortgage</th><th>Notes</th></tr></thead>
       <tbody id="ind-deeds"></tbody></table>
+    <h3>Active Life Chapters &amp; Goal Chains</h3>
+    <div id="ind-chapters-meta" class="policy-grid"></div>
+    <table><thead><tr><th>Resident</th><th>Chapter</th><th>Arc</th>
+      <th>Stage</th><th>Status</th><th>Progress Note</th></tr></thead>
+      <tbody id="ind-chapters"></tbody></table>
     <h3>Civic Projects &amp; Durable Town Landmarks</h3>
     <table><thead><tr><th>Civic Landmark</th><th>District</th><th>Venue</th>
       <th>Funding</th><th>Volunteer Hrs</th><th>Status &amp; Benefit</th></tr></thead>
@@ -252,6 +258,7 @@
     <div id="econ-market" class="market-strip" hidden></div>
     <div id="econ-transit" class="transit-strip" hidden></div>
     <div id="econ-regional" class="regional-strip" hidden></div>
+    <div id="econ-utilities" class="utilities-strip" hidden></div>
     <h3>Businesses</h3>
     <table><thead><tr><th>Business</th><th>Owner</th><th>Kind</th><th>Status</th>
       <th>Balance</th><th>Revenue</th><th>Payroll</th><th>Prices</th><th>Traffic</th>
@@ -283,6 +290,11 @@
     <table><thead><tr><th>Day</th><th>Policy</th><th>Target</th><th>Direction</th>
       <th>Votes</th><th>Outcome</th></tr></thead>
       <tbody id="council-motions"></tbody></table>
+    <h3>Town Court &amp; Civil Mediation Docket</h3>
+    <div id="council-courts-meta" class="policy-grid"></div>
+    <table><thead><tr><th>Day</th><th>Kind</th><th>Plaintiff</th><th>Defendant</th>
+      <th>Judge</th><th>Verdict</th><th>Restitution / Fine</th><th>Summary</th></tr></thead>
+      <tbody id="council-courts"></tbody></table>
     <div id="council-extra">
       <div id="council-boycotts-wrap" hidden>
         <h3>Active Boycotts</h3>

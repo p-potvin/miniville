@@ -843,6 +843,54 @@ CREATE TABLE IF NOT EXISTS home_deeds (
     note              TEXT
 );
 
+CREATE TABLE IF NOT EXISTS court_cases (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    day               INTEGER NOT NULL,
+    year              INTEGER NOT NULL,
+    kind              TEXT NOT NULL,
+    plaintiff_id      INTEGER REFERENCES agents(id),
+    defendant_id      INTEGER REFERENCES agents(id),
+    judge_id          INTEGER REFERENCES agents(id),
+    jury_count        INTEGER NOT NULL DEFAULT 3,
+    verdict           TEXT NOT NULL,
+    restitution_cents INTEGER NOT NULL DEFAULT 0,
+    fine_cents        INTEGER NOT NULL DEFAULT 0,
+    summary           TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_court_cases_day ON court_cases(day DESC);
+
+CREATE TABLE IF NOT EXISTS life_chapters (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id      INTEGER NOT NULL REFERENCES agents(id),
+    arc_type      TEXT NOT NULL,
+    title         TEXT NOT NULL,
+    stage         INTEGER NOT NULL DEFAULT 1,
+    max_stage     INTEGER NOT NULL DEFAULT 3,
+    status        TEXT NOT NULL DEFAULT 'active',
+    started_day   INTEGER NOT NULL,
+    updated_day   INTEGER NOT NULL,
+    completed_day INTEGER,
+    progress_note TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_life_chapters_agent ON life_chapters(agent_id, status);
+CREATE INDEX IF NOT EXISTS idx_life_chapters_status ON life_chapters(status, updated_day DESC);
+
+CREATE TABLE IF NOT EXISTS chapters_days (
+    day INTEGER PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS utility_days (
+    day               INTEGER PRIMARY KEY,
+    demand_mw         REAL,
+    supply_mw         REAL,
+    renewable_pct     REAL,
+    grid_status       TEXT,
+    outage_district   TEXT,
+    maintenance_cents INTEGER,
+    rebate_cents      INTEGER,
+    note              TEXT
+);
+
 """
 
 

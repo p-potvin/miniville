@@ -646,3 +646,21 @@ body.tv-mode #map-host canvas {
   padding: .7rem .95rem;
 }
 .regional-strip { margin-bottom: 1rem; }
+
+/* v0.63-v0.66 Courts, Chapters, Utilities & Living Map HUD */
+.utilities-strip { margin-bottom: 1rem; }
+#map-stage-wrap { position: relative; }
+.map-overlay-hud {
+  position: absolute;
+  top: .65rem;
+  left: .75rem;
+  z-index: 6;
+  background: rgba(16, 20, 29, 0.84);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: .3rem .8rem;
+  font-size: .82rem;
+  color: var(--fg);
+  pointer-events: none;
+}
+body.tv-mode .map-overlay-hud { display: none; }

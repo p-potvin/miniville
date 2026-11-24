@@ -690,11 +690,12 @@ class TVDirector {
       const festHtml = data.festival ? `<span>🎪 <b>${tvEsc(data.festival.name)}</b></span>` : "";
       const trHtml = data.transit ? `<span>🚌 <b>${data.transit.total_rides ?? 0}</b> rides (${Math.round(data.transit.on_time_pct ?? 100)}%)</span>` : "";
       const regHtml = data.regional ? `<span>🚂 <b>${tvEsc(data.regional.sister_town)}</b> (${data.regional.visitors_count ?? 0} visitors)</span>` : "";
+      const utHtml = data.utilities ? `<span>⚡ <b>${tvEsc(data.utilities.grid_status)}</b> (${Math.round(data.utilities.renewable_pct ?? 0)}% green)</span>` : "";
       vitEl.innerHTML = `
         <span>👥 <b>${vit.population ?? 0}</b> residents (${vit.awake ?? 0} awake)</span>
         <span>💼 <b>${vit.employed ?? 0}</b> employed</span>
         <span>🏛️ <b>$${(vit.treasury_dollars ?? 0).toLocaleString()}</b> treasury</span>
-        <span>📰 <b>${(data.stories || []).length}</b> stories today</span>${cpiHtml}${festHtml}${trHtml}${regHtml}`;
+        <span>📰 <b>${(data.stories || []).length}</b> stories today</span>${cpiHtml}${festHtml}${trHtml}${regHtml}${utHtml}`;
     }
 
     this._renderSpotlightCards(data);
@@ -785,6 +786,19 @@ class TVDirector {
         const ld = data.latest_deed;
         const detail = ld ? `${tvEsc(ld.owner_name || "Resident")} · Gen ${ld.generation}` : `${data.real_estate.total_deeds} deeds`;
         progItems.push(`<div class="tv-prog-item"><small>🏡 Real Estate</small><b>${data.real_estate.total_deeds ?? 0} Deeds (Gen ${data.real_estate.max_generation ?? 1})</b><span>${detail}</span></div>`);
+      }
+      if (data.courts) {
+        const ct = data.courts;
+        progItems.push(`<div class="tv-prog-item"><small>⚖️ Town Court</small><b>${tvEsc(String(ct.kind).replace(/_/g, " "))}</b><span>${tvEsc(ct.verdict)} · ${tvEsc(ct.defendant_name || "Case #" + ct.id)}</span></div>`);
+      }
+      if (data.chapters && (data.chapters.active_count > 0 || data.chapters.latest)) {
+        const lc = data.chapters.latest;
+        const detail = lc ? `${tvEsc(lc.agent_name || "Resident")} (${lc.stage}/${lc.max_stage})` : `${data.chapters.active_count} active`;
+        progItems.push(`<div class="tv-prog-item"><small>📘 Life Chapters</small><b>${data.chapters.active_count ?? 0} Active · ${data.chapters.completed_count ?? 0} Done</b><span>${detail}</span></div>`);
+      }
+      if (data.utilities) {
+        const ut = data.utilities;
+        progItems.push(`<div class="tv-prog-item"><small>⚡ Power Grid</small><b>${tvEsc(String(ut.grid_status).toUpperCase())} (${Number(ut.renewable_pct ?? 0).toFixed(0)}% green)</b><span>${Number(ut.demand_mw ?? 0).toFixed(1)} / ${Number(ut.supply_mw ?? 0).toFixed(1)} MW</span></div>`);
       }
       const progHtml = progItems.join("");
       svEl.innerHTML = `

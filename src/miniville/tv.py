@@ -566,6 +566,36 @@ def _safe_real_estate_summary(conn: sqlite3.Connection) -> dict[str, Any] | None
         return None
 
 
+def _safe_latest_court(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        from . import courts
+        rows = courts.list_cases(conn, limit=1)
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def _safe_chapters_summary(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        from . import chapters
+        summ = chapters.chapters_summary(conn)
+        return {
+            "active_count": summ["active_count"],
+            "completed_count": summ["completed_count"],
+            "latest": summ["chapters"][0] if summ["chapters"] else None,
+        }
+    except Exception:
+        return None
+
+
+def _safe_utilities_today(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        from . import utilities
+        return utilities.utilities_summary(conn, days=1).get("today")
+    except Exception:
+        return None
+
+
 def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any]]:
     """Build a 10-foot lower-third broadcast ticker with clickable items."""
     items: list[dict[str, Any]] = []
@@ -758,6 +788,51 @@ def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any
                 "agent_id": d.get("owner_agent_id"),
                 "place_id": d.get("place_id"),
                 "time": f"Day {int(d['acquired_day']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import courts
+        cases = courts.list_cases(conn, limit=1)
+        if cases and int(cases[0]["day"]) >= cur_day - 10:
+            cs = cases[0]
+            items.insert(0, {
+                "badge": "⚖️ Town Court",
+                "text": cs["summary"],
+                "agent_id": cs.get("defendant_id"),
+                "place_id": None,
+                "time": f"Day {int(cs['day']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import chapters
+        chaps = chapters.list_chapters(conn, status="all", limit=1)
+        if chaps and int(chaps[0]["updated_day"]) >= cur_day - 7:
+            ch = chaps[0]
+            items.append({
+                "badge": "📘 Life Chapter",
+                "text": f"{ch.get('agent_name') or 'Resident'}: {ch['title']} (Stage {ch['stage']}/{ch['max_stage']})",
+                "agent_id": ch.get("agent_id"),
+                "place_id": None,
+                "time": f"Day {int(ch['updated_day']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import utilities
+        ut = utilities.utilities_summary(conn, days=1).get("today")
+        if ut and (ut["grid_status"] in ("strained", "brownout") or int(ut["rebate_cents"]) > 0):
+            badge = "⚡ Power Grid" if ut["grid_status"] in ("strained", "brownout") else "🌱 Green Grid"
+            items.insert(0, {
+                "badge": badge,
+                "text": f"{ut['grid_status'].title()} ({ut['demand_mw']:.1f}/{ut['supply_mw']:.1f} MW, {ut['renewable_pct']:.0f}% renewable) — {ut['note']}",
+                "agent_id": None,
+                "place_id": None,
+                "time": f"Day {int(ut['day']) + 1}",
             })
     except Exception:
         pass
@@ -1199,6 +1274,9 @@ def tv_director_snapshot(conn: sqlite3.Connection,
         "expansion": _safe_latest_expansion(conn),
         "regional": _safe_regional_today(conn),
         "real_estate": _safe_real_estate_summary(conn),
+        "courts": _safe_latest_court(conn),
+        "chapters": _safe_chapters_summary(conn),
+        "utilities": _safe_utilities_today(conn),
         "holiday": holiday.name if holiday else None,
         "sky": _sky_state(tod, season),
         "vitality": {

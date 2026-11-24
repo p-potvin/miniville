@@ -72,7 +72,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "SELECT COUNT(*) n FROM agents WHERE alive=1").fetchone()["n"]
             day = day_of(tick)
             holiday = holiday_for(c, day)
-            from .. import awards, expansion, festivals, market, museum, potlucks, real_estate, regional, transit, weather
+            from .. import awards, chapters, courts, expansion, festivals, market, museum, potlucks, real_estate, regional, transit, utilities, weather
             ms = museum.museum_summary(c)
             ts = transit.transit_summary(c, days=1)
             aws = awards.list_awards(c, limit=4)
@@ -80,6 +80,9 @@ def create_app(db_path: str | None = None) -> FastAPI:
             exps = expansion.list_expansions(c, limit=1)
             rg = regional.regional_summary(c, days=1)
             re_summ = real_estate.real_estate_summary(c)
+            crt = courts.list_cases(c, limit=1)
+            ch_summ = chapters.chapters_summary(c)
+            ut = utilities.utilities_summary(c, days=1)
             return {"tick": tick, "day": day + 1, "date": fmt_date(day),
                     "season": season_of(day),
                     "weather": weather.today(c, day),
@@ -100,6 +103,12 @@ def create_app(db_path: str | None = None) -> FastAPI:
                         "active_mortgages": re_summ["active_mortgages"],
                         "max_generation": re_summ["max_generation"],
                     },
+                    "courts": crt[0] if crt else None,
+                    "chapters": {
+                        "active_count": ch_summ["active_count"],
+                        "completed_count": ch_summ["completed_count"],
+                    },
+                    "utilities": ut["today"],
                     "holiday": holiday.name if holiday else None,
                     "time": fmt_tick(tick), "population": pop, "moods": moods}
         finally:
@@ -241,6 +250,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     "groups": memberships_of(c, agent_id),
                     "owns": [dict(b) for b in owned_by(c, agent_id)],
                     "individual": resident_summary(c, agent_id),
+                    "chapters": __import__("miniville.chapters", fromlist=["chapters_of"]).chapters_of(c, agent_id),
                     "family": family_tree(c, agent_id)}
         finally:
             c.close()
@@ -541,13 +551,29 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "SELECT COUNT(*) n FROM places WHERE kind='home' AND district=?",
                 (name,)).fetchone()["n"] for name in DISTRICT_TILES}
             from ..housing import district_profile
+            from .. import festivals, transit, utilities, weather
             profile = {d["district"]: d for d in district_profile(c)}
+            tick = int(dbmod.get_meta(c, "tick", "0") or 0)
+            cur_day = day_of(tick)
+            try:
+                exp_rows = c.execute(
+                    "SELECT place_id FROM town_expansions "
+                    "WHERE kind = 'new_landmark' AND place_id IS NOT NULL"
+                ).fetchall()
+                exp_place_ids = [int(r["place_id"]) for r in exp_rows]
+            except Exception:
+                exp_place_ids = []
             return {
                 "districts": [dict(z, homes=home_counts.get(z["name"], 0),
                                    profile=profile.get(z["name"]))
                               for z in districts.values()],
                 "places": places,
                 "agents": agents,
+                "weather": weather.today(c, cur_day),
+                "festival": festivals.active_festival(c, cur_day),
+                "transit": transit.transit_summary(c, days=1)["today"],
+                "utilities": utilities.utilities_summary(c, days=1)["today"],
+                "expansion_place_ids": exp_place_ids,
             }
         finally:
             c.close()
@@ -954,6 +980,39 @@ def create_app(db_path: str | None = None) -> FastAPI:
             if limit != 25:
                 summ["deeds"] = real_estate.list_deeds(c, limit=limit)
             return summ
+        finally:
+            c.close()
+
+    @app.get("/api/courts")
+    def courts_view(limit: int = Query(20, le=100)):
+        c = conn()
+        try:
+            from .. import courts
+            summ = courts.courts_summary(c)
+            if limit != 20:
+                summ["cases"] = courts.list_cases(c, limit=limit)
+            return summ
+        finally:
+            c.close()
+
+    @app.get("/api/chapters")
+    def chapters_view(status: str = "all", limit: int = Query(24, le=100)):
+        c = conn()
+        try:
+            from .. import chapters
+            summ = chapters.chapters_summary(c)
+            if status != "all" or limit != 24:
+                summ["chapters"] = chapters.list_chapters(c, status=status, limit=limit)
+            return summ
+        finally:
+            c.close()
+
+    @app.get("/api/utilities")
+    def utilities_view(days: int = Query(14, le=90)):
+        c = conn()
+        try:
+            from .. import utilities
+            return utilities.utilities_summary(c, days=days)
         finally:
             c.close()
 

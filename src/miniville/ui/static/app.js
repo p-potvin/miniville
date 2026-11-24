@@ -183,6 +183,14 @@ async function residentCard(id) {
         <div class="prog-bar"><div class="prog-fill" style="width:${Math.round((r.individual.ambition.progress || 0) * 100)}%"></div></div>
       </div>` : ""}
     </div>` : ""}
+    ${r.chapters && r.chapters.length ? `
+    <h4>Life Chapters</h4>
+    <ul>${r.chapters.map(ch => {
+      const pct = Math.round(((ch.stage || 1) / Math.max(1, ch.max_stage || 3)) * 100);
+      return `<li><b>${esc(ch.title)}</b> <span class="t">(${esc(ch.arc_type.replace(/_/g, " "))} · Stage ${ch.stage}/${ch.max_stage} · ${esc(ch.status)})</span>
+        <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
+        ${ch.progress_note ? `<small class="muted">${esc(ch.progress_note)}</small>` : ""}</li>`;
+    }).join("")}</ul>` : ""}
     ${r.family && (r.family.parents.length || r.family.children.length || r.family.siblings.length || r.family.spouse) ? `
     <h4>Family Lineage · Gen ${r.family.generation} (${esc(r.family.surname)})</h4>
     <ul>
@@ -322,11 +330,12 @@ const money = (c) => "$" + ((c ?? 0) / 100).toLocaleString(undefined,
   { maximumFractionDigits: 0 });
 
 async function economy() {
-  const [r, mkt, trRes, regRes] = await Promise.all([
+  const [r, mkt, trRes, regRes, utRes] = await Promise.all([
     api("/api/economy"),
     api("/api/market?days=14").catch(() => ({})),
     api("/api/transit?days=14").catch(() => ({})),
     api("/api/regional?days=14").catch(() => ({})),
+    api("/api/utilities?days=14").catch(() => ({})),
   ]);
   const s = r.stats;
   $("#econ-stats").innerHTML =
@@ -402,6 +411,28 @@ async function economy() {
       regBox.innerHTML = "";
     }
   }
+  const utBox = $("#econ-utilities");
+  if (utBox) {
+    const ut = utRes?.today || (utRes?.history && utRes.history[0]) || null;
+    utBox.hidden = !ut;
+    if (ut) {
+      const statusCls = ut.grid_status === "brownout"
+        ? "cpi-high"
+        : (ut.grid_status === "surplus" ? "cpi-low" : "cpi-steady");
+      utBox.innerHTML = `
+        <div class="market-row">
+          <span class="cpi-badge ${statusCls}">⚡ Grid: ${esc(String(ut.grid_status).toUpperCase())}</span>
+          <span class="stat"><b>${Number(ut.demand_mw ?? 0).toFixed(1)} / ${Number(ut.supply_mw ?? 0).toFixed(1)} MW</b><span>demand / supply</span></span>
+          <span class="stat"><b>${Number(ut.renewable_pct ?? 0).toFixed(1)}%</b><span>renewable mix</span></span>
+          ${ut.outage_district ? `<span class="stat"><b>${esc(ut.outage_district)}</b><span>brownout district</span></span>` : ""}
+          ${(ut.rebate_cents ?? 0) > 0 ? `<span class="stat active-policy"><b>${money(ut.rebate_cents)}</b><span>green rebate</span></span>` : ""}
+          ${(ut.maintenance_cents ?? 0) > 0 ? `<span class="stat"><b>${money(ut.maintenance_cents)}</b><span>grid repair</span></span>` : ""}
+        </div>
+        ${ut.note ? `<div class="muted market-note">${esc(ut.note)}</div>` : ""}`;
+    } else {
+      utBox.innerHTML = "";
+    }
+  }
   $("#econ-body").innerHTML = r.businesses.map(b =>
     `<tr><td>${esc(b.name)}${b.founded_tick != null ? ` <span class="muted">(new ${esc(b.concept || "")})</span>` : ""}</td>
      <td>${b.owner_id ? `<a class="click-link" onclick="mvPick({id: ${b.owner_id}})">${esc(b.owner_name)}</a>` : `<span class="muted">—</span>`}</td>
@@ -433,7 +464,10 @@ function formatPolicy(name, val) {
 }
 
 async function council() {
-  const r = await api("/api/council");
+  const [r, courtsRes] = await Promise.all([
+    api("/api/council"),
+    api("/api/courts?limit=20").catch(() => ({})),
+  ]);
   const seats = r.seats || [];
   const policies = r.policies || {};
   const nextElection = r.next_election_day;
@@ -529,16 +563,50 @@ async function council() {
       <span class="t">influence <b>${Number(inf.influence).toFixed(1)}</b></span>
     </li>`
   ).join("") : `<li class="muted">No influence data</li>`;
+
+  const ct = courtsRes || {};
+  $("#council-courts-meta").innerHTML = `
+    <div class="stat"><b>${ct.total_cases ?? 0}</b><span>cases heard</span></div>
+    <div class="stat"><b>${ct.settlements ?? 0}</b><span>mediations / settlements</span></div>
+    <div class="stat"><b>${money(ct.total_restitution_cents ?? 0)}</b><span>restitution</span></div>
+    <div class="stat"><b>${money(ct.total_fines_cents ?? 0)}</b><span>civic fines</span></div>`;
+  const cases = ct.cases || [];
+  $("#council-courts").innerHTML = cases.length ? cases.map(c => {
+    const pl = c.plaintiff_id
+      ? `<a class="click-link" onclick="mvPick({id:${c.plaintiff_id}})">${esc(c.plaintiff_name || "#" + c.plaintiff_id)}</a>`
+      : `<span class="muted">Town</span>`;
+    const df = c.defendant_id
+      ? `<a class="click-link" onclick="mvPick({id:${c.defendant_id}})">${esc(c.defendant_name || "#" + c.defendant_id)}</a>`
+      : `<span class="muted">—</span>`;
+    const jd = c.judge_id
+      ? `<a class="click-link" onclick="mvPick({id:${c.judge_id}})">${esc(c.judge_name || "#" + c.judge_id)}</a>`
+      : `<span class="muted">—</span>`;
+    const vBadge = (c.verdict === "mediated" || c.verdict === "settled")
+      ? `<span class="badge-pass">${esc(c.verdict)}</span>`
+      : `<span class="badge-fail">${esc(c.verdict)}</span>`;
+    const amts = `${money(c.restitution_cents)} / ${money(c.fine_cents)}`;
+    return `<tr>
+      <td>Day ${c.day + 1}</td>
+      <td>${esc(String(c.kind).replace(/_/g, " "))}</td>
+      <td>${pl}</td>
+      <td>${df}</td>
+      <td>${jd}</td>
+      <td>${vBadge}</td>
+      <td>${amts}</td>
+      <td><small class="muted">${esc(c.summary)}</small></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="8" class="muted">No court cases heard yet</td></tr>`;
 }
 
 
 async function individual() {
-  const [r, dynRes, musRes, awRes, deedsRes] = await Promise.all([
+  const [r, dynRes, musRes, awRes, deedsRes, chapRes] = await Promise.all([
     api("/api/individual"),
     api("/api/dynasties").catch(() => ({})),
     api("/api/museum?limit=24").catch(() => ({})),
     api("/api/awards?limit=20").catch(() => ({})),
     api("/api/deeds?limit=25").catch(() => ({})),
+    api("/api/chapters?status=all&limit=24").catch(() => ({})),
   ]);
   const chronos = r.chronotypes || {};
   const order = ["early_bird", "morning", "day_walker", "evening", "night_owl"];
@@ -733,6 +801,28 @@ async function individual() {
       <td><small class="muted">${esc(d.note || "")}</small></td>
     </tr>`;
   }).join("") : `<tr><td colspan="8" class="muted">No home deeds recorded yet</td></tr>`;
+
+  const ch = chapRes || {};
+  $("#ind-chapters-meta").innerHTML = `
+    <div class="stat"><b>${ch.active_count ?? 0}</b><span>active chapters</span></div>
+    <div class="stat active-policy"><b>${ch.completed_count ?? 0}</b><span>completed chapters</span></div>
+    <div class="stat"><b>${ch.closed_count ?? 0}</b><span>closed chapters</span></div>`;
+  const chList = ch.chapters || [];
+  $("#ind-chapters").innerHTML = chList.length ? chList.map(c => {
+    const pct = Math.round(((c.stage || 1) / Math.max(1, c.max_stage || 3)) * 100);
+    const resLink = `<a class="click-link" onclick="mvPick({id:${c.agent_id}})"><b>${esc(c.agent_name || "#" + c.agent_id)}</b></a>`;
+    const stBadge = c.status === "completed"
+      ? `<span class="badge-pass">Completed</span>`
+      : (c.status === "active" ? `<b>Active</b>` : `<span class="muted">${esc(c.status)}</span>`);
+    return `<tr>
+      <td>${resLink}</td>
+      <td><b>${esc(c.title)}</b></td>
+      <td>${esc(String(c.arc_type).replace(/_/g, " "))}</td>
+      <td><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div> <span class="muted">${c.stage}/${c.max_stage}</span></td>
+      <td>${stBadge}</td>
+      <td><small class="muted">${esc(c.progress_note || "")}</small></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="6" class="muted">No life chapters seeded yet</td></tr>`;
 
   const projs = r.civic_projects || [];
   $("#ind-projects").innerHTML = projs.length ? projs.map(p => {

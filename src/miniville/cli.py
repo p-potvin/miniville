@@ -1180,6 +1180,72 @@ def cmd_deeds(args) -> int:
     return 0
 
 
+def cmd_courts(args) -> int:
+    from . import courts
+    conn = dbmod.connect(args.db)
+    summ = courts.courts_summary(conn)
+    print(
+        f"Town Courts: {summ['total_cases']} cases ({summ['settlements']} settlements) · "
+        f"${summ['total_restitution_cents']/100:,.2f} restitution · "
+        f"${summ['total_fines_cents']/100:,.2f} fines"
+    )
+    rows = courts.list_cases(conn, limit=args.limit)
+    if not rows:
+        print("no court cases heard yet")
+        return 0
+    print(f"\n{'day':>5} {'kind':<22} {'verdict':<21}  summary")
+    for r in rows:
+        print(
+            f"{r['day'] + 1:>5} {r['kind'][:20]:<22} {r['verdict'][:19]:<21}  {r['summary']}"
+        )
+    return 0
+
+
+def cmd_chapters(args) -> int:
+    from . import chapters
+    conn = dbmod.connect(args.db)
+    summ = chapters.chapters_summary(conn)
+    print(
+        f"Life Chapters: {summ['active_count']} active · "
+        f"{summ['completed_count']} completed · {summ['closed_count']} closed"
+    )
+    rows = chapters.list_chapters(conn, status=args.status, limit=args.limit)
+    if not rows:
+        print("no life chapters recorded yet")
+        return 0
+    print(f"\n{'resident':<22} {'arc_type':<21} {'stg':>3} {'status':<10}  title")
+    for r in rows:
+        res = r.get("agent_name") or f"#{r['agent_id']}"
+        print(
+            f"{res[:20]:<22} {r['arc_type'][:19]:<21} "
+            f"{r['stage']}/{r['max_stage']} {r['status']:<10}  {r['title']}"
+        )
+    return 0
+
+
+def cmd_utilities(args) -> int:
+    from . import utilities
+    conn = dbmod.connect(args.db)
+    summ = utilities.utilities_summary(conn, days=args.days)
+    print(
+        f"Town Utilities & Power Grid: {summ['avg_renewable_pct']:.1f}% avg renewable · "
+        f"{summ['brownout_days']} brownout days · "
+        f"${summ['total_maintenance_cents']/100:,.2f} maint · "
+        f"${summ['total_rebate_cents']/100:,.2f} rebates"
+    )
+    hist = summ["history"]
+    if not hist:
+        print("no utility days recorded yet")
+        return 0
+    print(f"\n{'day':>5} {'dem_mw':>7} {'sup_mw':>7} {'ren%':>6} {'status':<10}  note")
+    for r in hist:
+        print(
+            f"{r['day'] + 1:>5} {r['demand_mw']:>7.1f} {r['supply_mw']:>7.1f} "
+            f"{r['renewable_pct']:>5.1f}% {r['grid_status']:<10}  {r['note']}"
+        )
+    return 0
+
+
 def cmd_loans(args) -> int:
     from . import banking
     conn = dbmod.connect(args.db)
@@ -1519,6 +1585,16 @@ def main(argv=None) -> int:
     pded = sub.add_parser("deeds", help="Show Real Estate home deeds and mortgages")
     pded.add_argument("--limit", type=int, default=25)
     pded.set_defaults(fn=cmd_deeds)
+    pcrt = sub.add_parser("courts", help="Show Town Courts hearings, mediation, and verdicts")
+    pcrt.add_argument("--limit", type=int, default=20)
+    pcrt.set_defaults(fn=cmd_courts)
+    pchp = sub.add_parser("chapters", help="Show multi-step Resident Life Chapters")
+    pchp.add_argument("--status", choices=["all", "active", "completed", "closed"], default="all")
+    pchp.add_argument("--limit", type=int, default=24)
+    pchp.set_defaults(fn=cmd_chapters)
+    putl = sub.add_parser("utilities", help="Show Town Utilities & Renewable Power Grid")
+    putl.add_argument("--days", type=int, default=14)
+    putl.set_defaults(fn=cmd_utilities)
     plon = sub.add_parser("loans", help="List peer-backed Credit Union loans")
     plon.add_argument("--status", choices=["active", "repaid", "defaulted", "all"], default="all")
     plon.add_argument("--limit", type=int, default=40)

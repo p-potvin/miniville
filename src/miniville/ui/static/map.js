@@ -38,6 +38,9 @@ class TownMap {
     this.flash = null;         // a breaking-news cut: one bright expanding ring
     this.moverPhase = 0;
     this.clock = 0;
+    this.mapData = null;
+    this.busLoops = [];
+    this.weatherParticles = [];
 
     this._buildLayers();
     this.tooltip = this._makeTooltip();
@@ -48,20 +51,28 @@ class TownMap {
   _buildLayers() {
     this.staticLayer = new PIXI.Container();
     this.pulseLayer = new PIXI.Graphics();
+    this.overlayLayer = new PIXI.Graphics();
+    this.overlayLayer.eventMode = "none";
     this.moversGraphic = new PIXI.Graphics();
     this.moversLabels = new PIXI.Container();
+    this.busLabels = new PIXI.Container();
     this.spotlightGraphic = new PIXI.Graphics();
     this.hotspotGraphic = new PIXI.Graphics();
     this.skyOverlay = new PIXI.Graphics();
     this.skyOverlay.eventMode = "none";
+    this.weatherOverlay = new PIXI.Graphics();
+    this.weatherOverlay.eventMode = "none";
 
     this.world.addChild(this.staticLayer);
     this.world.addChild(this.pulseLayer);
+    this.world.addChild(this.overlayLayer);
     this.world.addChild(this.hotspotGraphic);
     this.world.addChild(this.moversGraphic);
     this.world.addChild(this.moversLabels);
+    this.world.addChild(this.busLabels);
     this.world.addChild(this.spotlightGraphic);
     this.app.stage.addChild(this.skyOverlay);
+    this.app.stage.addChild(this.weatherOverlay);
   }
 
   _makeTooltip() {
@@ -158,6 +169,8 @@ class TownMap {
   }
 
   _animate(delta) {
+    const mapPanel = document.getElementById("map");
+    if (!this.tvMode && mapPanel && !mapPanel.classList.contains("on")) return;
     this.clock += 0.025 * delta;
 
     // 1. Smooth camera pan/zoom interpolation
@@ -285,6 +298,111 @@ class TownMap {
       this.spotlightGraphic.lineStyle(1.2, 0xfff3c4, 0.45)
         .drawCircle(this.spotlightTarget.x, this.spotlightTarget.y, r + 6);
     }
+
+    // 5. Living overlays: brownout dim, festival ring, expansion beacons, buses, weather
+    this._animateLivingOverlays(delta);
+  }
+
+  _animateLivingOverlays(delta) {
+    this.overlayLayer.clear();
+    this.weatherOverlay.clear();
+    const d = this.mapData;
+    if (!d) return;
+
+    // 5a. Brownout dim-overlay on outage_district
+    const ut = d.utilities;
+    if (ut && ut.grid_status === "brownout" && ut.outage_district) {
+      const zone = (d.districts || []).find(z => z.name === ut.outage_district);
+      if (zone) {
+        const pulse = 0.14 + 0.05 * Math.sin(this.clock * 3.0);
+        this.overlayLayer.lineStyle(2, 0xe89b3c, 0.55)
+          .beginFill(0x2b1d0e, pulse)
+          .drawRoundedRect(zone.x, zone.y, zone.w, zone.h, 14)
+          .endFill();
+      }
+    }
+
+    // 5b. Pulsing ring on active festival venue
+    const fest = d.festival;
+    if (fest && fest.status === "active" && fest.venue_id && this.venues[fest.venue_id]) {
+      const fv = this.venues[fest.venue_id];
+      const phase = (this.clock * 0.6) % 1;
+      const r = fv.size * 0.7 + phase * 26;
+      this.overlayLayer.lineStyle(2.5, 0xf26cae, (1 - phase) * 0.85)
+        .drawCircle(fv.x, fv.y, r);
+    }
+
+    // 5c. Golden star/beacon on expansion_place_ids landmarks
+    const expIds = d.expansion_place_ids || [];
+    for (const pid of expIds) {
+      const ev = this.venues[pid];
+      if (!ev) continue;
+      const gPulse = 0.5 + 0.5 * Math.sin(this.clock * 2.5);
+      const bx = ev.x + ev.size / 2 + 4;
+      const by = ev.y - ev.size / 2 - 4;
+      this.overlayLayer.lineStyle(1.5, 0xffe066, 0.75 + 0.25 * gPulse)
+        .beginFill(0xe8b64c, 0.9)
+        .drawStar(bx, by, 5, 6 + gPulse * 1.5, 3)
+        .endFill();
+    }
+
+    // 5d. Two animated municipal bus markers cruising district loops
+    for (let bi = 0; bi < this.busLoops.length; bi++) {
+      const loop = this.busLoops[bi];
+      const pts = loop.points;
+      if (pts.length < 2) continue;
+      const speed = bi === 0 ? 0.12 : 0.15;
+      const prog = (this.clock * speed + bi * 0.45) % pts.length;
+      const idx = Math.floor(prog);
+      const frac = prog - idx;
+      const p0 = pts[idx % pts.length];
+      const p1 = pts[(idx + 1) % pts.length];
+      const bx = p0.x + (p1.x - p0.x) * frac;
+      const by = p0.y + (p1.y - p0.y) * frac;
+      const busColor = bi === 0 ? 0x4ecdc4 : 0xf6c34c;
+      this.overlayLayer.lineStyle(1.5, 0xffffff, 0.9)
+        .beginFill(busColor, 0.95)
+        .drawRoundedRect(bx - 7, by - 5, 14, 10, 3)
+        .endFill();
+      if (loop.label && !loop.label.destroyed) {
+        loop.label.position.set(bx, by - 9);
+      }
+    }
+
+    // 5e. Subtle weather particles / tint
+    const cond = d.weather?.condition || "clear";
+    if (cond === "rain" || cond === "storm") {
+      const isStorm = cond === "storm";
+      this.weatherOverlay.lineStyle(1.2, isStorm ? 0x9ec5ff : 0x7aa2f7, isStorm ? 0.42 : 0.3);
+      for (const p of this.weatherParticles) {
+        p.x -= delta * (isStorm ? 3.2 : 2.0);
+        p.y += delta * (isStorm ? 9.5 : 6.8);
+        if (p.y > 900 || p.x < 0) {
+          p.x = (p.x + 1600) % 1600;
+          p.y = -10;
+        }
+        this.weatherOverlay.moveTo(p.x, p.y);
+        this.weatherOverlay.lineTo(p.x - 4, p.y + (isStorm ? 14 : 10));
+      }
+    } else if (cond === "snow" || cond === "blizzard") {
+      const isBlizz = cond === "blizzard";
+      for (const p of this.weatherParticles) {
+        p.x += Math.sin(this.clock * 1.6 + p.phase) * 0.6 - (isBlizz ? delta * 2.2 : 0);
+        p.y += delta * (isBlizz ? 3.6 : 1.5);
+        if (p.y > 900) p.y = -6;
+        if (p.x < 0) p.x = 1600;
+        if (p.x > 1600) p.x = 0;
+        this.weatherOverlay.lineStyle(0)
+          .beginFill(0xe8f1ff, isBlizz ? 0.65 : 0.5)
+          .drawCircle(p.x, p.y, p.r)
+          .endFill();
+      }
+    } else if (cond === "fog") {
+      const drift = 0.08 + 0.03 * Math.sin(this.clock * 0.5);
+      this.weatherOverlay.beginFill(0xc7d1de, drift).drawRect(0, 0, 1600, 900).endFill();
+    } else if (cond === "heatwave") {
+      this.weatherOverlay.beginFill(0xff9f43, 0.07).drawRect(0, 0, 1600, 900).endFill();
+    }
   }
 
   async refresh() {
@@ -293,10 +411,13 @@ class TownMap {
   }
 
   _draw(data) {
+    this.mapData = data;
     this.staticLayer.removeChildren().forEach(c => c.destroy({ children: true }));
+    this.busLabels.removeChildren().forEach(c => c.destroy({ children: true }));
     this.venuePulses = [];
     this.settledDots = [];
     this._legendDone = false;
+    this._initLivingOverlays(data);
     const g = new PIXI.Graphics();
     this.staticLayer.addChild(g);
 
@@ -435,6 +556,65 @@ class TownMap {
     }
 
     this._legend();
+  }
+
+  _initLivingOverlays(data) {
+    // Build two bus loops from district centers
+    const centers = (data.districts || []).map(d => ({
+      name: d.name,
+      x: d.x + d.w / 2,
+      y: d.y + d.h / 2,
+    }));
+    const l2Pts = centers.filter((_, i) => i % 2 === 0 || centers.length <= 3);
+    const makeLabel = (txt, color) => {
+      const t = new PIXI.Text(txt, {
+        fontFamily: "Consolas, monospace", fontSize: 10, fontWeight: "bold",
+        fill: color, stroke: 0x0b0e17, strokeThickness: 3,
+      });
+      t.anchor.set(0.5, 1);
+      this.busLabels.addChild(t);
+      return t;
+    };
+    this.busLoops = [];
+    if (centers.length >= 2) {
+      this.busLoops.push({ points: centers, label: makeLabel("🚌 L1", 0x4ecdc4) });
+      this.busLoops.push({
+        points: (l2Pts.length >= 2 ? l2Pts : centers).slice().reverse(),
+        label: makeLabel("🚌 L2", 0xf6c34c),
+      });
+    }
+
+    // Weather particles
+    const cond = data.weather?.condition || "clear";
+    const count = (cond === "storm" || cond === "blizzard") ? 65 : 42;
+    this.weatherParticles = [];
+    if (["rain", "storm", "snow", "blizzard"].includes(cond)) {
+      for (let i = 0; i < count; i++) {
+        this.weatherParticles.push({
+          x: (i * 197 + 41) % 1600,
+          y: (i * 131 + 23) % 900,
+          r: 1.4 + (i % 3) * 0.6,
+          phase: i * 0.45,
+        });
+      }
+    }
+
+    // Compact live map overlay HUD pill
+    const hud = document.getElementById("map-overlay-hud");
+    if (hud) {
+      const w = data.weather;
+      const tr = data.transit;
+      const ut = data.utilities;
+      const parts = [];
+      if (w) parts.push(`${w.icon || ""} ${w.label || w.condition} (${w.temp_f}°F)`);
+      if (tr) parts.push(`🚌 ${Math.round(tr.on_time_pct ?? 100)}% on-time`);
+      if (ut) parts.push(`⚡ ${String(ut.grid_status || "nominal").toUpperCase()} · ${Math.round(ut.renewable_pct ?? 0)}% green`);
+      if (data.festival && data.festival.status === "active") {
+        parts.push(`🎪 ${data.festival.name}`);
+      }
+      hud.hidden = parts.length === 0;
+      hud.textContent = parts.join("  ·  ");
+    }
   }
 
   _dotTexture() {
