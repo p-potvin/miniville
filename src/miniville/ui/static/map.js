@@ -346,6 +346,16 @@ class TownMap {
         .endFill();
     }
 
+    // 5c-bis. Subtle musical note pulse at live music venue
+    const mus = d.music;
+    if (mus && mus.place_id && this.venues[mus.place_id]) {
+      const mv = this.venues[mus.place_id];
+      const mPhase = (this.clock * 0.75) % 1;
+      const mr = mv.size * 0.6 + mPhase * 22;
+      this.overlayLayer.lineStyle(2, 0x4ecdc4, (1 - mPhase) * 0.8)
+        .drawCircle(mv.x, mv.y, mr);
+    }
+
     // 5d. Two animated municipal bus markers cruising district loops
     for (let bi = 0; bi < this.busLoops.length; bi++) {
       const loop = this.busLoops[bi];
@@ -402,6 +412,19 @@ class TownMap {
       this.weatherOverlay.beginFill(0xc7d1de, drift).drawRect(0, 0, 1600, 900).endFill();
     } else if (cond === "heatwave") {
       this.weatherOverlay.beginFill(0xff9f43, 0.07).drawRect(0, 0, 1600, 900).endFill();
+    }
+
+    // 5f. Subtle starfield/comet sparkles on crystal-clear skywatch nights
+    if (d.skywatch && d.skywatch.visibility === "crystal_clear") {
+      for (let i = 0; i < 18; i++) {
+        const sx = (i * 211 + 73) % 1560 + 20;
+        const sy = (i * 97 + 31) % 360 + 20;
+        const tw = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(this.clock * 2.2 + i * 1.1));
+        this.weatherOverlay.lineStyle(0)
+          .beginFill(0xfff3c4, tw)
+          .drawCircle(sx, sy, 1.4 + (i % 2) * 0.6)
+          .endFill();
+      }
     }
   }
 

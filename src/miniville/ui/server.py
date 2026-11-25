@@ -72,7 +72,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "SELECT COUNT(*) n FROM agents WHERE alive=1").fetchone()["n"]
             day = day_of(tick)
             holiday = holiday_for(c, day)
-            from .. import awards, chapters, courts, expansion, festivals, market, museum, potlucks, real_estate, regional, transit, utilities, weather
+            from .. import awards, chapters, courts, cuisine, expansion, festivals, market, museum, music, observatory, potlucks, real_estate, regional, relief, transit, utilities, weather
             ms = museum.museum_summary(c)
             ts = transit.transit_summary(c, days=1)
             aws = awards.list_awards(c, limit=4)
@@ -83,6 +83,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
             crt = courts.list_cases(c, limit=1)
             ch_summ = chapters.chapters_summary(c)
             ut = utilities.utilities_summary(c, days=1)
+            sk = observatory.list_skywatch(c, limit=1)
+            rc = cuisine.list_recipes(c, limit=1)
+            mu = music.list_performances(c, limit=1)
+            rl = relief.list_drives(c, limit=1)
             return {"tick": tick, "day": day + 1, "date": fmt_date(day),
                     "season": season_of(day),
                     "weather": weather.today(c, day),
@@ -109,6 +113,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
                         "completed_count": ch_summ["completed_count"],
                     },
                     "utilities": ut["today"],
+                    "observatory": sk[0] if sk else None,
+                    "cuisine": rc[0] if rc else None,
+                    "music": mu[0] if mu else None,
+                    "relief": rl[0] if rl else None,
                     "holiday": holiday.name if holiday else None,
                     "time": fmt_tick(tick), "population": pop, "moods": moods}
         finally:
@@ -551,7 +559,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "SELECT COUNT(*) n FROM places WHERE kind='home' AND district=?",
                 (name,)).fetchone()["n"] for name in DISTRICT_TILES}
             from ..housing import district_profile
-            from .. import festivals, transit, utilities, weather
+            from .. import festivals, music, observatory, transit, utilities, weather
             profile = {d["district"]: d for d in district_profile(c)}
             tick = int(dbmod.get_meta(c, "tick", "0") or 0)
             cur_day = day_of(tick)
@@ -563,6 +571,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 exp_place_ids = [int(r["place_id"]) for r in exp_rows]
             except Exception:
                 exp_place_ids = []
+            sk_rows = observatory.list_skywatch(c, limit=1)
+            mu_rows = music.list_performances(c, limit=1)
             return {
                 "districts": [dict(z, homes=home_counts.get(z["name"], 0),
                                    profile=profile.get(z["name"]))
@@ -574,6 +584,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "transit": transit.transit_summary(c, days=1)["today"],
                 "utilities": utilities.utilities_summary(c, days=1)["today"],
                 "expansion_place_ids": exp_place_ids,
+                "skywatch": sk_rows[0] if sk_rows else None,
+                "music": mu_rows[0] if mu_rows else None,
             }
         finally:
             c.close()
@@ -1013,6 +1025,54 @@ def create_app(db_path: str | None = None) -> FastAPI:
         try:
             from .. import utilities
             return utilities.utilities_summary(c, days=days)
+        finally:
+            c.close()
+
+    @app.get("/api/observatory")
+    def observatory_view(limit: int = Query(20, le=100)):
+        c = conn()
+        try:
+            from .. import observatory
+            summ = observatory.observatory_summary(c)
+            if limit != 20:
+                summ["events"] = observatory.list_skywatch(c, limit=limit)
+            return summ
+        finally:
+            c.close()
+
+    @app.get("/api/cuisine")
+    def cuisine_view(limit: int = Query(24, le=100)):
+        c = conn()
+        try:
+            from .. import cuisine
+            summ = cuisine.cuisine_summary(c)
+            if limit != 24:
+                summ["recipes"] = cuisine.list_recipes(c, limit=limit)
+            return summ
+        finally:
+            c.close()
+
+    @app.get("/api/music")
+    def music_view(limit: int = Query(20, le=100)):
+        c = conn()
+        try:
+            from .. import music
+            summ = music.music_summary(c)
+            if limit != 20:
+                summ["performances"] = music.list_performances(c, limit=limit)
+            return summ
+        finally:
+            c.close()
+
+    @app.get("/api/relief")
+    def relief_view(limit: int = Query(20, le=100)):
+        c = conn()
+        try:
+            from .. import relief
+            summ = relief.relief_summary(c)
+            if limit != 20:
+                summ["drives"] = relief.list_drives(c, limit=limit)
+            return summ
         finally:
             c.close()
 

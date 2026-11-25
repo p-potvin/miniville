@@ -1246,6 +1246,91 @@ def cmd_utilities(args) -> int:
     return 0
 
 
+def cmd_observatory(args) -> int:
+    from . import observatory
+    conn = dbmod.connect(args.db)
+    summ = observatory.observatory_summary(conn)
+    print(
+        f"Greenhill Skywatch: {summ['total_events']} nights "
+        f"({summ['clear_nights']} clear, {summ['clouded_nights']} clouded) · "
+        f"{summ['total_attendees']} attendees · ${summ['total_donations_cents']/100:,.2f} donations"
+    )
+    rows = observatory.list_skywatch(conn, limit=args.limit)
+    if not rows:
+        print("no skywatch events recorded yet")
+        return 0
+    print(f"\n{'day':>5} {'visibility':<14} {'att':>4} {'title':<34} venue")
+    for r in rows:
+        print(
+            f"{r['day'] + 1:>5} {r['visibility']:<14} {r['attendees_count']:>4} "
+            f"{r['title'][:32]:<34} {r.get('place_name') or '-'}"
+        )
+    return 0
+
+
+def cmd_cuisine(args) -> int:
+    from . import cuisine
+    conn = dbmod.connect(args.db)
+    summ = cuisine.cuisine_summary(conn)
+    print(
+        f"Town Culinary Heritage: {summ['total_recipes']} recipes · "
+        f"{summ['total_orders']:,} orders · ${summ['total_prizes_cents']/100:,.2f} chef bonuses"
+    )
+    rows = cuisine.list_recipes(conn, limit=args.limit)
+    if not rows:
+        print("no signature recipes debuted yet")
+        return 0
+    print(f"\n{'fame':>4} {'ord':>5} {'cat':<7} {'recipe':<30} venue")
+    for r in rows:
+        print(
+            f"{r['fame_score']:>4} {r['orders_count']:>5} {r['category']:<7} "
+            f"{r['name'][:28]:<30} {r.get('venue_name') or '-'}"
+        )
+    return 0
+
+
+def cmd_music(args) -> int:
+    from . import music
+    conn = dbmod.connect(args.db)
+    summ = music.music_summary(conn)
+    print(
+        f"Town Ensembles & Live Music: {summ['total_performances']} shows · "
+        f"{summ['total_audience']} listeners · ${summ['total_tips_cents']/100:,.2f} tips"
+    )
+    rows = music.list_performances(conn, limit=args.limit)
+    if not rows:
+        print("no live music performances recorded yet")
+        return 0
+    print(f"\n{'day':>5} {'ensemble':<24} {'aud':>4} {'tips':>7}  venue")
+    for r in rows:
+        print(
+            f"{r['day'] + 1:>5} {r['ensemble_name'][:22]:<24} {r['audience_count']:>4} "
+            f"${r['tips_cents']/100:>5,.2f}  {r.get('place_name') or '-'}"
+        )
+    return 0
+
+
+def cmd_relief(args) -> int:
+    from . import relief
+    conn = dbmod.connect(args.db)
+    summ = relief.relief_summary(conn)
+    print(
+        f"Community Chest & Relief: {summ['total_drives']} drives · "
+        f"{summ['total_recipients']} helped · ${summ['total_distributed_cents']/100:,.2f} distributed"
+    )
+    rows = relief.list_drives(conn, limit=args.limit)
+    if not rows:
+        print("no relief drives held yet")
+        return 0
+    print(f"\n{'day':>5} {'trigger':<16} {'don':>4} {'rec':>4} {'raised':>8}  organizer")
+    for r in rows:
+        print(
+            f"{r['day'] + 1:>5} {r['trigger_kind']:<16} {r['donors_count']:>4} "
+            f"{r['recipients_count']:>4} ${r['raised_cents']/100:>6,.2f}  {r.get('organizer_name') or '-'}"
+        )
+    return 0
+
+
 def cmd_loans(args) -> int:
     from . import banking
     conn = dbmod.connect(args.db)
@@ -1595,6 +1680,18 @@ def main(argv=None) -> int:
     putl = sub.add_parser("utilities", help="Show Town Utilities & Renewable Power Grid")
     putl.add_argument("--days", type=int, default=14)
     putl.set_defaults(fn=cmd_utilities)
+    pobs = sub.add_parser("observatory", help="Show Greenhill Skywatch & Town Almanac events")
+    pobs.add_argument("--limit", type=int, default=20)
+    pobs.set_defaults(fn=cmd_observatory)
+    pcui = sub.add_parser("cuisine", help="Show Town Culinary Heritage & signature recipes")
+    pcui.add_argument("--limit", type=int, default=24)
+    pcui.set_defaults(fn=cmd_cuisine)
+    pmus2 = sub.add_parser("music", help="Show Town Ensembles & live music performances")
+    pmus2.add_argument("--limit", type=int, default=20)
+    pmus2.set_defaults(fn=cmd_music)
+    prel = sub.add_parser("relief", help="Show Community Chest & Mutual Weather Relief drives")
+    prel.add_argument("--limit", type=int, default=20)
+    prel.set_defaults(fn=cmd_relief)
     plon = sub.add_parser("loans", help="List peer-backed Credit Union loans")
     plon.add_argument("--status", choices=["active", "repaid", "defaulted", "all"], default="all")
     plon.add_argument("--limit", type=int, default=40)

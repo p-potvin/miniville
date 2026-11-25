@@ -800,6 +800,22 @@ class TVDirector {
         const ut = data.utilities;
         progItems.push(`<div class="tv-prog-item"><small>⚡ Power Grid</small><b>${tvEsc(String(ut.grid_status).toUpperCase())} (${Number(ut.renewable_pct ?? 0).toFixed(0)}% green)</b><span>${Number(ut.demand_mw ?? 0).toFixed(1)} / ${Number(ut.supply_mw ?? 0).toFixed(1)} MW</span></div>`);
       }
+      if (data.observatory) {
+        const ob = data.observatory;
+        progItems.push(`<div class="tv-prog-item"><small>🔭 Skywatch (${tvEsc(ob.visibility)})</small><b>${tvEsc(ob.title)}</b><span>${ob.attendees_count ?? 0} stargazers</span></div>`);
+      }
+      if (data.cuisine) {
+        const cu = data.cuisine;
+        progItems.push(`<div class="tv-prog-item"><small>🍽️ Cuisine (${tvEsc(cu.season)})</small><b>${tvEsc(cu.name)}</b><span>${cu.fame_score ?? 1} fame · ${cu.orders_count ?? 0} orders</span></div>`);
+      }
+      if (data.music) {
+        const mu = data.music;
+        progItems.push(`<div class="tv-prog-item"><small>🎵 Live Music</small><b>${tvEsc(mu.ensemble_name)}</b><span>${tvEsc(mu.place_name || "Stage")} · ${mu.audience_count ?? 0} listening</span></div>`);
+      }
+      if (data.relief) {
+        const rl = data.relief;
+        progItems.push(`<div class="tv-prog-item"><small>🤝 Mutual Aid</small><b>${tvEsc(String(rl.trigger_kind).replace(/_/g, " "))}</b><span>$${((rl.raised_cents ?? 0) / 100).toFixed(0)} raised · ${rl.recipients_count ?? 0} aided</span></div>`);
+      }
       const progHtml = progItems.join("");
       svEl.innerHTML = `
         <div class="tv-card-head">

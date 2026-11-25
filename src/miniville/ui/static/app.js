@@ -18,13 +18,69 @@ async function status() {
 }
 
 async function feed() {
-  const [rows, arcRes, festRes, potRes, expRes] = await Promise.all([
+  const [rows, arcRes, festRes, potRes, expRes, skyRes, musRes] = await Promise.all([
     api("/api/feed?limit=60"),
     api("/api/arcs?status=active&limit=6").catch(() => ({})),
     api("/api/festivals?limit=4").catch(() => ({})),
     api("/api/potlucks?limit=16").catch(() => ({})),
     api("/api/expansion?limit=20").catch(() => ({})),
+    api("/api/observatory?limit=20").catch(() => ({})),
+    api("/api/music?limit=20").catch(() => ({})),
   ]);
+  const skyBox = $("#feed-skywatch");
+  if (skyBox) {
+    const sw = skyRes?.latest || (skyRes?.events && skyRes.events[0]) || null;
+    skyBox.hidden = !sw;
+    if (sw) {
+      const visBadge = sw.visibility === "crystal_clear"
+        ? `<span class="badge-pass">✨ Crystal Clear</span>`
+        : `<span class="muted">☁️ Clouded Out</span>`;
+      const discLink = sw.discoverer_agent_id
+        ? ` · Observer: <a class="click-link" onclick="mvPick({id:${sw.discoverer_agent_id}})"><b>${esc(sw.discoverer_name || "#" + sw.discoverer_agent_id)}</b></a>`
+        : "";
+      skyBox.innerHTML = `
+        <div class="skywatch-card">
+          <div class="fest-head">
+            <span>🔭 <b>${esc(sw.title)}</b> <span class="muted">(${esc(sw.season)} · Year ${sw.year} · Day ${sw.day + 1})</span></span>
+            <span>${visBadge}</span>
+          </div>
+          <div class="fest-meta">
+            📍 ${esc(sw.place_name || "Greenhill Ridge")} · ${sw.attendees_count ?? 0} stargazers ·
+            ${money(sw.donation_cents ?? 0)} star-party donations${discLink}
+          </div>
+          ${sw.summary ? `<div class="fest-note">${esc(sw.summary)}</div>` : ""}
+        </div>`;
+    } else {
+      skyBox.innerHTML = "";
+    }
+  }
+  const musBox = $("#feed-music");
+  if (musBox) {
+    const pm = musRes?.latest || (musRes?.performances && musRes.performances[0]) || null;
+    musBox.hidden = !pm;
+    if (pm) {
+      const leadLink = pm.leader_agent_id
+        ? `<a class="click-link" onclick="mvPick({id:${pm.leader_agent_id}})"><b>${esc(pm.leader_name || "#" + pm.leader_agent_id)}</b></a>`
+        : `<span class="muted">Ensemble</span>`;
+      const modeBadge = pm.weather_mode === "indoor_shelter"
+        ? `<span class="muted">🏠 Indoor Concert</span>`
+        : `<span class="badge-pass">🎶 Outdoor Stage</span>`;
+      musBox.innerHTML = `
+        <div class="music-card">
+          <div class="fest-head">
+            <span>🎵 <b>${esc(pm.ensemble_name)}</b> <span class="muted">(${esc(pm.genre)} · Day ${pm.day + 1})</span></span>
+            <span>${modeBadge}</span>
+          </div>
+          <div class="fest-meta">
+            📍 ${esc(pm.place_name || "Town Square")} · Leader: ${leadLink} ·
+            ${pm.audience_count ?? 0} listeners · ${money(pm.tips_cents ?? 0)} tips
+          </div>
+          ${pm.summary ? `<div class="fest-note">${esc(pm.summary)}</div>` : ""}
+        </div>`;
+    } else {
+      musBox.innerHTML = "";
+    }
+  }
   const expBox = $("#feed-expansion");
   if (expBox) {
     const ex = expRes?.latest || (expRes?.expansions && expRes.expansions[0]) || null;
@@ -464,9 +520,10 @@ function formatPolicy(name, val) {
 }
 
 async function council() {
-  const [r, courtsRes] = await Promise.all([
+  const [r, courtsRes, reliefRes] = await Promise.all([
     api("/api/council"),
     api("/api/courts?limit=20").catch(() => ({})),
+    api("/api/relief?limit=20").catch(() => ({})),
   ]);
   const seats = r.seats || [];
   const policies = r.policies || {};
@@ -596,17 +653,39 @@ async function council() {
       <td><small class="muted">${esc(c.summary)}</small></td>
     </tr>`;
   }).join("") : `<tr><td colspan="8" class="muted">No court cases heard yet</td></tr>`;
+
+  const rl = reliefRes || {};
+  $("#council-relief-meta").innerHTML = `
+    <div class="stat"><b>${rl.total_drives ?? 0}</b><span>relief drives</span></div>
+    <div class="stat active-policy"><b>${money(rl.total_raised_cents ?? 0)}</b><span>raised &amp; distributed</span></div>
+    <div class="stat"><b>${rl.total_recipients ?? 0}</b><span>neighbors aided</span></div>`;
+  const drives = rl.drives || [];
+  $("#council-relief").innerHTML = drives.length ? drives.map(dr => {
+    const orgLink = dr.organizer_agent_id
+      ? `<a class="click-link" onclick="mvPick({id:${dr.organizer_agent_id}})"><b>${esc(dr.organizer_name || "#" + dr.organizer_agent_id)}</b></a>`
+      : `<span class="muted">Town</span>`;
+    return `<tr>
+      <td>Day ${dr.day + 1}</td>
+      <td>${esc(String(dr.trigger_kind).replace(/_/g, " "))}</td>
+      <td>${esc(dr.district || "Townwide")}</td>
+      <td>${orgLink}</td>
+      <td>${dr.donors_count ?? 0} / ${dr.recipients_count ?? 0}</td>
+      <td>${money(dr.raised_cents)} / ${money(dr.distributed_cents)}</td>
+      <td><small class="muted">${esc(dr.summary)}</small></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="7" class="muted">No mutual relief drives held yet</td></tr>`;
 }
 
 
 async function individual() {
-  const [r, dynRes, musRes, awRes, deedsRes, chapRes] = await Promise.all([
+  const [r, dynRes, musRes, awRes, deedsRes, chapRes, cuisRes] = await Promise.all([
     api("/api/individual"),
     api("/api/dynasties").catch(() => ({})),
     api("/api/museum?limit=24").catch(() => ({})),
     api("/api/awards?limit=20").catch(() => ({})),
     api("/api/deeds?limit=25").catch(() => ({})),
     api("/api/chapters?status=all&limit=24").catch(() => ({})),
+    api("/api/cuisine?limit=24").catch(() => ({})),
   ]);
   const chronos = r.chronotypes || {};
   const order = ["early_bird", "morning", "day_walker", "evening", "night_owl"];
@@ -823,6 +902,28 @@ async function individual() {
       <td><small class="muted">${esc(c.progress_note || "")}</small></td>
     </tr>`;
   }).join("") : `<tr><td colspan="6" class="muted">No life chapters seeded yet</td></tr>`;
+
+  const cu = cuisRes || {};
+  $("#ind-cuisine-meta").innerHTML = `
+    <div class="stat"><b>${cu.total_recipes ?? 0}</b><span>signature recipes</span></div>
+    <div class="stat"><b>${cu.total_orders ?? 0}</b><span>total orders</span></div>
+    <div class="stat active-policy"><b>${money(cu.total_prizes_cents ?? 0)}</b><span>chef bonuses</span></div>`;
+  const recs = cu.recipes || [];
+  $("#ind-cuisine").innerHTML = recs.length ? recs.map(rc => {
+    const crLink = rc.creator_agent_id
+      ? `<a class="click-link" onclick="mvPick({id:${rc.creator_agent_id}})"><b>${esc(rc.creator_name || "#" + rc.creator_agent_id)}</b></a>`
+      : `<span class="muted">—</span>`;
+    const prize = (rc.prize_cents ?? 0) > 0 ? money(rc.prize_cents) : `<span class="muted">—</span>`;
+    return `<tr>
+      <td><b>${esc(rc.name)}</b><br><small class="muted">${esc(rc.ingredients)}</small></td>
+      <td>${esc(rc.category)}</td>
+      <td>${crLink}</td>
+      <td>${esc(rc.venue_name || "Local Kitchen")}</td>
+      <td>${esc(rc.season)}</td>
+      <td><b>${rc.fame_score ?? 1}</b> fame · ${rc.orders_count ?? 0} orders</td>
+      <td>${prize}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="7" class="muted">No signature recipes debuted yet</td></tr>`;
 
   const projs = r.civic_projects || [];
   $("#ind-projects").innerHTML = projs.length ? projs.map(p => {

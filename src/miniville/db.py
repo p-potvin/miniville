@@ -891,6 +891,75 @@ CREATE TABLE IF NOT EXISTS utility_days (
     note              TEXT
 );
 
+CREATE TABLE IF NOT EXISTS skywatch_events (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    day                 INTEGER NOT NULL,
+    year                INTEGER NOT NULL,
+    season              TEXT NOT NULL,
+    kind                TEXT NOT NULL,
+    title               TEXT NOT NULL,
+    visibility          TEXT NOT NULL,
+    weather_condition   TEXT NOT NULL,
+    attendees_count     INTEGER NOT NULL DEFAULT 0,
+    discoverer_agent_id INTEGER REFERENCES agents(id),
+    host_place_id       INTEGER REFERENCES places(id),
+    donation_cents      INTEGER NOT NULL DEFAULT 0,
+    summary             TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_skywatch_events_day ON skywatch_events(day DESC);
+
+CREATE TABLE IF NOT EXISTS town_recipes (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    day_created      INTEGER NOT NULL,
+    year_created     INTEGER NOT NULL,
+    name             TEXT NOT NULL,
+    category         TEXT NOT NULL,
+    creator_agent_id INTEGER REFERENCES agents(id),
+    venue_id         INTEGER REFERENCES places(id),
+    season           TEXT NOT NULL,
+    ingredients      TEXT NOT NULL,
+    fame_score       INTEGER NOT NULL DEFAULT 1,
+    orders_count     INTEGER NOT NULL DEFAULT 0,
+    prize_cents      INTEGER NOT NULL DEFAULT 0,
+    summary          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_town_recipes_fame ON town_recipes(fame_score DESC, orders_count DESC);
+
+CREATE TABLE IF NOT EXISTS cuisine_days (
+    day INTEGER PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS music_performances (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    day             INTEGER,
+    year            INTEGER,
+    ensemble_name   TEXT,
+    genre           TEXT,
+    leader_agent_id INTEGER,
+    place_id        INTEGER,
+    occasion        TEXT,
+    audience_count  INTEGER,
+    tips_cents      INTEGER,
+    weather_mode    TEXT,
+    summary         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_music_day ON music_performances(day);
+
+CREATE TABLE IF NOT EXISTS relief_drives (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    day                INTEGER,
+    year               INTEGER,
+    trigger_kind       TEXT,
+    district           TEXT,
+    organizer_agent_id INTEGER,
+    donors_count       INTEGER,
+    recipients_count   INTEGER,
+    raised_cents       INTEGER,
+    distributed_cents  INTEGER,
+    summary            TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_relief_day ON relief_drives(day);
+
 """
 
 

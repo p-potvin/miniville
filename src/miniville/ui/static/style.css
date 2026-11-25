@@ -664,3 +664,20 @@ body.tv-mode #map-host canvas {
   pointer-events: none;
 }
 body.tv-mode .map-overlay-hud { display: none; }
+
+/* v0.67-v0.70 Skywatch, Cuisine, Music & Relief */
+.skywatch-banner, .music-banner { margin-bottom: 1rem; }
+.skywatch-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid #9d7cd8;
+  border-radius: 8px;
+  padding: .7rem .95rem;
+}
+.music-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid #4ecdc4;
+  border-radius: 8px;
+  padding: .7rem .95rem;
+}

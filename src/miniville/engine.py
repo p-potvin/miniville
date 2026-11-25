@@ -13,6 +13,7 @@ from . import (
     conflict,
     courts,
     crime,
+    cuisine,
     economy,
     enterprise,
     events,
@@ -51,11 +52,14 @@ from . import (
     market,
     memory,
     museum,
+    music,
+    observatory,
     politics,
     potlucks,
     press,
     real_estate,
     regional,
+    relief,
     reputation,
     mortality,
     newspaper,
@@ -152,6 +156,10 @@ def _day_start(conn: sqlite3.Connection, tick: int, seed: str) -> dict:
     stats["courts"] = courts.daily_courts(conn, day_of(tick), seed)
     stats["chapters"] = chapters.daily_chapters(conn, day_of(tick), seed)
     stats["utilities"] = utilities.daily_utilities(conn, day_of(tick), seed)
+    stats["observatory"] = observatory.daily_observatory(conn, day_of(tick), seed)
+    stats["cuisine"] = cuisine.daily_cuisine(conn, day_of(tick), seed)
+    stats["music"] = music.daily_music(conn, day_of(tick), seed)
+    stats["relief"] = relief.daily_relief(conn, day_of(tick), seed)
     stats["plans"] = rebuild_day_plans(conn, day_of(tick), seed)
     seasons.announce_day(conn, tick)
     stats["life_events"] = daily_life_lottery(conn, tick, seed)

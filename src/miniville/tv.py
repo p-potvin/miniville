@@ -596,6 +596,42 @@ def _safe_utilities_today(conn: sqlite3.Connection) -> dict[str, Any] | None:
         return None
 
 
+def _safe_latest_skywatch(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        from . import observatory
+        rows = observatory.list_skywatch(conn, limit=1)
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def _safe_top_recipe(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        from . import cuisine
+        rows = cuisine.list_recipes(conn, limit=1)
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def _safe_latest_music(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        from . import music
+        rows = music.list_performances(conn, limit=1)
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def _safe_latest_relief(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        from . import relief
+        rows = relief.list_drives(conn, limit=1)
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
 def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any]]:
     """Build a 10-foot lower-third broadcast ticker with clickable items."""
     items: list[dict[str, Any]] = []
@@ -833,6 +869,66 @@ def _broadcast_ticker(conn: sqlite3.Connection, tick: int) -> list[dict[str, Any
                 "agent_id": None,
                 "place_id": None,
                 "time": f"Day {int(ut['day']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import observatory
+        sks = observatory.list_skywatch(conn, limit=1)
+        if sks and int(sks[0]["day"]) >= cur_day - 14:
+            sk = sks[0]
+            items.append({
+                "badge": "🔭 Skywatch",
+                "text": f"{sk['title']} ({sk['visibility'].replace('_', ' ')}) — {sk['attendees_count']} stargazers",
+                "agent_id": sk.get("discoverer_agent_id"),
+                "place_id": sk.get("host_place_id"),
+                "time": f"Day {int(sk['day']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import cuisine
+        recs = cuisine.list_recipes(conn, limit=1)
+        if recs and int(recs[0]["day_created"]) >= cur_day - 14:
+            rc = recs[0]
+            items.append({
+                "badge": "🍽️ Cuisine",
+                "text": f"{rc['name']} at {rc.get('venue_name') or 'town'} by {rc.get('creator_name') or 'Chef'} ({rc['orders_count']} orders)",
+                "agent_id": rc.get("creator_agent_id"),
+                "place_id": rc.get("venue_id"),
+                "time": f"Day {int(rc['day_created']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import music
+        muss = music.list_performances(conn, limit=1)
+        if muss and int(muss[0]["day"]) >= cur_day - 7:
+            ms = muss[0]
+            items.append({
+                "badge": "🎵 Live Music",
+                "text": f"{ms['ensemble_name']} at {ms.get('place_name') or 'town'} ({ms['audience_count']} listeners)",
+                "agent_id": ms.get("leader_agent_id"),
+                "place_id": ms.get("place_id"),
+                "time": f"Day {int(ms['day']) + 1}",
+            })
+    except Exception:
+        pass
+
+    try:
+        from . import relief
+        drvs = relief.list_drives(conn, limit=1)
+        if drvs and int(drvs[0]["day"]) >= cur_day - 10:
+            dr = drvs[0]
+            items.insert(0, {
+                "badge": "🤝 Mutual Aid",
+                "text": dr["summary"],
+                "agent_id": dr.get("organizer_agent_id"),
+                "place_id": None,
+                "time": f"Day {int(dr['day']) + 1}",
             })
     except Exception:
         pass
@@ -1277,6 +1373,10 @@ def tv_director_snapshot(conn: sqlite3.Connection,
         "courts": _safe_latest_court(conn),
         "chapters": _safe_chapters_summary(conn),
         "utilities": _safe_utilities_today(conn),
+        "observatory": _safe_latest_skywatch(conn),
+        "cuisine": _safe_top_recipe(conn),
+        "music": _safe_latest_music(conn),
+        "relief": _safe_latest_relief(conn),
         "holiday": holiday.name if holiday else None,
         "sky": _sky_state(tod, season),
         "vitality": {
