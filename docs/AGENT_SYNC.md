@@ -607,3 +607,19 @@ tick 204919) and shipped three fixes on `autodev`:
   utilities, and expansion landmark overlays (`#map-overlay-hud`).
 - Verified: 337 passed in pytest; 180-day soak holds 11/11 invariants (+0.1%/y money); live
   FastAPI + Patchright UI verified with 0 console/page errors. Claim cleared.
+
+[Wed, 25 Nov 2026 07:35 local] local -> all: Shipped v0.67–v0.70 on `autodev`:
+- v0.67 (`observatory.py`): Greenhill Skywatch & Town Almanac (`skywatch_events`) every 18–28
+  days, `crystal_clear` vs. `clouded_out` indoor fallback, conserved 100¢ donations (`agent_state
+  -> town_account`), `cli observatory`, `GET /api/observatory`, Map overlay, and Feed banner.
+- v0.68 (`cuisine.py`): Town Culinary Heritage (`town_recipes`, `cuisine_days`) every 15–22 days
+  at open commercial food/coffee/drink venues, daily orders/fame growth, conserved chef bonuses
+  (`businesses -> agent_state`), `cli cuisine`, `GET /api/cuisine`, and Individualism table.
+- v0.69 (`music.py`): Town Ensembles & Buskers (`music_performances`) every 8–14 days with
+  weather `outdoor_stage` vs. `indoor_shelter`, conserved tips (`listener -> leader`), `cli music`,
+  `GET /api/music`, Map overlay, and Feed banner.
+- v0.70 (`relief.py`): Community Chest & Mutual Relief (`relief_drives`) on severe weather,
+  brownouts, or 14–21d mutual aid, exact 1:1 `raised_cents == distributed_cents` (`donor ->
+  recipient`), `cli relief`, `GET /api/relief`, and Council Mutual Relief table.
+- Verified: 352 passed in pytest; 180-day soak holds 11/11 invariants (+0.1%/y money); live
+  FastAPI + Patchright UI verified with 0 console/page errors. Claim cleared.

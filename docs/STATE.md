@@ -4,7 +4,7 @@ This file is the memory between sessions. Chat history is NOT carried over —
 everything worth knowing lives here, in `README.md`, and in `docs/`.
 Update it at the end of every session (status, decisions, roadmap, operator asks).
 
-Last updated: Tue, 24 Nov 2026 17:05
+Last updated: Wed, 25 Nov 2026 07:35
 
 ## Mandate (from the operator, Tue, 30 Sep 2026)
 
@@ -582,6 +582,14 @@ the receipt. Current live issue had no false claim, so the misreport path is
 tested with a deliberately opposed council vote. A 90-day press soak is
 running to see whether routine politics produces claims and how credibility
 moves.
+
+## v0.67–v0.70 — Skywatch, Culinary Heritage, Live Music & Mutual Relief (Wed, 25 Nov 2026, workstation)
+
+- **v0.67 (`observatory.py`)**: Greenhill Skywatch & Town Almanac (`skywatch_events`) every 18–28 days (`meteor_shower`, `harvest_supermoon`, `solstice_conjunction`, `lunar_eclipse`, `comet_sighting`, `rare_aurora`) with `crystal_clear` vs. `clouded_out` indoor lantern fallback, exact 1:1 conserved 100¢ star-party donations (`agent_state.money_cents -> town_account`), `skywatch_event` logging, `cli observatory`, `/api/observatory`, Map overlay, and Feed Skywatch banner (`#feed-skywatch`).
+- **v0.68 (`cuisine.py`)**: Town Culinary Heritage & Signature Recipes (`town_recipes`, `cuisine_days`) debuting seasonal dishes/brews every 15–22 days at open commercial food/coffee/drink venues (never `PUBLIC_TAGS`), daily `orders_count` & `fame_score` growth, exact 1:1 conserved chef bonuses (`businesses.balance_cents -> creator agent_state.money_cents`, never touching `revenue_today`), `signature_recipe` events, `cli cuisine`, `/api/cuisine`, and Individualism Culinary Heritage table (`#ind-cuisine`).
+- **v0.69 (`music.py`)**: Town Ensembles, Choir & Street Buskers (`music_performances`) every 8–14 days preferring weekends/festivals (*Lakeshore Brass*, *Old Mill Folk Trio*, *Greenhill Chamber Choir*, *Flats Blues Quartet*) with `outdoor_stage` vs. `indoor_shelter` weather fallback, exact 1:1 conserved listener tips (`listener -> leader agent_state.money_cents`), `live_music` events, `cli music`, `/api/music`, Map overlay, and Feed Live Music banner (`#feed-music`).
+- **v0.70 (`relief.py`)**: Community Chest & Mutual Weather Relief (`relief_drives`) triggering on `severe_weather`, `grid_brownout`, or 14–21d `mutual_aid` cadence; exact 1:1 conserved donor-to-recipient transfers (`raised_cents == distributed_cents`), `relief_drive` events, `cli relief`, `/api/relief`, and Council Mutual Relief table (`#council-relief`).
+- **Verified**: `352 passed` in pytest; 180-day soak (`backups/miniville-t026112.db`) holds 11/11 invariants (+0.1%/y money, 0 deficits, 4.3% unemployment); Patchright UI verified with 0 console/page errors.
 
 ## v0.63–v0.66 — Town Courts, Life Chapters, Power Grid & Living 2D Map (Tue, 24 Nov 2026, workstation)
 
