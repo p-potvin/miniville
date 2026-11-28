@@ -27,7 +27,7 @@ were re-cropped from an exemplar whose own detected sex matches the identity's.
 
 Two adult-gallery leaks were found and fixed on the way:
 
-- 78 casts came from `F:\amd\gallery` (the second adult gallery, 7k dirs) —
+- 78 casts came from `G:\Galleries\People` (the second adult gallery, 7k dirs) —
   the first purge only knew `G:\Gallery`; `purge_bad_casts.py` now unions both.
 - 121 source folders were emptied into `.assets/.head` by the head pipeline;
   their db rows survived and the pool offered them, producing 56 residents

@@ -10,7 +10,7 @@ Truth sources:
   * `D:\miniville\celebrity_gender.json` — sex verified offline with insightface
     for the mixed `G:\Galleries\Celebrities` gallery (from
     verify_celebrity_gender.py, which no longer calls TMDB).
-  * `G:\Gallery` and `F:\amd\gallery` are female-only by construction.
+  * `G:\Gallery` and `G:\Galleries\People` are female-only by construction.
 
 The male pool is `G:\Galleries\Celebrities` filtered to verified males.
 It is smaller than the demand today, so this is meant to be re-run as the

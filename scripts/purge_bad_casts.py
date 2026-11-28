@@ -1,7 +1,7 @@
 r"""Purge adult-gallery casts from the Miniville resident gallery.
 
 `build_avatar_gallery.py` originally drew the female pool from adult galleries
-(`G:\Gallery`, and `F:\amd\gallery` in an earlier revision) — so `src=Female:*`
+(`G:\Gallery`, and `G:\Galleries\People` in an earlier revision) — so `src=Female:*`
 identities and the `src=Male:*` ones whose source name exists in either gallery
 are all wrong-cast. This deletes them from `D:\miniville\gallery\gallery.db`,
 removes their sample dirs and portraits, and nulls `agents.avatar_path` so the
@@ -9,7 +9,7 @@ residents queue for a proper recast. Real celebrity casts (`src=celebrity:*`,
 and legacy `src=Male:<name>_nm*`) are kept.
 
 Both adult galleries are checked: the first purge pass only knew about
-`G:\Gallery`, so 78 casts from `F:\amd\gallery` survived until the recast
+`G:\Gallery`, so 78 casts from `G:\Galleries\People` survived until the recast
 audit (Sat, 04 Oct 2026) — every legacy `src=Female:` row is purged by
 prefix regardless of gallery, which is what catches those.
 
@@ -35,8 +35,8 @@ OUT_DB = OUT_ROOT / "gallery" / "gallery.db"
 GAL_DIR = OUT_ROOT / "gallery"
 AV_DIR = OUT_ROOT / "avatars"
 MAPPING = OUT_ROOT / "avatar_mapping.json"
-ADULT_DBS = [Path(r"G:\Gallery\gallery.db"), Path(r"F:\amd\gallery\gallery.db")]
-ADULT_DIRS = [Path(r"G:\Gallery"), Path(r"F:\amd\gallery")]
+ADULT_DBS = [Path(r"G:\Gallery\gallery.db"), Path(r"G:\Galleries\People\gallery.db")]
+ADULT_DIRS = [Path(r"G:\Gallery"), Path(r"G:\Galleries\People")]
 
 
 def adult_names() -> set[str]:

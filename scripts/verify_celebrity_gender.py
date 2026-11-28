@@ -1,7 +1,7 @@
 r"""Verify the sex of every identity in the mixed celebrity gallery, locally.
 
 `G:\Galleries\Celebrities` is the only *mixed* source gallery (the other two,
-`G:\Gallery` and `F:\amd\gallery`, are female-only). The gallery's own
+`G:\Gallery` and `G:\Galleries\People`, are female-only). The gallery's own
 `face_crops.gender` column is unreliable on its own — it mislabels angled and
 profile crops, which is how female faces got cast onto male residents — but a
 *majority vote* across every crop of an identity is not.
